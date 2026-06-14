@@ -3,13 +3,13 @@
   "compilerOptions": {
     "plugins": [
       {
-        "name": "next",
-      },
+        "name": "next"
+      }
     ],
     "paths": {
-      "@/*": ["./*"],
+      "@/*": ["./*"]
     },
-    "strictNullChecks": true,
+    "strictNullChecks": true
   },
   "include": [
     "**/*.ts",
@@ -17,7 +17,7 @@
     "next-env.d.ts",
     "next.config.js",
     ".next/types/**/*.ts",
-    "postcss.config.mjs",
+    "postcss.config.mjs"
   ],
-  "exclude": ["lib/node_modules"],
+  "exclude": ["lib/node_modules"]
 }
