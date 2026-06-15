@@ -1,24 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { SocketServer } from "../lib/socketServer";
-import { auth } from "./auth/auth";
-
-export type Bindings = {
-  // secrets
-  XAI_API_KEY: string;
-  OPENROUTER_API_KEY: string;
-  // cf bindings
-  SOCKET_OBJECT: DurableObjectNamespace;
-  MEDIA_BUCKET: R2Bucket;
-  APP_DB: D1Database;
-};
+import { authMiddleware } from "./middleware/authMiddleware";
+import { dbMiddleware } from "./middleware/dbMiddleware";
+import type { CF_Bindings, HonoVariables } from "./types/types";
 
 const app = new Hono<{
-  Bindings: Bindings;
-  Variables: {
-    user: typeof auth.$Infer.Session.user | null;
-    session: typeof auth.$Infer.Session.session | null;
-  };
+  Bindings: CF_Bindings;
+  Variables: HonoVariables;
 }>();
 
 app.use(
@@ -33,20 +22,11 @@ app.use(
   }),
 );
 
-app.use("*", async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session) {
-    c.set("user", null);
-    c.set("session", null);
-    // await next();
-    return c.text("unauthorized", 401);
-  }
-  c.set("user", session.user);
-  c.set("session", session.session);
-  await next();
-});
+app.use("*", dbMiddleware);
+app.use("*", authMiddleware);
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
+  const auth = c.get("auth");
   return auth.handler(c.req.raw);
 });
 

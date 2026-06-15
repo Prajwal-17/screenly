@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bd744f0a-2ad9-41eb-af27-cd86b062350c",
+  "id": "b32c45bc-7a8d-4ee6-b0a4-43d4ef32ab68",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -86,19 +86,18 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -155,19 +154,18 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "autoincrement": false
         },
         "ip_address": {
           "name": "ip_address",
@@ -267,19 +265,19 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         }
       },
       "indexes": {
@@ -329,19 +327,19 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         }
       },
       "indexes": {

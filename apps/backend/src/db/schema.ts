@@ -9,12 +9,12 @@ export const user = sqliteTable("user", {
     .default(false)
     .notNull(),
   image: text("image"),
-  createdAt: text("created_at")
-    .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
-  updatedAt: text("updated_at")
-    .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-    .$onUpdate(() => new Date().toISOString())
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
 });
 
@@ -24,12 +24,11 @@ export const session = sqliteTable(
     id: text("id").primaryKey(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     token: text("token").notNull().unique(),
-    createdAt: text("created_at")
-      .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
-    updatedAt: text("updated_at")
-      .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-      .$onUpdate(() => new Date().toISOString())
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
@@ -60,12 +59,11 @@ export const account = sqliteTable(
     }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: text("created_at")
-      .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
-    updatedAt: text("updated_at")
-      .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-      .$onUpdate(() => new Date().toISOString())
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
   (table) => [index("account_userId_idx").on(table.userId)],
@@ -78,12 +76,12 @@ export const verification = sqliteTable(
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: text("created_at")
-      .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
-    updatedAt: text("updated_at")
-      .default(sql`(STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-      .$onUpdate(() => new Date().toISOString())
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],

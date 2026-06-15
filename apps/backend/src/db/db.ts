@@ -1,9 +1,7 @@
 import { drizzle } from "drizzle-orm/d1";
-import { Context } from "hono";
-import { Bindings } from "..";
+import { CF_Bindings } from "../types/types";
+import * as schema from "./schema";
 
-export default {
-  async fetch(c: Context, request: Request, env: Bindings) {
-    const db = drizzle(env.APP_DB);
-  },
-};
+export function getDB(env: CF_Bindings) {
+  return drizzle(env.APP_DB, { schema });
+}
