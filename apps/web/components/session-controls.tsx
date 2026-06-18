@@ -2,30 +2,24 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { session } from "@/lib/session";
+import { useDownloadStore } from "@/store/downloadStore";
 import { Mic, Square } from "lucide-react";
 
-interface SessionControlsProps {
-  isRecording: boolean;
-  onStart: () => void;
-  onStop: () => void;
-  downloadAudio: boolean;
-  onDownloadAudioChange: (checked: boolean) => void;
-}
+export function SessionControls() {
+  const isRecording = useDownloadStore((s) => s.isRecording);
+  const downloadAudio = useDownloadStore((s) => s.downloadAudio);
+  const setDownloadAudio = useDownloadStore((s) => s.setDownloadAudio);
 
-export function SessionControls({
-  isRecording,
-  onStart,
-  onStop,
-  downloadAudio,
-  onDownloadAudioChange,
-}: SessionControlsProps) {
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto">
       <div className="flex items-center justify-center gap-4 w-full">
         <Button
           size="lg"
           className="flex-1 gap-2 h-11"
-          onClick={onStart}
+          onClick={() => {
+            session.startRecording();
+          }}
           disabled={isRecording}
         >
           <Mic className="h-4 w-4" />
@@ -35,7 +29,9 @@ export function SessionControls({
           size="lg"
           variant="outline"
           className="flex-1 gap-2 h-11"
-          onClick={onStop}
+          onClick={() => {
+            session.stopRecording();
+          }}
           disabled={!isRecording}
         >
           <Square className="h-4 w-4" />
@@ -48,7 +44,9 @@ export function SessionControls({
           id="download-audio"
           type="checkbox"
           checked={downloadAudio}
-          onChange={(e) => onDownloadAudioChange(e.target.checked)}
+          onChange={(e) => {
+            setDownloadAudio(e.target.checked);
+          }}
           className="h-4 w-4 rounded border-border bg-background text-foreground focus:ring-ring cursor-pointer accent-foreground"
         />
         <label

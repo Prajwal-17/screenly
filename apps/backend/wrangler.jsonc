@@ -7,14 +7,14 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["SocketServer"],
+      "new_sqlite_classes": ["InterviewSessionDO"],
     },
   ],
   "durable_objects": {
     "bindings": [
       {
-        "name": "SOCKET_OBJECT",
-        "class_name": "SocketServer",
+        "name": "INTERVIEW_SESSION",
+        "class_name": "InterviewSessionDO",
       },
     ],
   },

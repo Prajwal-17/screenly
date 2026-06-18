@@ -11,7 +11,7 @@ export type CF_Bindings = {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   // cf bindings
-  SOCKET_OBJECT: DurableObjectNamespace;
+  INTERVIEW_SESSION: DurableObjectNamespace;
   MEDIA_BUCKET: R2Bucket;
   APP_DB: D1Database;
 };

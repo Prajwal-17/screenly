@@ -12,14 +12,15 @@
     "better-auth": "^1.6.18",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.23"
+    "hono": "^4.12.23",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@types/node": "^22.15.3",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.1",
     "prettier": "^3.6.2",
-    "drizzle-kit": "^0.31.10",
     "tsx": "^4.22.4",
     "wrangler": "^4.98.0"
   }

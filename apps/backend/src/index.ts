@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { SocketServer } from "../lib/socketServer";
-import { authMiddleware } from "./middleware/authMiddleware";
+import { v4 as uuid } from "uuid";
+import { InterviewSessionDO } from "./lib/interview-session-do";
+import { interviewSession } from "./db/schema";
+import { authMiddleware, requireAuth } from "./middleware/authMiddleware";
 import { dbMiddleware } from "./middleware/dbMiddleware";
 import type { CF_Bindings, HonoVariables } from "./types/types";
 
@@ -11,11 +13,11 @@ const app = new Hono<{
 }>();
 
 app.use(
-  "/api/auth/*",
+  "/api/*",
   cors({
     origin: "http://localhost:3000",
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "OPTIONS"],
+    allowMethods: ["POST", "GET", "OPTIONS", "PUT", "DELETE"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
     credentials: true,
@@ -34,18 +36,56 @@ app.get("/", async (c) => {
   return c.text("Hello Hono!");
 });
 
-app.get("/api/protected", async (c, next) => {
+app.get("/api/protected", requireAuth, async (c) => {
   return c.text("Verified");
 });
 
-app.get("/ws", (c) => {
-  const id = c.env.SOCKET_OBJECT.idFromName("socket_object_instance");
-  const stub = c.env.SOCKET_OBJECT.get(id);
+app.post("/api/session", requireAuth, async (c) => {
+  const db = c.var.db;
+  const user = c.var.user!;
+
+  const sessionId = uuid();
+  await db.insert(interviewSession).values({
+    id: sessionId,
+    userId: user.id,
+  });
+
+  return c.json({ id: sessionId }, 201);
+});
+
+app.get("/api/sessions/:id/ws", requireAuth, (c) => {
+  const sessionId = c.req.param("id");
+
+  const id = c.env.INTERVIEW_SESSION.idFromName(sessionId);
+
+  const stub = c.env.INTERVIEW_SESSION.get(id);
 
   return stub.fetch(c.req.raw);
+});
+
+// list r2 objects
+app.get("/api/list/r2", requireAuth, async (c) => {
+  const listed = await c.env.MEDIA_BUCKET.list();
+  return c.json(listed.objects);
+});
+
+app.get("/api/r2/download", requireAuth, async (c) => {
+  const object = await c.env.MEDIA_BUCKET.get("sample.webm");
+  if (object === null) {
+    return c.text("Object Not Found", 404);
+  }
+
+  c.header("etag", object.httpEtag);
+  c.header("Content-Disposition", 'attachment; filename="sample.webm"');
+
+  if (object.httpMetadata?.contentType) {
+    c.header("Content-Type", object.httpMetadata.contentType);
+  }
+
+  return c.body(object.body);
 });
 
 export default app;
 
 // wrangler expects Durable object export from main file "src/index.ts"
-export { SocketServer };
+export { InterviewSessionDO };
