@@ -1,17 +1,10 @@
 import { useDownloadStore } from "@/store/downloadStore";
 import { MicVAD } from "@ricky0123/vad-web";
 
-/**
- * AudioPlayer — decodes and plays ArrayBuffer audio chunks received from the
- * backend (mp3 / aac / webm, whatever the TTS emits).
- *
- * Calls are queued so that back-to-back AI utterances don't overlap.
- */
 class AudioPlayer {
   private ctx: AudioContext | null = null;
   private queue: Promise<void> = Promise.resolve();
 
-  /** Lazily create / resume the AudioContext (browsers suspend it until a gesture). */
   private getCtx(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext();
@@ -22,36 +15,29 @@ class AudioPlayer {
     return this.ctx;
   }
 
-  /**
-   * Decode `buffer` and play it. Returns a promise that resolves when playback
-   * finishes, so callers can await it if needed. Internally the calls are
-   * serialised via a promise chain so utterances never overlap.
-   */
   play(buffer: ArrayBuffer): Promise<void> {
     this.queue = this.queue.then(() => this._play(buffer));
     return this.queue;
   }
 
-  private _play(buffer: ArrayBuffer): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const ctx = this.getCtx();
-        // decodeAudioData consumes the buffer — copy it first so the original
-        // reference stays intact in case the caller still needs it.
-        const decoded = await ctx.decodeAudioData(buffer.slice(0));
+  private async _play(buffer: ArrayBuffer): Promise<void> {
+    try {
+      const ctx = this.getCtx();
+      const decoded = await ctx.decodeAudioData(buffer.slice(0));
+
+      await new Promise<void>((resolve) => {
         const source = ctx.createBufferSource();
         source.buffer = decoded;
         source.connect(ctx.destination);
         source.onended = () => resolve();
         source.start();
-      } catch (err) {
-        console.error("[AudioPlayer] playback error:", err);
-        resolve(); // swallow so the queue keeps moving
-      }
-    });
+      });
+    } catch (err) {
+      console.error("[AudioPlayer] playback error:", err);
+    }
   }
 
-  /** Stop any in-flight audio immediately. */
+  // stop in-flight audio
   stop() {
     this.ctx?.close();
     this.ctx = null;
@@ -71,6 +57,7 @@ export class Session {
   // buffer : for streaming
   utteranceChunks: Blob[] = [];
   private cleanupQueued = false;
+  private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
 
   player = new AudioPlayer();
 
@@ -100,23 +87,30 @@ export class Session {
     this.setIsRecording(true);
 
     this.vad = await MicVAD.new({
-      // This version of vad-web derives all asset filenames from a base path.
-      // Files must be in public/vad/ (already copied there).
       baseAssetPath: "/vad/",
       onnxWASMBasePath: "/vad/",
       onSpeechStart: () => {
+        if (this.speechEndTimer) {
+          clearTimeout(this.speechEndTimer);
+          this.speechEndTimer = null;
+        }
         if (this.recorder?.state === "inactive") {
           this.recorder.start();
         }
         // TODO - interrupt user
         console.log("User has started speaking");
       },
-      onSpeechEnd: async (audio) => {
-        console.log("audio", audio);
-        if (this.recorder?.state === "recording") {
-          this.recorder.stop();
-          // this.socket?.send(audio);
+      onSpeechEnd: () => {
+        // clear any previous timer
+        if (this.speechEndTimer) {
+          clearTimeout(this.speechEndTimer);
         }
+        this.speechEndTimer = setTimeout(() => {
+          if (this.recorder?.state === "recording") {
+            this.recorder.stop();
+          }
+          this.speechEndTimer = null;
+        }, 1200);
       },
     });
 
@@ -160,6 +154,12 @@ export class Session {
   }
 
   stopRecording() {
+    // Clear any pending speech-end timer
+    if (this.speechEndTimer) {
+      clearTimeout(this.speechEndTimer);
+      this.speechEndTimer = null;
+    }
+
     this.vad?.destroy();
     this.vad = null;
 
@@ -247,6 +247,11 @@ export class Session {
   }
 
   disconnect() {
+    if (this.speechEndTimer) {
+      clearTimeout(this.speechEndTimer);
+      this.speechEndTimer = null;
+    }
+
     this.vad?.destroy();
     this.vad = null;
     if (this.recorder?.state === "recording") this.recorder.stop();

@@ -1,4 +1,4 @@
-import { session } from "@/lib/session";
+import { session } from "@/lib/interview-session";
 import { useEffect, useRef } from "react";
 
 const useWSConnection = (sessionId: string | null) => {

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { session } from "@/lib/session";
+import { session } from "@/lib/interview-session";
 import { useDownloadStore } from "@/store/downloadStore";
 import { Mic, Square } from "lucide-react";
 

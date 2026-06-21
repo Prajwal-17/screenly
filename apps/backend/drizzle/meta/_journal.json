@@ -15,6 +15,13 @@
       "when": 1781769927307,
       "tag": "0001_far_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782028960248,
+      "tag": "0002_thick_veda",
+      "breakpoints": true
     }
   ]
 }

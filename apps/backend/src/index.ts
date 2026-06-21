@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { v4 as uuid } from "uuid";
-import { InterviewSessionDO } from "./lib/interview-session-do";
 import { interviewSession } from "./db/schema";
+import { InterviewSessionDO } from "./lib/interview-session-do";
 import { authMiddleware, requireAuth } from "./middleware/authMiddleware";
 import { dbMiddleware } from "./middleware/dbMiddleware";
 import type { CF_Bindings, HonoVariables } from "./types/types";
@@ -53,11 +53,12 @@ app.post("/api/session", requireAuth, async (c) => {
   return c.json({ id: sessionId }, 201);
 });
 
-app.get("/api/sessions/:id/ws", requireAuth, (c) => {
+app.get("/api/sessions/:id/ws", requireAuth, async (c) => {
   const sessionId = c.req.param("id");
+  const user = c.var.user;
 
+  // Forward the original upgrade request — preserves WebSocket headers
   const id = c.env.INTERVIEW_SESSION.idFromName(sessionId);
-
   const stub = c.env.INTERVIEW_SESSION.get(id);
 
   return stub.fetch(c.req.raw);
