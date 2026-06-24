@@ -5,12 +5,19 @@ import { AudioPlayer } from "./audio-player";
 export class Session {
   sessionId: string = "";
   socket: WebSocket | null = null;
+
   vad: MicVAD | null = null;
+
+  private ctx: AudioContext | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private worklet: AudioWorkletNode | null = null;
 
   recorder: MediaRecorder | null = null;
   stream: MediaStream | null = null;
+
   chunks: Blob[] | null = null; // for download
   utteranceChunks: Blob[] = []; // for streaming
+
   private cleanupQueued = false;
   private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -36,8 +43,28 @@ export class Session {
 
   async startRecording() {
     if (this.recorder || this.vad) return;
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.stream = stream;
+    this.ctx = new AudioContext({ sampleRate: 16000 });
+    await this.ctx.audioWorklet.addModule("/audio/pcm-processor.js");
+    this.source = this.ctx.createMediaStreamSource(stream);
+    this.worklet = new AudioWorkletNode(this.ctx, "pcm-processor");
+    this.source.connect(this.worklet); // Send mic audio from source node into the worklet node.
+
+    this.worklet.port.onmessage = (e) => {
+      const msg = e.data;
+
+      if (msg.type === "pcm-chunk") {
+        const pcm16 = msg.samples;
+        if (this.socket?.readyState === WebSocket.OPEN) {
+          this.socket.send(pcm16.buffer);
+        }
+      } else {
+        console.log("worklet message:", msg);
+      }
+    };
+
     this.chunks = [];
     this.setIsRecording(true);
 

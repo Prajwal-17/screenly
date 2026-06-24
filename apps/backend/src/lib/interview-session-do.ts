@@ -176,6 +176,13 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
       }
 
       const audio = message as ArrayBuffer;
+
+      console.log(audio);
+      // store audio to r2 - for debugging
+      const audioFilename = `debug-audio-${new Date().toLocaleTimeString().replace(/\s/g, "-").replace(/:/g, "-")}.webm`;
+      this.env.MEDIA_BUCKET.put(audioFilename, audio);
+
+      // throw new Error("Error");
       const transcribeResponse = await this.stt.transcribe(audio);
 
       if (!transcribeResponse) {
