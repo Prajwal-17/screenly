@@ -1,49 +1,6 @@
 import { useDownloadStore } from "@/store/downloadStore";
 import { MicVAD } from "@ricky0123/vad-web";
-
-class AudioPlayer {
-  private ctx: AudioContext | null = null;
-  private queue: Promise<void> = Promise.resolve();
-
-  private getCtx(): AudioContext {
-    if (!this.ctx) {
-      this.ctx = new AudioContext();
-    }
-    if (this.ctx.state === "suspended") {
-      this.ctx.resume();
-    }
-    return this.ctx;
-  }
-
-  play(buffer: ArrayBuffer): Promise<void> {
-    this.queue = this.queue.then(() => this._play(buffer));
-    return this.queue;
-  }
-
-  private async _play(buffer: ArrayBuffer): Promise<void> {
-    try {
-      const ctx = this.getCtx();
-      const decoded = await ctx.decodeAudioData(buffer.slice(0));
-
-      await new Promise<void>((resolve) => {
-        const source = ctx.createBufferSource();
-        source.buffer = decoded;
-        source.connect(ctx.destination);
-        source.onended = () => resolve();
-        source.start();
-      });
-    } catch (err) {
-      console.error("[AudioPlayer] playback error:", err);
-    }
-  }
-
-  // stop in-flight audio
-  stop() {
-    this.ctx?.close();
-    this.ctx = null;
-    this.queue = Promise.resolve();
-  }
-}
+import { AudioPlayer } from "./audio-player";
 
 export class Session {
   sessionId: string = "";
@@ -52,10 +9,8 @@ export class Session {
 
   recorder: MediaRecorder | null = null;
   stream: MediaStream | null = null;
-  // for download
-  chunks: Blob[] | null = null;
-  // buffer : for streaming
-  utteranceChunks: Blob[] = [];
+  chunks: Blob[] | null = null; // for download
+  utteranceChunks: Blob[] = []; // for streaming
   private cleanupQueued = false;
   private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -110,7 +65,7 @@ export class Session {
             this.recorder.stop();
           }
           this.speechEndTimer = null;
-        }, 1200);
+        }, 1000);
       },
     });
 
@@ -162,6 +117,7 @@ export class Session {
 
     this.vad?.destroy();
     this.vad = null;
+    this.player.stop();
 
     const downloadAudio = useDownloadStore.getState().downloadAudio;
 
@@ -172,7 +128,6 @@ export class Session {
         origOnStop?.call(this.recorder, ev);
         this.finalizeStop(downloadAudio);
       };
-      this.recorder.stop();
     } else {
       this.finalizeStop(downloadAudio);
     }
@@ -184,9 +139,9 @@ export class Session {
 
     if (downloadAudio && this.chunks && this.chunks.length > 0) {
       this.downloadAudio();
+      this.chunks = null;
     }
 
-    this.chunks = null;
     this.utteranceChunks = [];
     this.recorder = null;
     if (this.stream) {
