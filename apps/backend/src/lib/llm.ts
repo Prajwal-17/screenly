@@ -10,6 +10,7 @@ export class LLM {
 
   async generate(messages: Message[]) {
     try {
+      console.log("messages", messages);
       const options = {
         method: "POST",
         headers: {
@@ -20,6 +21,8 @@ export class LLM {
         body: JSON.stringify({
           model: "deepseek/deepseek-v4-flash",
           messages,
+          allow_fallbacks: false,
+          only: ["DigitalOcean"],
         }),
       };
 

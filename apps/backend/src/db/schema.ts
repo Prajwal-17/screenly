@@ -89,7 +89,9 @@ export const verification = sqliteTable(
 );
 
 export const interviewSession = sqliteTable("interview_session", {
-  id: text("id").primaryKey(),
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => uuid()),
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
@@ -106,7 +108,7 @@ export const messages = sqliteTable("messages", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => uuid()),
-  sessionId: text("session_id")
+  interviewSessionId: text("interview_session_id")
     .notNull()
     .references(() => interviewSession.id, { onDelete: "cascade" }),
   role: text("role").notNull(),

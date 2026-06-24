@@ -55,7 +55,6 @@ app.post("/api/session", requireAuth, async (c) => {
 
 app.get("/api/sessions/:id/ws", requireAuth, async (c) => {
   const sessionId = c.req.param("id");
-  const user = c.var.user;
 
   // Forward the original upgrade request — preserves WebSocket headers
   const id = c.env.INTERVIEW_SESSION.idFromName(sessionId);

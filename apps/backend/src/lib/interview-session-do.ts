@@ -1,10 +1,24 @@
+import { Session, User } from "better-auth";
 import { DurableObject } from "cloudflare:workers";
+import { asc, eq } from "drizzle-orm";
+import { drizzle, DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
+import { v4 as uuid } from "uuid";
+import migrations from "../../drizzle-do/migrations";
+import { getAuth } from "../auth/auth";
 import { getDB } from "../db/db";
-import { messages } from "../db/schema";
+import { messages as doMessages, interviewSession } from "../db/do-schema";
 import { CF_Bindings } from "../types/types";
 import { LLM } from "./llm";
 import { SpeechToText } from "./stt";
+import { systemPrompt } from "./system-prompt";
 import { TextToSpeech } from "./tts";
+
+export type Attachment = {
+  id: string;
+  userId: string;
+  interviewSessionId: string;
+};
 
 export type Message = {
   role: "system" | "user" | "assistant";
@@ -13,13 +27,16 @@ export type Message = {
 };
 
 export class InterviewSessionDO extends DurableObject<CF_Bindings> {
-  ws: WebSocket | null = null;
-  private db: ReturnType<typeof getDB>;
+  private ws: WebSocket | null = null;
+  storage: DurableObjectStorage;
+  db: DrizzleSqliteDODatabase;
 
-  sessionId: string | null = null;
-  userId: string | null = null;
+  private user!: User;
+  private session!: Session;
 
-  attachment: { id: string } | null = null;
+  private _attachment: Attachment | null = null;
+  private d1: ReturnType<typeof getDB>;
+
   messages: Message[] = [];
 
   private stt;
@@ -28,44 +45,90 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
 
   constructor(ctx: DurableObjectState, env: CF_Bindings) {
     super(ctx, env);
-    this.db = getDB(env);
-
-    // TODO: get user details - prompts, settings etc .. & store in DO sqlite
+    this.storage = ctx.storage;
+    this.db = drizzle(this.storage, { logger: false });
+    this.d1 = getDB(env);
 
     this.stt = new SpeechToText(env.XAI_API_KEY);
     this.tts = new TextToSpeech(env.XAI_API_KEY);
     this.llm = new LLM(env.OPENROUTER_API_KEY);
-    this.messages = [];
+    this.messages = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+    ];
+
+    ctx.blockConcurrencyWhile(async () => {
+      await this._migrate();
+    });
 
     const sockets = this.ctx.getWebSockets();
     if (sockets.length > 0) {
       this.ws = sockets[0];
-      this.attachment = this.ws.deserializeAttachment();
+      const data = this.ws.deserializeAttachment() as Attachment | null;
+      if (data) {
+        this._attachment = data;
+      }
     }
 
-    // auto response without using hibernated sockets
     this.ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair("ping", "pong"),
     );
+  }
+
+  private get attachment(): Attachment {
+    if (!this._attachment) {
+      throw new Error("Attachment not initialized");
+    }
+    return this._attachment;
+  }
+
+  get interviewSessionId(): string {
+    return this.attachment.interviewSessionId;
   }
 
   setWs(webSocket: WebSocket) {
     this.ws = webSocket;
   }
 
+  setUser(user: User) {
+    this.user = user;
+  }
+
+  setSession(session: Session) {
+    this.session = session;
+  }
+
+  private setAttachment(data: Attachment) {
+    this._attachment = data;
+    if (this.ws) {
+      this.ws.serializeAttachment(data);
+    }
+  }
+
+  async _migrate() {
+    migrate(this.db, migrations);
+  }
+
   async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
+    const auth = getAuth(this.env);
+    const session = await auth.api.getSession({ headers: request.headers });
 
-    // Extract sessionId from path: /api/sessions/:id/ws
-    this.sessionId = url.pathname.split("/").filter(Boolean).at(2) ?? null;
-    // this.userId = url.searchParams.get("userId");
+    if (!session || !session.user || !session.session) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
-    // Seed system prompt once — before any user message arrives
-    this.messages.push({
-      role: "system",
-      content:
-        "You are an expert interviewer. Conduct a professional, structured, one-question-at-a-time interview. Maintain a neutral, encouraging tone, listen actively to answers, and probe for details using the STAR method. Do not break character, do not provide evaluations during the session, and adapt your complexity to the candidate's level. Start by asking for the target role.",
-    });
+    this.setUser(session.user);
+    this.setSession(session.session);
+
+    // TODO: get user details - prompts, settings etc .. & store in DO sqlite
+    // get user's custom settings in fetch not in constructor - since fetch runs when req hits DO
+
+    // this.messages.push({
+    //   role: "system",
+    //   content: systemPrompt,
+    // });
 
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
@@ -73,9 +136,20 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
     this.setWs(server);
     this.ctx.acceptWebSocket(server);
 
-    const id = crypto.randomUUID();
+    const id = uuid();
 
-    server.serializeAttachment({ id });
+    const [sessionRecord] = await this.db
+      .insert(interviewSession)
+      .values({
+        userId: this.user.id,
+      })
+      .returning();
+
+    this.setAttachment({
+      id,
+      userId: session.user.id,
+      interviewSessionId: sessionRecord.id,
+    });
 
     return new Response(null, {
       status: 101,
@@ -87,43 +161,46 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
     ws: WebSocket,
     message: string | ArrayBuffer,
   ): Promise<void> {
-    try {
-      // Handle text messages (interrupts, control signals from frontend)
-      // if (typeof message === "string") {
-      //   const data = JSON.parse(message);
-      //   if (data.type === "interrupt") {
-      //     this.tts.stop();
-      //   }
-      //   return;
-      // }
+    const sessionId = this._attachment?.interviewSessionId;
+    if (!sessionId) {
+      console.log("interviewSessionId not set yet, skipping message");
+      return;
+    }
 
-      if (!this.sessionId) {
-        console.log("sessionid", this.sessionId);
+    try {
+      if (typeof message === "string") {
+        console.log("url", ws.url);
+        console.log("msg", message);
+        ws.send("fine");
         return;
       }
 
       const audio = message as ArrayBuffer;
-      console.log("audio", audio);
       const transcribeResponse = await this.stt.transcribe(audio);
 
       if (!transcribeResponse) {
         return;
       }
 
-      await this.db
-        .insert(messages)
-        .values({
-          sessionId: this.sessionId,
-          role: "user",
-          content: transcribeResponse.text ?? "",
-        })
-        .run();
-
-      this.messages.push({
+      await this.db.insert(doMessages).values({
+        interviewSessionId: sessionId,
         role: "user",
-        content: transcribeResponse.text,
-        duration: transcribeResponse.duration,
+        content: transcribeResponse.text ?? "",
       });
+
+      const history = await this.db
+        .select({ role: doMessages.role, content: doMessages.content })
+        .from(doMessages)
+        .where(eq(doMessages.interviewSessionId, sessionId))
+        .orderBy(asc(doMessages.createdAt));
+
+      this.messages = [
+        { role: "system", content: systemPrompt },
+        ...history.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ];
 
       const llmResponse = await this.llm.generate(this.messages);
 
@@ -137,17 +214,8 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
         return;
       }
 
-      await this.db
-        .insert(messages)
-        .values({
-          id: crypto.randomUUID(),
-          sessionId: this.sessionId,
-          role: "assistant",
-          content: llmResponse.content,
-        })
-        .run();
-
-      this.messages.push({
+      await this.db.insert(doMessages).values({
+        interviewSessionId: sessionId,
         role: "assistant",
         content: llmResponse.content,
       });

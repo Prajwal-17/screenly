@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1fe56bfb-5e14-491a-9f39-967f12a138fb",
+  "id": "57d8f847-d517-4ebe-b7c9-85d7ab0aaaa9",
   "prevId": "20ecc5b6-f30e-46a1-a535-6badaf822ba5",
   "tables": {
     "account": {
@@ -192,8 +192,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "session_id": {
-          "name": "session_id",
+        "interview_session_id": {
+          "name": "interview_session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -232,12 +232,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "messages_session_id_interview_session_id_fk": {
-          "name": "messages_session_id_interview_session_id_fk",
+        "messages_interview_session_id_interview_session_id_fk": {
+          "name": "messages_interview_session_id_interview_session_id_fk",
           "tableFrom": "messages",
           "tableTo": "interview_session",
           "columnsFrom": [
-            "session_id"
+            "interview_session_id"
           ],
           "columnsTo": [
             "id"

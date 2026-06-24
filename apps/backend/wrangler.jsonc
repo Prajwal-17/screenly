@@ -24,6 +24,7 @@
       "bucket_name": "media-bucket",
     },
   ],
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
   "d1_databases": [
     {
       "binding": "APP_DB",
