@@ -1,14 +1,14 @@
 import { Session, User } from "better-auth";
 import { DurableObject } from "cloudflare:workers";
-import { asc, eq } from "drizzle-orm";
 import { drizzle, DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { v4 as uuid } from "uuid";
 import migrations from "../../drizzle-do/migrations";
 import { getAuth } from "../auth/auth";
 import { getDB } from "../db/db";
-import { messages as doMessages, interviewSession } from "../db/do-schema";
+import { interviewSession } from "../db/do-schema";
 import { CF_Bindings } from "../types/types";
+import { GrokSttStream } from "./grok-stt-stream";
 import { LLM } from "./llm";
 import { SpeechToText } from "./stt";
 import { systemPrompt } from "./system-prompt";
@@ -42,6 +42,7 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
   private stt;
   private tts;
   private llm;
+  private grokSttStream: GrokSttStream | null = null;
 
   constructor(ctx: DurableObjectState, env: CF_Bindings) {
     super(ctx, env);
@@ -107,6 +108,26 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
     }
   }
 
+  // grokstream uses cf fetch to connect to a socket url
+  // need to await until it connects to the grok server
+  private async _ensureGrokStream(ws: WebSocket) {
+    if (this.grokSttStream) return;
+
+    const stream = new GrokSttStream(this.env.XAI_API_KEY);
+
+    stream.on("transcript", (msg: any) => {
+      console.log("transcript from grok:", msg.transcript);
+      ws.send(JSON.stringify({ type: "transcript", text: msg.transcript }));
+    });
+
+    stream.on("error", (err: any) => {
+      console.error("grok stream error:", err);
+    });
+
+    await stream.connect();
+    this.grokSttStream = stream;
+  }
+
   async _migrate() {
     migrate(this.db, migrations);
   }
@@ -169,67 +190,15 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
 
     try {
       if (typeof message === "string") {
-        console.log("url", ws.url);
-        console.log("msg", message);
-        ws.send("fine");
+        console.log("ws string msg:", message);
         return;
       }
 
       const audio = message as ArrayBuffer;
 
-      console.log(audio);
-      // store audio to r2 - for debugging
-      const audioFilename = `debug-audio-${new Date().toLocaleTimeString().replace(/\s/g, "-").replace(/:/g, "-")}.webm`;
-      this.env.MEDIA_BUCKET.put(audioFilename, audio);
+      await this._ensureGrokStream(ws);
 
-      // throw new Error("Error");
-      const transcribeResponse = await this.stt.transcribe(audio);
-
-      if (!transcribeResponse) {
-        return;
-      }
-
-      await this.db.insert(doMessages).values({
-        interviewSessionId: sessionId,
-        role: "user",
-        content: transcribeResponse.text ?? "",
-      });
-
-      const history = await this.db
-        .select({ role: doMessages.role, content: doMessages.content })
-        .from(doMessages)
-        .where(eq(doMessages.interviewSessionId, sessionId))
-        .orderBy(asc(doMessages.createdAt));
-
-      this.messages = [
-        { role: "system", content: systemPrompt },
-        ...history.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ];
-
-      const llmResponse = await this.llm.generate(this.messages);
-
-      if (!llmResponse?.content) {
-        ws.send(
-          JSON.stringify({
-            type: "error",
-            message: "LLM returned empty response",
-          }),
-        );
-        return;
-      }
-
-      await this.db.insert(doMessages).values({
-        interviewSessionId: sessionId,
-        role: "assistant",
-        content: llmResponse.content,
-      });
-
-      const audioBuffer = await this.tts.speak(llmResponse.content);
-
-      ws.send(audioBuffer as ArrayBuffer);
+      this.grokSttStream?.sendAudio(audio);
     } catch (err) {
       console.error("[InterviewSessionDO] error:", err);
       ws.send(JSON.stringify({ type: "error", message: "Internal error" }));
