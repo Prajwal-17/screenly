@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b32c45bc-7a8d-4ee6-b0a4-43d4ef32ab68",
+  "id": "8bf11c1c-71f5-4c50-b08d-2ca4acf7f11a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -90,19 +90,20 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+          "default": "(unixepoch() * 1000)"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
         }
       },
       "indexes": {
-        "account_userId_idx": {
-          "name": "account_userId_idx",
+        "account_user_id_idx": {
+          "name": "account_user_id_idx",
           "columns": [
             "user_id"
           ],
@@ -113,6 +114,66 @@
         "account_user_id_user_id_fk": {
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "interview_session": {
+      "name": "interview_session",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "interview_session_user_id_idx": {
+          "name": "interview_session_user_id_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "interview_session_user_id_user_id_fk": {
+          "name": "interview_session_user_id_user_id_fk",
+          "tableFrom": "interview_session",
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
@@ -158,14 +219,15 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+          "default": "(unixepoch() * 1000)"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
         },
         "ip_address": {
           "name": "ip_address",
@@ -197,8 +259,8 @@
           ],
           "isUnique": true
         },
-        "session_userId_idx": {
-          "name": "session_userId_idx",
+        "session_user_id_idx": {
+          "name": "session_user_id_idx",
           "columns": [
             "user_id"
           ],
@@ -269,7 +331,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+          "default": "(unixepoch() * 1000)"
         },
         "updated_at": {
           "name": "updated_at",
@@ -277,7 +339,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+          "default": "(unixepoch() * 1000)"
         }
       },
       "indexes": {
@@ -331,7 +393,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+          "default": "(unixepoch() * 1000)"
         },
         "updated_at": {
           "name": "updated_at",
@@ -339,7 +401,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+          "default": "(unixepoch() * 1000)"
         }
       },
       "indexes": {

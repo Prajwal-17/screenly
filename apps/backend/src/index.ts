@@ -1,91 +1,124 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { v4 as uuid } from "uuid";
+import { upgradeWebSocket, websocket } from "hono/bun";
+import { auth } from "./auth";
+import { env } from "./config";
+import { db } from "./db";
 import { interviewSession } from "./db/schema";
-import { InterviewSessionDO } from "./lib/interview-session-do";
-import { authMiddleware, requireAuth } from "./middleware/authMiddleware";
-import { dbMiddleware } from "./middleware/dbMiddleware";
-import type { CF_Bindings, HonoVariables } from "./types/types";
 
-const app = new Hono<{
-  Bindings: CF_Bindings;
-  Variables: HonoVariables;
-}>();
+const app = new Hono();
 
-app.use(
-  "/api/*",
-  cors({
-    origin: "http://localhost:3000",
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "OPTIONS", "PUT", "DELETE"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
-  }),
-);
+const localCors = cors({
+  origin: env.FRONTEND_URL,
+  allowHeaders: ["Content-Type", "Authorization"],
+  allowMethods: ["GET", "POST", "OPTIONS"],
+  credentials: true,
+});
 
-app.use("*", dbMiddleware);
-app.use("*", authMiddleware);
+app.use("/api/auth/*", localCors);
+app.use("/api/session", localCors);
 
-app.on(["POST", "GET"], "/api/auth/*", (c) => {
-  const auth = c.get("auth");
+app.get("/", (c) => {
+  return c.json({ service: "ai-interviewer-backend", status: "ok" });
+});
+
+app.on(["GET", "POST"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
-app.get("/", async (c) => {
-  return c.text("Hello Hono!");
-});
+app.post("/api/session", async (c) => {
+  const authSession = await auth.api.getSession({ headers: c.req.raw.headers });
 
-app.get("/api/protected", requireAuth, async (c) => {
-  return c.text("Verified");
-});
-
-app.post("/api/session", requireAuth, async (c) => {
-  const db = c.var.db;
-  const user = c.var.user!;
-
-  const sessionId = uuid();
-  await db.insert(interviewSession).values({
-    id: sessionId,
-    userId: user.id,
-  });
-
-  return c.json({ id: sessionId }, 201);
-});
-
-app.get("/api/sessions/:id/ws", requireAuth, async (c) => {
-  const sessionId = c.req.param("id");
-
-  // Forward the original upgrade request — preserves WebSocket headers
-  const id = c.env.INTERVIEW_SESSION.idFromName(sessionId);
-  const stub = c.env.INTERVIEW_SESSION.get(id);
-
-  return stub.fetch(c.req.raw);
-});
-
-// list r2 objects
-app.get("/api/list/r2", requireAuth, async (c) => {
-  const listed = await c.env.MEDIA_BUCKET.list();
-  return c.json(listed.objects);
-});
-
-app.get("/api/r2/download", requireAuth, async (c) => {
-  const object = await c.env.MEDIA_BUCKET.get("sample.webm");
-  if (object === null) {
-    return c.text("Object Not Found", 404);
+  if (!authSession) {
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
-  c.header("etag", object.httpEtag);
-  c.header("Content-Disposition", 'attachment; filename="sample.webm"');
+  const id = crypto.randomUUID();
 
-  if (object.httpMetadata?.contentType) {
-    c.header("Content-Type", object.httpMetadata.contentType);
-  }
+  db.insert(interviewSession)
+    .values({
+      id,
+      userId: authSession.user.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .run();
 
-  return c.body(object.body);
+  return c.json({ id }, 201);
 });
 
-export default app;
+app.get(
+  "/api/sessions/:id/ws",
+  upgradeWebSocket(async (c) => {
+    const sessionId = c.req.param("id") ?? "unknown";
+    const authSession = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+    let totalBytes = 0;
+    let chunkCount = 0;
 
-// wrangler expects Durable object export from main file "src/index.ts"
-export { InterviewSessionDO };
+    return {
+      onOpen(_event, socket) {
+        if (!authSession) {
+          socket.send(
+            JSON.stringify({ type: "error", message: "Unauthorized" }),
+          );
+          socket.close(1008, "Unauthorized");
+          return;
+        }
+
+        console.log(`[Audio WS] Connected: ${sessionId}`);
+        socket.send(JSON.stringify({ type: "socket-ready", sessionId }));
+      },
+
+      async onMessage(event, socket) {
+        if (typeof event.data === "string") {
+          console.log(`[Audio WS] Control message: ${event.data}`);
+          return;
+        }
+
+        const bytes = await getByteLength(event.data);
+        totalBytes += bytes;
+        chunkCount += 1;
+
+        console.log(
+          `[Audio WS] Chunk ${chunkCount}: ${bytes} bytes (${totalBytes} total)`,
+        );
+
+        socket.send(
+          JSON.stringify({
+            type: "audio-received",
+            bytes,
+            totalBytes,
+            chunkCount,
+          }),
+        );
+      },
+
+      onClose() {
+        console.log(
+          `[Audio WS] Closed: ${sessionId}; ${chunkCount} chunks, ${totalBytes} bytes`,
+        );
+      },
+
+      onError(event) {
+        console.error(`[Audio WS] Error: ${sessionId}`, event);
+      },
+    };
+  }),
+);
+
+async function getByteLength(data: Blob | ArrayBufferLike): Promise<number> {
+  if (data instanceof Blob) return data.size;
+  return data.byteLength;
+}
+
+const server = Bun.serve({
+  port: env.PORT,
+  fetch: app.fetch,
+  websocket,
+});
+
+console.log(`Hono server running at http://localhost:${server.port}`);
+
+export { app, server };

@@ -1,6 +1,5 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { v4 as uuid } from "uuid";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -11,11 +10,10 @@ export const user = sqliteTable("user", {
     .notNull(),
   image: text("image"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .default(sql`(unixepoch() * 1000)`)
     .notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .default(sql`(unixepoch() * 1000)`)
     .notNull(),
 });
 
@@ -26,10 +24,10 @@ export const session = sqliteTable(
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     token: text("token").notNull().unique(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .default(sql`(unixepoch() * 1000)`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .default(sql`(unixepoch() * 1000)`)
       .notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
@@ -37,7 +35,7 @@ export const session = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)],
+  (table) => [index("session_user_id_idx").on(table.userId)],
 );
 
 export const account = sqliteTable(
@@ -61,13 +59,13 @@ export const account = sqliteTable(
     scope: text("scope"),
     password: text("password"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .default(sql`(unixepoch() * 1000)`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .default(sql`(unixepoch() * 1000)`)
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [index("account_user_id_idx").on(table.userId)],
 );
 
 export const verification = sqliteTable(
@@ -78,53 +76,32 @@ export const verification = sqliteTable(
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .default(sql`(unixepoch() * 1000)`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .default(sql`(unixepoch() * 1000)`)
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const interviewSession = sqliteTable("interview_session", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuid()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
-
-export const messages = sqliteTable("messages", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuid()),
-  interviewSessionId: text("interview_session_id")
-    .notNull()
-    .references(() => interviewSession.id, { onDelete: "cascade" }),
-  role: text("role").notNull(),
-  content: text("content").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
+export const interviewSession = sqliteTable(
+  "interview_session",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("interview_session_user_id_idx").on(table.userId)],
+);
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  interviewSessions: many(interviewSession),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -140,3 +117,13 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const interviewSessionRelations = relations(
+  interviewSession,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [interviewSession.userId],
+      references: [user.id],
+    }),
+  }),
+);

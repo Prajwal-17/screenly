@@ -2,12 +2,11 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "types": ["node", "./worker-configuration.d.ts"],
     "moduleResolution": "Bundler",
+    "types": ["bun", "node"],
     "strict": true,
     "skipLibCheck": true,
-    "lib": ["ESNext"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
-  }
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "drizzle.config.ts"]
 }

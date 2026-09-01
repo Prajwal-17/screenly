@@ -1,21 +1,31 @@
-```txt
-npm install
-npm run dev
+# Backend
+
+A small local backend built with Bun, Hono, Drizzle ORM, SQLite, and Better Auth.
+
+## Setup
+
+Copy `.env.example` to `.env` and set `BETTER_AUTH_SECRET`. Google OAuth is
+optional; leave its two variables empty when using email and password only.
+
+```bash
+pnpm install
+pnpm --filter backend dev
 ```
 
-```txt
-npm run deploy
+The server runs on `http://localhost:8787` by default. It creates `local.sqlite`
+and applies the migrations in `drizzle/` at startup.
+
+## Commands
+
+```bash
+pnpm --filter backend dev
+pnpm --filter backend check-types
+pnpm --filter backend lint
+pnpm --filter backend db:generate
 ```
 
-[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
+## WebSocket
 
-```txt
-npm run cf-typegen
-```
-
-Pass the `CloudflareBindings` as generics when instantiating `Hono`:
-
-```ts
-// src/index.ts
-const app = new Hono<{ Bindings: CloudflareBindings }>();
-```
+`GET /api/sessions/:id/ws` accepts browser WebSocket connections. Binary audio
+frames are counted and acknowledged with an `audio-received` JSON message. The
+backend intentionally does not perform transcription or connect to an AI API.

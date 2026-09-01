@@ -1,6 +1,15 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "PORT",
+    "FRONTEND_URL",
+    "DATABASE_PATH",
+    "BETTER_AUTH_URL",
+    "BETTER_AUTH_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
+  ],
   "tasks": {
     "format": {
       "dependsOn": ["^format"]

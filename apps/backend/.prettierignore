@@ -2,6 +2,3 @@
 .next/
 node_modules/
 drizzle/
-components/ui/
-pnpm-lock.yaml
-worker-configuration.d.ts
