@@ -91,6 +91,8 @@ export class Session {
           if (this.recorder?.state === "recording") {
             this.recorder.stop();
           }
+          // signal to DO that utterance is complete
+          this.socket?.send(JSON.stringify({ type: "utterance-end" }));
           this.speechEndTimer = null;
         }, 1000);
       },

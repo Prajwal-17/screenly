@@ -1,14 +1,15 @@
 import { Session, User } from "better-auth";
 import { DurableObject } from "cloudflare:workers";
+import { asc, eq } from "drizzle-orm";
 import { drizzle, DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { v4 as uuid } from "uuid";
 import migrations from "../../drizzle-do/migrations";
 import { getAuth } from "../auth/auth";
 import { getDB } from "../db/db";
-import { interviewSession } from "../db/do-schema";
+import { interviewSession, messages } from "../db/do-schema";
 import { CF_Bindings } from "../types/types";
-import { GrokSttStream } from "./grok-stt-stream";
+import { GrokSttStream, STREAM_EVENTS } from "./grok-stt-stream";
 import { LLM } from "./llm";
 import { SpeechToText } from "./stt";
 import { systemPrompt } from "./system-prompt";
@@ -43,12 +44,14 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
   private tts;
   private llm;
   private grokSttStream: GrokSttStream | null = null;
+  private utteranceText = "";
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(ctx: DurableObjectState, env: CF_Bindings) {
     super(ctx, env);
     this.storage = ctx.storage;
-    this.db = drizzle(this.storage, { logger: false });
-    this.d1 = getDB(env);
+    this.db = drizzle(this.storage, { logger: false }); // durable object
+    this.d1 = getDB(env); // cloudflare D1
 
     this.stt = new SpeechToText(env.XAI_API_KEY);
     this.tts = new TextToSpeech(env.XAI_API_KEY);
@@ -115,9 +118,41 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
 
     const stream = new GrokSttStream(this.env.XAI_API_KEY);
 
-    stream.on("transcript", (msg: any) => {
-      console.log("transcript from grok:", msg.transcript);
-      ws.send(JSON.stringify({ type: "transcript", text: msg.transcript }));
+    stream.on(STREAM_EVENTS.READY, () => {
+      console.log("Grok STT Ready");
+    });
+
+    stream.on(STREAM_EVENTS.TRANSCRIPT, (msg: any) => {
+      ws.send(JSON.stringify({ type: "transcript", text: msg.text }));
+    });
+
+    stream.on(STREAM_EVENTS.CHUNK_FINAL, (msg: any) => {
+      if (!msg.text) return;
+
+      this.utteranceText = this.utteranceText
+        ? this.utteranceText + " " + msg.text
+        : msg.text;
+
+      this._resetFlushTimer(ws);
+
+      ws.send(
+        JSON.stringify({ type: "utterance", text: this.utteranceText }),
+      );
+    });
+
+    stream.on(STREAM_EVENTS.UTTERANCE_FINAL, (msg: any) => {
+      if (!msg.text) return;
+      console.log("utterance final:", msg.text);
+
+      this.utteranceText = this.utteranceText
+        ? this.utteranceText + " " + msg.text
+        : msg.text;
+
+      this._resetFlushTimer(ws);
+
+      ws.send(
+        JSON.stringify({ type: "utterance", text: this.utteranceText }),
+      );
     });
 
     stream.on("error", (err: any) => {
@@ -126,6 +161,67 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
 
     await stream.connect();
     this.grokSttStream = stream;
+  }
+
+  private _resetFlushTimer(ws: WebSocket) {
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flushUtterance(ws);
+    }, 2000);
+  }
+
+  private async flushUtterance(ws: WebSocket) {
+    if (!this.utteranceText) return;
+
+    const fullText = this.utteranceText;
+    this.utteranceText = "";
+
+    console.log("flushing utterance:", fullText);
+
+    const sessionId = this.attachment.interviewSessionId;
+
+    // 1. insert merged user message
+    await this.db.insert(messages).values({
+      interviewSessionId: sessionId,
+      role: "user",
+      content: fullText,
+    });
+
+    // 2. rebuild LLM context
+    const history = await this.db
+      .select({ role: messages.role, content: messages.content })
+      .from(messages)
+      .where(eq(messages.interviewSessionId, sessionId))
+      .orderBy(asc(messages.createdAt));
+
+    this.messages = [
+      { role: "system", content: systemPrompt },
+      ...history.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })),
+    ];
+
+    // 3. LLM
+    const llmResponse = await this.llm.generate(this.messages);
+    if (!llmResponse?.content) return;
+
+    // 4. insert assistant response
+    await this.db.insert(messages).values({
+      interviewSessionId: sessionId,
+      role: "assistant",
+      content: llmResponse.content,
+    });
+
+    this.messages.push({
+      role: "assistant",
+      content: llmResponse.content,
+    });
+
+    // 5. TTS + send audio
+    const audioBuffer = await this.tts.speak(llmResponse.content);
+    ws.send(audioBuffer as ArrayBuffer);
   }
 
   async _migrate() {
@@ -184,13 +280,20 @@ export class InterviewSessionDO extends DurableObject<CF_Bindings> {
   ): Promise<void> {
     const sessionId = this._attachment?.interviewSessionId;
     if (!sessionId) {
-      console.log("interviewSessionId not set yet, skipping message");
+      console.log("InterviewSessionId not set yet, skipping message");
       return;
     }
 
     try {
       if (typeof message === "string") {
-        console.log("ws string msg:", message);
+        try {
+          const parsed = JSON.parse(message);
+          if (parsed.type === "utterance-end") {
+            await this.flushUtterance(ws);
+          }
+        } catch {
+          // ignore unparseable strings
+        }
         return;
       }
 
