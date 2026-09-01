@@ -150,11 +150,12 @@ export class Session {
 
     const downloadAudio = useDownloadStore.getState().downloadAudio;
 
-    if (this.recorder?.state === "recording") {
+    const recorder = this.recorder;
+    if (recorder?.state === "recording") {
       this.cleanupQueued = false;
-      const origOnStop = this.recorder.onstop;
-      this.recorder.onstop = (ev: Event) => {
-        origOnStop?.call(this.recorder, ev);
+      const origOnStop = recorder.onstop;
+      recorder.onstop = (ev: Event) => {
+        origOnStop?.call(recorder, ev);
         this.finalizeStop(downloadAudio);
       };
     } else {
