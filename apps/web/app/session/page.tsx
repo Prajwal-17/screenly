@@ -3,6 +3,7 @@
 import { AIListeningBackground } from "@/components/ai-listening-background";
 import { Navbar } from "@/components/navbar";
 import { SessionControls } from "@/components/session-controls";
+import { TranscriptStream } from "@/components/transcript-stream";
 import useWSConnection from "@/hooks/useWsConnection";
 import { authClient } from "@/lib/auth-client";
 import { useDownloadStore } from "@/store/downloadStore";
@@ -89,6 +90,7 @@ export default function SessionPage() {
             </div>
 
             <SessionControls />
+            <TranscriptStream />
           </div>
         </div>
       </main>

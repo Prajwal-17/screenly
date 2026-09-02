@@ -9,7 +9,8 @@
     "BETTER_AUTH_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
-    "DEEPGRAM_API_KEY"
+    "DEEPGRAM_API_KEY",
+    "OMNIROUTE_API_KEY"
   ],
   "tasks": {
     "format": {

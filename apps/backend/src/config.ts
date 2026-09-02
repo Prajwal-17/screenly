@@ -17,4 +17,5 @@ export const env = {
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID?.trim(),
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET?.trim(),
   DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY?.trim(),
+  OMNIROUTE_API_KEY: process.env.OMNIROUTE_API_KEY?.trim(),
 };

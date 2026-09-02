@@ -2,6 +2,14 @@ import { useDownloadStore } from "@/store/downloadStore";
 import { MicVAD } from "@ricky0123/vad-web";
 import { AudioPlayer } from "./audio-player";
 
+const TTS_SAMPLE_RATE = 24000;
+
+export type TranscriptMessage = {
+  turnIndex: number;
+  transcript: string;
+  sequenceId: number;
+};
+
 export class Session {
   sessionId: string = "";
   socket: WebSocket | null = null;
@@ -16,7 +24,10 @@ export class Session {
   stream: MediaStream | null = null;
 
   chunks: Blob[] | null = null; // for download
-  utteranceChunks: Blob[] = []; // for streaming
+
+  private transcripts = new Map<number, TranscriptMessage>();
+  private transcriptSnapshot: TranscriptMessage[] = [];
+  private transcriptListeners = new Set<() => void>();
 
   private cleanupQueued = false;
   private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
@@ -41,8 +52,55 @@ export class Session {
     this.socket = ws;
   }
 
+  getTranscripts() {
+    return this.transcriptSnapshot;
+  }
+
+  subscribeTranscripts(listener: () => void) {
+    this.transcriptListeners.add(listener);
+    return () => {
+      this.transcriptListeners.delete(listener);
+    };
+  }
+
+  private updateTranscript(data: unknown) {
+    if (!data || typeof data !== "object") return;
+
+    const message = data as {
+      type?: unknown;
+      turnIndex?: unknown;
+      transcript?: unknown;
+      sequenceId?: unknown;
+    };
+
+    if (
+      message.type !== "turnInfo" ||
+      typeof message.turnIndex !== "number" ||
+      typeof message.transcript !== "string" ||
+      typeof message.sequenceId !== "number"
+    ) {
+      return;
+    }
+
+    const previous = this.transcripts.get(message.turnIndex);
+    if (previous && message.sequenceId <= previous.sequenceId) return;
+
+    this.transcripts.set(message.turnIndex, {
+      turnIndex: message.turnIndex,
+      transcript: message.transcript,
+      sequenceId: message.sequenceId,
+    });
+    this.transcriptSnapshot = Array.from(this.transcripts.values()).sort(
+      (a, b) => a.turnIndex - b.turnIndex,
+    );
+    this.transcriptListeners.forEach((listener) => listener());
+  }
+
   async startRecording() {
     if (this.recorder || this.vad) return;
+
+    this.cleanupQueued = false;
+    void this.player.unlock();
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.stream = stream;
@@ -66,6 +124,20 @@ export class Session {
     };
 
     this.chunks = [];
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm",
+    });
+
+    this.setRecorder(recorder);
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        this.chunks?.push(event.data);
+      }
+    };
+
+    recorder.start();
     this.setIsRecording(true);
 
     this.vad = await MicVAD.new({
@@ -76,9 +148,6 @@ export class Session {
           clearTimeout(this.speechEndTimer);
           this.speechEndTimer = null;
         }
-        if (this.recorder?.state === "inactive") {
-          this.recorder.start();
-        }
         // TODO - interrupt user
         console.log("User has started speaking");
       },
@@ -88,10 +157,7 @@ export class Session {
           clearTimeout(this.speechEndTimer);
         }
         this.speechEndTimer = setTimeout(() => {
-          if (this.recorder?.state === "recording") {
-            this.recorder.stop();
-          }
-          // signal to DO that utterance is complete
+          // Signal to the backend that the current utterance is complete.
           this.socket?.send(JSON.stringify({ type: "utterance-end" }));
           this.speechEndTimer = null;
         }, 1000);
@@ -99,42 +165,6 @@ export class Session {
     });
 
     this.vad.start();
-
-    const recorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm",
-    });
-
-    this.setRecorder(recorder);
-
-    recorder.ondataavailable = async (event) => {
-      if (event.data.size > 0) {
-        this.chunks?.push(event.data);
-        this.utteranceChunks.push(event.data);
-        // const buffer = await event.data.arrayBuffer();
-        // this.socket?.send(buffer);
-      }
-    };
-
-    // returns array of blob wrt timeslice
-    // recorder.start(1000); // not to start in VAD
-
-    recorder.onstop = async () => {
-      const blob = new Blob(this.utteranceChunks, {
-        type: "audio/webm",
-      });
-      const buffer = await blob.arrayBuffer();
-      this.socket?.send(buffer);
-      // ---
-
-      this.utteranceChunks = [];
-      // this.setIsRecording(false);
-      // const downloadAudio = useDownloadStore.getState().downloadAudio;
-      // if (downloadAudio) {
-      //   this.downloadAudio();
-      // } else {
-      //   this.chunks = [];
-      // }
-    };
   }
 
   stopRecording() {
@@ -152,12 +182,10 @@ export class Session {
 
     const recorder = this.recorder;
     if (recorder?.state === "recording") {
-      this.cleanupQueued = false;
-      const origOnStop = recorder.onstop;
-      recorder.onstop = (ev: Event) => {
-        origOnStop?.call(recorder, ev);
+      recorder.onstop = () => {
         this.finalizeStop(downloadAudio);
       };
+      recorder.stop();
     } else {
       this.finalizeStop(downloadAudio);
     }
@@ -169,10 +197,21 @@ export class Session {
 
     if (downloadAudio && this.chunks && this.chunks.length > 0) {
       this.downloadAudio();
-      this.chunks = null;
+    }
+    this.chunks = null;
+
+    if (this.worklet) {
+      this.worklet.disconnect();
+      this.worklet.port.onmessage = null;
+      this.worklet = null;
+    }
+    this.source?.disconnect();
+    this.source = null;
+    if (this.ctx) {
+      void this.ctx.close();
+      this.ctx = null;
     }
 
-    this.utteranceChunks = [];
     this.recorder = null;
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
@@ -217,13 +256,18 @@ export class Session {
     ws.onmessage = async (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
         // backend sent a raw binary frame → play directly
-        await this.player.play(event.data);
+        this.player.playPcm16(event.data, TTS_SAMPLE_RATE);
       } else if (event.data instanceof Blob) {
         // fallback: decode Blob → ArrayBuffer first
         const buffer = await event.data.arrayBuffer();
-        await this.player.play(buffer);
+        this.player.playPcm16(buffer, TTS_SAMPLE_RATE);
+      } else if (typeof event.data === "string") {
+        try {
+          this.updateTranscript(JSON.parse(event.data));
+        } catch {
+          // Ignore non-JSON control messages.
+        }
       }
-      // ignore plain-text control messages
     };
 
     ws.onerror = () => {};
@@ -241,6 +285,17 @@ export class Session {
     this.vad = null;
     if (this.recorder?.state === "recording") this.recorder.stop();
     this.recorder = null;
+    if (this.worklet) {
+      this.worklet.disconnect();
+      this.worklet.port.onmessage = null;
+      this.worklet = null;
+    }
+    this.source?.disconnect();
+    this.source = null;
+    if (this.ctx) {
+      void this.ctx.close();
+      this.ctx = null;
+    }
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;

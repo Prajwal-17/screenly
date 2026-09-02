@@ -3,10 +3,13 @@ import { upgradeWebSocket, websocket } from "hono/bun";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { env } from "./config";
+import { systemPrompt } from "./constants";
 import { db } from "./db";
 import { interviewSession } from "./db/schema";
+import { InterviewSession } from "./lib/interviewSession";
 
 const app = new Hono();
+const sessions = new Map<string, InterviewSession>(); // sessionId,InterviewSession
 
 const localCors = cors({
   origin: env.FRONTEND_URL,
@@ -54,8 +57,6 @@ app.get(
     const authSession = await auth.api.getSession({
       headers: c.req.raw.headers,
     });
-    let totalBytes = 0;
-    let chunkCount = 0;
 
     return {
       onOpen(_event, socket) {
@@ -67,38 +68,35 @@ app.get(
           return;
         }
 
+        const sessionExists = sessions.get(sessionId);
+        if (!sessionExists) {
+          const session = new InterviewSession(socket, sessionId);
+          sessions.set(sessionId, session);
+          session.messages.set(sessionId, [
+            {
+              role: "developer",
+              content: systemPrompt,
+            },
+          ]);
+        }
+
         console.log(`[Audio WS] Connected: ${sessionId}`);
         socket.send(JSON.stringify({ type: "socket-ready", sessionId }));
       },
 
       async onMessage(event, socket) {
-        if (typeof event.data === "string") {
-          console.log(`[Audio WS] Control message: ${event.data}`);
-          return;
-        }
+        const session = sessions.get(sessionId);
+        if (!session) return;
 
-        const bytes = await getByteLength(event.data);
-        totalBytes += bytes;
-        chunkCount += 1;
-
-        console.log(
-          `[Audio WS] Chunk ${chunkCount}: ${bytes} bytes (${totalBytes} total)`,
-        );
-
-        socket.send(
-          JSON.stringify({
-            type: "audio-received",
-            bytes,
-            totalBytes,
-            chunkCount,
-          }),
-        );
+        await session.handleMessage(event);
       },
 
       onClose() {
-        console.log(
-          `[Audio WS] Closed: ${sessionId}; ${chunkCount} chunks, ${totalBytes} bytes`,
-        );
+        const session = sessions.get(sessionId);
+        if (session) {
+          session.close();
+          sessions.delete(sessionId);
+        }
       },
 
       onError(event) {
@@ -108,10 +106,10 @@ app.get(
   }),
 );
 
-async function getByteLength(data: Blob | ArrayBufferLike): Promise<number> {
-  if (data instanceof Blob) return data.size;
-  return data.byteLength;
-}
+// async function getByteLength(data: Blob | ArrayBufferLike): Promise<number> {
+//   if (data instanceof Blob) return data.size;
+//   return data.byteLength;
+// }
 
 const server = Bun.serve({
   port: env.PORT,
