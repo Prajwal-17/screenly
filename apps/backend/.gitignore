@@ -29,6 +29,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # misc
+storage/
 .DS_Store
 *.sqlite
 *.sqlite-shm

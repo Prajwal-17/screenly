@@ -8,7 +8,8 @@
     "BETTER_AUTH_URL",
     "BETTER_AUTH_SECRET",
     "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET"
+    "GOOGLE_CLIENT_SECRET",
+    "DEEPGRAM_API_KEY"
   ],
   "tasks": {
     "format": {

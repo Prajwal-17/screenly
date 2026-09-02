@@ -23,6 +23,9 @@ export const auth = betterAuth({
     provider: "sqlite",
     schema,
   }),
+  account: {
+    identityStrategy: "provider-id",
+  },
   emailAndPassword: {
     enabled: true,
   },
