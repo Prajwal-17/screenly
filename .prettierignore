@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.turbo/
+bun.lock
+test-results/
+playwright-report/
+docs/screenshots/
+*.tsbuildinfo
+
+# Generated migration metadata and existing component templates
+apps/backend/drizzle/
+apps/web/components/ui/
