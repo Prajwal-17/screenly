@@ -1,0 +1,159 @@
+import { beforeAll, describe, expect, test } from "bun:test";
+import { db } from "../src/db";
+import { user } from "../src/db/schema";
+import { interviews } from "../src/db/interviews";
+import {
+  InterviewSession,
+  type SessionDependencies,
+} from "../src/lib/interviewSession";
+import type { ServerEvent } from "@repo/shared";
+const userId = "test-candidate";
+const settings = {
+  role: "Frontend",
+  level: "Mid-level",
+  topics: ["React"],
+  duration: 10,
+} as const;
+beforeAll(() => {
+  db.insert(user)
+    .values({ id: userId, name: "Candidate", email: "candidate@example.com" })
+    .run();
+});
+function fixture(reply: SessionDependencies["reply"]) {
+  const interview = interviews.create(userId, {
+    ...settings,
+    topics: [...settings.topics],
+  });
+  const events: ServerEvent[] = [];
+  let reports = 0;
+  const session = new InterviewSession(
+    interview.id,
+    (event) => {
+      if (!(event instanceof Uint8Array)) events.push(event);
+    },
+    {
+      store: interviews,
+      reply,
+      feedback: async () => {
+        reports++;
+      },
+      stt: () => ({
+        connect: async () => {},
+        sendAudio: () => {},
+        close: () => {},
+      }),
+      tts: () => ({
+        connect: async () => {},
+        sendText: () => {},
+        flush: async () => {},
+        close: () => {},
+      }),
+    },
+  );
+  return { session, interview, events, reports: () => reports };
+}
+describe("interview persistence and orchestration", () => {
+  test("starts with a question and saves one response per unique answer", async () => {
+    let calls = 0;
+    const f = fixture(async function* () {
+      calls++;
+      yield "How would you test this component?";
+    });
+    await f.session.handle({ type: "start", voice: false });
+    const answer = {
+      type: "answer",
+      id: crypto.randomUUID(),
+      text: "I would test the user-visible behavior.",
+    } as const;
+    await f.session.handle(answer);
+    await f.session.handle(answer);
+    const saved = interviews.get(f.interview.id)!;
+    expect(saved.messages.map((m) => m.role)).toEqual([
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    expect(calls).toBe(2);
+    const start = saved.startedAt;
+    await f.session.handle({ type: "start", voice: false });
+    expect(interviews.get(saved.id)?.startedAt).toBe(start);
+    f.session.close();
+  });
+  test("interruption saves partial output and ignores late chunks", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = fixture(async function* () {
+      yield "Consider a cache.";
+      await gate;
+      yield "This late chunk must never appear.";
+    });
+    const pending = f.session.handle({ type: "start", voice: false });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    f.session.interrupt();
+    release();
+    await pending;
+    const messages = interviews.get(f.interview.id)!.messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.status).toBe("interrupted");
+    expect(messages[0]?.content).toBe("Consider a cache.");
+    expect(
+      f.events
+        .filter((e) => e.type === "delta")
+        .map((e) => (e.type === "delta" ? e.text : "")),
+    ).toEqual(["Consider a cache."]);
+    f.session.close();
+  });
+  test("speech remains interruptible until browser playback is acknowledged", async () => {
+    const f = fixture(async function* () {
+      yield "Explain an HTTP cache.";
+    });
+    await f.session.handle({ type: "start", voice: true });
+    f.session.interrupt();
+    expect(interviews.get(f.interview.id)!.messages[0]?.status).toBe(
+      "interrupted",
+    );
+    f.session.close();
+    const acknowledged = fixture(async function* () {
+      yield "Explain an HTTP cache.";
+    });
+    await acknowledged.session.handle({ type: "start", voice: true });
+    await acknowledged.session.handle({ type: "played", responseId: 1 });
+    acknowledged.session.interrupt();
+    expect(interviews.get(acknowledged.interview.id)!.messages[0]?.status).toBe(
+      "complete",
+    );
+    acknowledged.session.close();
+  });
+  test("finishing is idempotent and prevents later answers", async () => {
+    const f = fixture(async function* () {
+      yield "What is a closure?";
+    });
+    await f.session.handle({ type: "start", voice: false });
+    await f.session.finish();
+    const ended = interviews.get(f.interview.id)?.endedAt;
+    await f.session.finish();
+    await f.session.handle({
+      type: "answer",
+      id: crypto.randomUUID(),
+      text: "Too late.",
+    });
+    expect(interviews.get(f.interview.id)?.endedAt).toBe(ended);
+    expect(f.reports()).toBe(1);
+    expect(interviews.get(f.interview.id)?.messages).toHaveLength(1);
+    f.session.close();
+  });
+  test("ownership and cascade deletion preserve isolation", () => {
+    const interview = interviews.create(userId, {
+      ...settings,
+      topics: [...settings.topics],
+    });
+    interviews.addMessage(interview.id, "user", "An answer.", "unique");
+    expect(interviews.owned(interview.id, "another-user")).toBeNull();
+    interviews.remove(interview.id, "another-user");
+    expect(interviews.get(interview.id)).not.toBeNull();
+    interviews.remove(interview.id, userId);
+    expect(interviews.get(interview.id)).toBeNull();
+  });
+});
