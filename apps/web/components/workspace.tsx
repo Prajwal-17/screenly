@@ -125,6 +125,16 @@ export function Workspace({ children }: { children: React.ReactNode }) {
             <span className="dot" />
             Your next chapter starts here
           </span>
+          <button
+            className="icon-button mobile-signout"
+            aria-label="Sign out"
+            onClick={async () => {
+              await authClient.signOut();
+              router.push("/");
+            }}
+          >
+            <LogOut size={17} />
+          </button>
         </header>
         <main className="content">{children}</main>
       </div>

@@ -1090,6 +1090,9 @@ small {
 .mobile-brand {
   display: none;
 }
+.mobile-signout {
+  display: none;
+}
 dialog {
   background: #1b211b;
   color: var(--text);
@@ -1197,6 +1200,12 @@ dialog p {
   }
 }
 @media (max-width: 600px) {
+  .mobile-signout {
+    display: inline-flex;
+  }
+  .topbar > .tag {
+    display: none;
+  }
   .sidebar {
     inset: auto 0 0;
     width: 100%;
