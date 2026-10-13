@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { Workspace } from "@/components/workspace";
@@ -16,6 +16,13 @@ import { api } from "@/lib/api";
 export default function History() {
   const { data: session } = authClient.useSession();
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const client = useQueryClient();
+  const remove = useMutation({
+    mutationFn: api.remove,
+    onSuccess: () => client.invalidateQueries({ queryKey: ["interviews"] }),
+  });
   const query = useQuery({
     queryKey: ["interviews"],
     queryFn: api.list,
@@ -68,8 +75,44 @@ export default function History() {
             <p style={{ marginTop: 12 }}>Try another role or topic.</p>
           </div>
         ) : (
-          <InterviewRows interviews={items} />
+          <InterviewRows
+            interviews={items}
+            onDelete={(interview) => {
+              setSelected(interview.id);
+              dialog.current?.showModal();
+            }}
+          />
         )}
+        {remove.error && (
+          <div className="error" role="alert" style={{ marginTop: 18 }}>
+            {remove.error.message}
+          </div>
+        )}
+        <dialog ref={dialog}>
+          <h2>Delete this interview?</h2>
+          <p>
+            This removes the session, its conversation, and feedback from your
+            history.
+          </p>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button
+              className="button ghost"
+              onClick={() => dialog.current?.close()}
+            >
+              Keep it
+            </button>
+            <button
+              className="button danger"
+              disabled={remove.isPending || !selected}
+              onClick={() => {
+                if (selected) remove.mutate(selected);
+                dialog.current?.close();
+              }}
+            >
+              Delete interview
+            </button>
+          </div>
+        </dialog>
       </Reveal>
     </Workspace>
   );

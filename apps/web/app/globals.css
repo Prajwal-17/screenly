@@ -1368,3 +1368,41 @@ dialog p {
     scroll-behavior: auto !important;
   }
 }
+
+.interview-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.interview-row:last-child {
+  border-bottom: 0;
+}
+.interview-row .table-row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+.table-row.with-delete {
+  grid-template-columns: minmax(0, 2fr) 1fr 85px 100px;
+}
+.row-delete {
+  margin-right: 12px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-color: transparent;
+}
+.row-delete:hover {
+  border-color: var(--line);
+  color: #f0a69c;
+}
+@media (max-width: 1100px) {
+  .table-row.with-delete {
+    grid-template-columns: minmax(0, 2fr) 1fr 75px;
+  }
+}
+@media (max-width: 600px) {
+  .table-row.with-delete {
+    grid-template-columns: minmax(0, 1fr) 75px;
+  }
+}

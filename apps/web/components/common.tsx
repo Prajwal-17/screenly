@@ -1,5 +1,11 @@
 "use client";
-import { Loader2, ArrowRight, AudioLines, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  ArrowRight,
+  AudioLines,
+  AlertCircle,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import type { Interview } from "@repo/shared";
@@ -88,42 +94,65 @@ export function EmptyState() {
     </div>
   );
 }
-export function InterviewRows({ interviews }: { interviews: Interview[] }) {
+export function InterviewRows({
+  interviews,
+  onDelete,
+}: {
+  interviews: Interview[];
+  onDelete?: (interview: Interview) => void;
+}) {
   return (
     <div className="surface" style={{ overflow: "hidden" }}>
       {interviews.length ? (
         interviews.map((item) => (
-          <Link className="table-row" key={item.id} href={interviewLink(item)}>
-            <div>
-              <div className="table-name">{item.role} interview</div>
-              <div className="table-topic">
-                {item.topics.slice(0, 3).join(" · ")}
-              </div>
-            </div>
-            <div className="table-level">
-              <span className="tag">{item.level}</span>
-            </div>
-            <div
-              className="table-date"
-              style={{ fontSize: 11, color: "var(--subtle)" }}
+          <div
+            key={item.id}
+            className={onDelete ? "interview-row" : "contents"}
+          >
+            <Link
+              className={`table-row ${onDelete ? "with-delete" : ""}`}
+              href={interviewLink(item)}
             >
-              {formatDate(item.createdAt)}
-            </div>
-            <div>
-              <span
-                className={`tag ${item.status === "completed" ? "green" : "amber"}`}
+              <div>
+                <div className="table-name">{item.role} interview</div>
+                <div className="table-topic">
+                  {item.topics.slice(0, 3).join(" · ")}
+                </div>
+              </div>
+              <div className="table-level">
+                <span className="tag">{item.level}</span>
+              </div>
+              <div
+                className="table-date"
+                style={{ fontSize: 11, color: "var(--subtle)" }}
               >
-                {item.status === "completed"
-                  ? item.feedback?.overallScore != null
-                    ? `${item.feedback.overallScore}/100`
-                    : "Completed"
-                  : item.status === "active"
-                    ? "Resume"
-                    : "Ready"}
-              </span>
-            </div>
-            <ArrowRight size={15} color="var(--subtle)" />
-          </Link>
+                {formatDate(item.createdAt)}
+              </div>
+              <div>
+                <span
+                  className={`tag ${item.status === "completed" ? "green" : "amber"}`}
+                >
+                  {item.status === "completed"
+                    ? item.feedback?.overallScore != null
+                      ? `${item.feedback.overallScore}/100`
+                      : "Completed"
+                    : item.status === "active"
+                      ? "Resume"
+                      : "Ready"}
+                </span>
+              </div>
+              {!onDelete && <ArrowRight size={15} color="var(--subtle)" />}
+            </Link>
+            {onDelete && (
+              <button
+                className="icon-button row-delete"
+                aria-label={`Delete ${item.role} interview`}
+                onClick={() => onDelete(item)}
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
         ))
       ) : (
         <EmptyState />
