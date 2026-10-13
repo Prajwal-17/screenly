@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.turbo/
+bun.lock
+test-results/
+playwright-report/
+docs/screenshots/
+*.tsbuildinfo
+
+# Generated migration metadata
+apps/backend/drizzle/
+
+# Generated Cloudflare types and local runtime state
+apps/backend/src/worker-configuration.d.ts
+.wrangler/
+.e2e-workers*/
+.local-e2e-workers*/
