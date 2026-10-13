@@ -83,6 +83,8 @@ export class InterviewSession {
     if (event.type === "answer") {
       const interview = this.deps.store.get(this.id);
       if (interview?.status !== "active") return;
+      if (this.deps.store.hasMessageSource(this.id, event.id)) return;
+      this.interrupt();
       const message = this.deps.store.addMessage(
         this.id,
         "user",
@@ -90,7 +92,6 @@ export class InterviewSession {
         event.id,
       );
       if (!message) return;
-      this.interrupt();
       this.send({ type: "partial", text: "" });
       this.send({ type: "message", message });
       await this.reply();
@@ -148,6 +149,8 @@ export class InterviewSession {
     this.send({ type: "partial", text: event.transcript });
     if (event.event === "EndOfTurn" && event.transcript.trim()) {
       const key = `stt:${this.connectionId}:${event.turn_index}`;
+      if (this.deps.store.hasMessageSource(this.id, key)) return;
+      this.interrupt();
       const message = this.deps.store.addMessage(
         this.id,
         "user",
@@ -157,7 +160,6 @@ export class InterviewSession {
       if (!message) return;
       this.send({ type: "partial", text: "" });
       this.send({ type: "message", message });
-      this.interrupt();
       void this.reply();
     }
   }

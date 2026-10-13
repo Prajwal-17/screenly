@@ -90,6 +90,20 @@ export const interviews = {
       .run();
     return this.get(id)!;
   },
+  hasMessageSource(id: string, sourceKey: string) {
+    return Boolean(
+      db
+        .select({ id: interviewMessage.id })
+        .from(interviewMessage)
+        .where(
+          and(
+            eq(interviewMessage.interviewId, id),
+            eq(interviewMessage.sourceKey, sourceKey),
+          ),
+        )
+        .get(),
+    );
+  },
   addMessage(
     id: string,
     role: InterviewMessage["role"],

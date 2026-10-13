@@ -126,6 +126,44 @@ describe("interview persistence and orchestration", () => {
     );
     acknowledged.session.close();
   });
+  test("a new answer follows interrupted output in the persisted transcript", async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const began = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let calls = 0;
+    const f = fixture(async function* () {
+      calls++;
+      if (calls === 1) {
+        yield "An opening question.";
+        entered();
+        await gate;
+        yield "Stale output.";
+      } else yield "A follow-up question.";
+    });
+    const opening = f.session.handle({ type: "start", voice: false });
+    await began;
+    await f.session.handle({
+      type: "answer",
+      id: crypto.randomUUID(),
+      text: "Here is my answer.",
+    });
+    release();
+    await opening;
+    const saved = interviews.get(f.interview.id)!.messages;
+    expect(
+      saved.map((message) => [message.role, message.status, message.content]),
+    ).toEqual([
+      ["assistant", "interrupted", "An opening question."],
+      ["user", "complete", "Here is my answer."],
+      ["assistant", "complete", "A follow-up question."],
+    ]);
+    f.session.close();
+  });
   test("finishing is idempotent and prevents later answers", async () => {
     const f = fixture(async function* () {
       yield "What is a closure?";
