@@ -8,7 +8,7 @@ Technical interview practice for frontend, backend, and full-stack roles. Experi
 
 1. Prepare a draft interview without starting the clock.
 2. Check microphone input and speaker output.
-3. Connect the authenticated session socket; start voice or typed mode.
+3. Connect the authenticated session socket; start the voice conversation.
 4. The server marks the session active and opens with a question.
 5. The browser captures 16 kHz mono PCM16 in recommended 80 ms chunks in an AudioWorklet.
 6. Deepgram Flux emits partial transcripts and finalized end-of-turn events.
@@ -19,13 +19,13 @@ Technical interview practice for frontend, backend, and full-stack roles. Experi
 11. A playback acknowledgement distinguishes completed synthesis from speech the browser is still playing.
 12. Finish saves the interview, releases audio resources, and generates validated feedback.
 
-Typed answers follow the same persisted conversation flow. Connection loss stops local audio and retains the transcript; reconnect and resume within the session's original time budget. Server restarts retain the database; reports interrupted during generation become retryable.
+Connection loss stops local audio and retains the transcript; reconnect and resume within the session's original time budget. Server restarts retain the database; reports interrupted during generation become retryable.
 
 ## Storage
 
 A migration extends the original interview table with settings, state, timing, and feedback. A new message table stores ordered, finalized speaker turns. Message source keys are unique per interview; deletion cascades to messages.
 
-Feedback validation checks rubric dimensions, score ranges, next steps, and referenced candidate IDs. Overall scores are suppressed for interviews with fewer than two candidate answers. Pending feedback requests are deduplicated in the running process; the durable status supports retry after restart.
+Feedback uses a 0–10 scale with one decimal place. Saved 0–100 reports are converted on read; new reports store their scale explicitly. Feedback validation checks rubric dimensions, score ranges, next steps, and referenced candidate IDs. Overall scores are suppressed for interviews with fewer than two candidate answers. Pending feedback requests are deduplicated in the running process; the durable status supports retry after restart.
 
 ## Ownership and resource boundaries
 
@@ -45,7 +45,7 @@ Named Impeccable/Emil Kowalski skills were not available in this workspace. No c
 - Real email/password signup, authenticated API, invalid settings, cross-user isolation, and draft-finish rejection.
 - Duplicate answer suppression, persisted interrupted output, stale generation rejection, idempotent finish, and ownership/deletion.
 - Local WebSocket transport test for JSON and binary speech frames.
-- Chromium journey: signup, setup, typed conversation, provider-error recovery, report, reload, transcript download, history, mobile width, and deletion.
+- Chromium journey: signup, setup, voice conversation, provider-error recovery, report, reload, transcript download, history, mobile width, and deletion.
 - Chromium voice journey with simulated microphone and local Deepgram wire-protocol fixture: capture, transcription, playback, mute, reload, and finish.
 - Type checks, ESLint, production build, and formatting.
 
@@ -61,6 +61,6 @@ English recognition uses `flux-general-en`; synthesis uses `flux-kit-en`. These 
 
 ## Audio recovery
 
-Microphone transcription and speech output are independent. Typed answers still receive spoken replies when Deepgram is configured, and transcription failures do not disable TTS. **Hear question** replays the last question without generating another LLM response or adding duplicate transcript messages. Speech errors have their own retry action.
+Microphone transcription and speech output are independent. Microphone failures require retrying transcription; they do not disable TTS. A transcription connection must succeed before the interview clock starts. **Hear question** replays the last question without generating another LLM response or adding duplicate transcript messages. Speech errors have their own retry action.
 
 Flux `Flushed` acknowledges text flushing; it does not mean all audio has arrived. The speech transport waits for `SpeechMetadata` before ending synthesis. Audio contexts use idempotent, shared cleanup so repeated microphone checks, starting, and navigation cannot close an already closed context. Browser tests track actual PCM playback and exercise repeated microphone checks.

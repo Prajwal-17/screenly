@@ -4,8 +4,22 @@ import {
   unpackAudio,
   settingsSchema,
   feedbackSchema,
+  clientEventSchema,
 } from "./index";
 describe("shared contracts", () => {
+  test("accepts voice starts and rejects text answers and mode selection", () => {
+    expect(clientEventSchema.safeParse({ type: "start" }).success).toBe(true);
+    expect(
+      clientEventSchema.safeParse({ type: "start", voice: false }).success,
+    ).toBe(false);
+    expect(
+      clientEventSchema.safeParse({
+        type: "answer",
+        id: crypto.randomUUID(),
+        text: "An answer",
+      }).success,
+    ).toBe(false);
+  });
   test("audio preserves the reply ID and PCM samples", () => {
     const pcm = new Int16Array([-32768, 0, 32767]);
     const frame = packAudio(4294967294, new Uint8Array(pcm.buffer));
@@ -33,13 +47,13 @@ describe("shared contracts", () => {
   test("feedback must cover each rubric dimension once", () => {
     const item = {
       name: "Technical accuracy",
-      score: 50,
+      score: 5,
       explanation: "Some evidence",
     };
     expect(
       feedbackSchema.safeParse({
         summary: "Example",
-        overallScore: 50,
+        overallScore: 5,
         dimensions: [item, item, item, item],
         strengths: [],
         improvements: [],

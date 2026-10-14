@@ -49,28 +49,29 @@ const server = Bun.serve({
     }[];
     const candidates = transcript.filter((m) => m.role === "user");
     const report = {
+      scoreScale: 10,
       summary:
         "You connected component testing to user-visible behavior and considered error handling. Keep exploring concrete examples.",
-      overallScore: candidates.length >= 2 ? 78 : null,
+      overallScore: candidates.length >= 2 ? 7.8 : null,
       dimensions: [
         {
           name: "Technical accuracy",
-          score: 80,
+          score: 8,
           explanation: "You described behavior-focused assertions.",
         },
         {
           name: "Depth & trade-offs",
-          score: 72,
+          score: 7.2,
           explanation: "Explore more alternatives and their trade-offs.",
         },
         {
           name: "Problem solving",
-          score: 78,
+          score: 7.8,
           explanation: "Your approach follows a clear sequence.",
         },
         {
           name: "Communication",
-          score: 82,
+          score: 8.2,
           explanation: "Your explanations were clear and concise.",
         },
       ],

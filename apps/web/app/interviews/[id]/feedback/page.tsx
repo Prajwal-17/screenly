@@ -167,7 +167,7 @@ export default function Report() {
                     <span>
                       {feedback.overallScore === null
                         ? "More evidence needed"
-                        : "Overall · out of 100"}
+                        : "Overall · out of 10"}
                     </span>
                   </div>
                 </div>
@@ -184,11 +184,11 @@ export default function Report() {
                           <span className="accent">
                             {d.score === null
                               ? "Insufficient evidence"
-                              : `${d.score}/100`}
+                              : `${d.score}/10`}
                           </span>
                         </div>
                         <div className="score-track">
-                          <span style={{ width: `${d.score ?? 0}%` }} />
+                          <span style={{ width: `${(d.score ?? 0) * 10}%` }} />
                         </div>
                         <p>{d.explanation}</p>
                       </div>

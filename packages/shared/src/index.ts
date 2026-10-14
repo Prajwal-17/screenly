@@ -37,8 +37,9 @@ export type LiveStatus =
   | "finishing"
   | "disconnected";
 
-const score = z.number().int().min(0).max(100).nullable();
+const score = z.number().min(0).max(10).multipleOf(0.1).nullable();
 export const feedbackSchema = z.object({
+  scoreScale: z.literal(10).default(10),
   summary: z.string().min(1).max(2000),
   overallScore: score,
   dimensions: z
@@ -93,12 +94,7 @@ export type Interview = InterviewSettings & {
 export type InterviewDetail = Interview & { messages: InterviewMessage[] };
 export type Capabilities = { google: boolean; voice: boolean; llm: boolean };
 export const clientEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("start"), voice: z.boolean() }),
-  z.object({
-    type: z.literal("answer"),
-    id: z.string().uuid(),
-    text: z.string().trim().min(1).max(6000),
-  }),
+  z.object({ type: z.literal("start") }).strict(),
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("speak") }),
   z.object({

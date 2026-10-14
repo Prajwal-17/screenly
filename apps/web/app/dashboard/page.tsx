@@ -25,7 +25,7 @@ export default function Dashboard() {
     i.feedback?.overallScore != null ? [i.feedback.overallScore] : [],
   );
   const average = scores.length
-    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
     : null;
   return (
     <Workspace>
@@ -69,7 +69,7 @@ export default function Dashboard() {
               {average ?? "—"}
               {average !== null && (
                 <span style={{ fontSize: 15, color: "var(--subtle)" }}>
-                  /100
+                  /10
                 </span>
               )}
             </div>

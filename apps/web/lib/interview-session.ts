@@ -111,6 +111,9 @@ export class Session {
             )
           : [...s.messages, event.message],
         ...(event.message.role === "assistant" ? { streaming: "" } : {}),
+        ...(event.message.role === "user" && s.errorScope === "llm"
+          ? { error: "", errorScope: null }
+          : {}),
       }));
     if (event.type === "delta") {
       if (this.cancelled.has(event.responseId)) return;
@@ -162,30 +165,29 @@ export class Session {
       throw new Error("Reconnect before continuing.");
     this.socket.send(JSON.stringify(event));
   }
-  async start(voice: boolean, download = false) {
+  async start(download = this.download) {
     if (useInterviewStore.getState().starting) return;
     useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
       await this.player.unlock();
       if (this.disposed) return;
       this.download = download;
-      if (voice) {
-        try {
-          await this.capture();
-        } catch {
-          voice = false;
-          this.stopCapture();
-          useInterviewStore.setState({
-            error:
-              "Microphone access is unavailable. You can continue by typing your answers.",
-          });
-        }
+      try {
+        await this.capture();
+      } catch {
+        this.stopCapture();
+        useInterviewStore.setState({
+          error:
+            "Microphone access is unavailable. Allow microphone access in your browser, then retry.",
+          errorScope: "voice",
+        });
+        return;
       }
       if (this.disposed) {
         this.stopCapture();
         return;
       }
-      this.send({ type: "start", voice });
+      this.send({ type: "start" });
     } catch (error) {
       useInterviewStore.setState({
         error: error instanceof Error ? error.message : "Could not start.",
@@ -297,11 +299,6 @@ export class Session {
         errorScope: "speech",
       });
     }
-  }
-  answer(text: string) {
-    this.interrupt();
-    this.send({ type: "answer", id: crypto.randomUUID(), text });
-    useInterviewStore.setState({ error: "", errorScope: null });
   }
   interrupt() {
     this.player.stop();

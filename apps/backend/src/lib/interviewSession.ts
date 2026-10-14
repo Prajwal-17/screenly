@@ -85,36 +85,20 @@ export class InterviewSession {
       return;
     }
     if (event.type === "start") {
-      await this.start(event.voice);
+      await this.start();
       return;
-    }
-    if (event.type === "answer") {
-      const interview = this.deps.store.get(this.id);
-      if (interview?.status !== "active") return;
-      if (this.deps.store.hasMessageSource(this.id, event.id)) return;
-      this.interrupt();
-      const message = this.deps.store.addMessage(
-        this.id,
-        "user",
-        event.text,
-        event.id,
-      );
-      if (!message) return;
-      this.send({ type: "partial", text: "" });
-      this.send({ type: "message", message });
-      await this.reply();
     }
   }
   audio(data: Uint8Array) {
     if (!this.closed && this.voice && !this.finishing)
       this.stt?.sendAudio(data);
   }
-  private async start(voice: boolean) {
+  private async start() {
     if (this.starting || this.deps.store.get(this.id)?.status === "completed")
       return;
     this.starting = true;
     try {
-      if (voice && !this.stt) {
+      if (!this.stt) {
         this.stt = this.deps.stt(
           (event) => this.turn(event),
           (error) => this.voiceError(error),
@@ -124,6 +108,7 @@ export class InterviewSession {
           this.voice = true;
         } catch (error) {
           this.voiceError(error);
+          return;
         }
       }
       if (this.closed || this.finishing) return;
@@ -153,7 +138,13 @@ export class InterviewSession {
     }
   }
   private turn(event: ListenV2TurnInfo) {
-    if (this.closed || this.finishing) return;
+    if (
+      this.closed ||
+      this.finishing ||
+      !this.voice ||
+      this.deps.store.get(this.id)?.status !== "active"
+    )
+      return;
     if (event.event === "StartOfTurn") this.interrupt();
     this.send({ type: "partial", text: event.transcript });
     if (event.event === "EndOfTurn" && event.transcript.trim()) {
@@ -289,7 +280,7 @@ export class InterviewSession {
           scope: speechFailed ? "speech" : "llm",
           message: speechFailed
             ? "Speech is unavailable. Check the Deepgram key and model, then retry speech."
-            : "The interviewer could not respond. Retry or continue with a typed answer.",
+            : "The interviewer could not respond. Retry the interviewer or answer again using your microphone.",
         });
       }
     } finally {
@@ -376,9 +367,8 @@ export class InterviewSession {
         scope: "voice",
         message:
           error instanceof DeepgramConnectionError
-            ? error.message +
-              " Type your answer; spoken replies remain enabled."
-            : "Microphone transcription is unavailable. Type your answer; spoken replies remain enabled. Check the Deepgram key and retry microphone.",
+            ? error.message
+            : "Microphone transcription is unavailable. Check the Deepgram key and retry microphone.",
       });
   }
   async finish() {

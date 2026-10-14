@@ -134,7 +134,7 @@ export function InterviewRows({
                 >
                   {item.status === "completed"
                     ? item.feedback?.overallScore != null
-                      ? `${item.feedback.overallScore}/100`
+                      ? `${item.feedback.overallScore}/10`
                       : "Completed"
                     : item.status === "active"
                       ? "Resume"

@@ -6,6 +6,7 @@ import {
   InterviewSession,
   type SessionDependencies,
 } from "../src/lib/interviewSession";
+import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
 import type { ServerEvent } from "@repo/shared";
 const userId = "test-candidate";
 const settings = {
@@ -30,6 +31,7 @@ function fixture(
   const events: ServerEvent[] = [];
   const audioFrames: Uint8Array[] = [];
   let reports = 0;
+  let onTurn!: (event: ListenV2TurnInfo) => void;
   const session = new InterviewSession(
     interview.id,
     (event) => {
@@ -43,11 +45,14 @@ function fixture(
       feedback: async () => {
         reports++;
       },
-      stt: () => ({
-        connect: async () => {},
-        sendAudio: () => {},
-        close: () => {},
-      }),
+      stt: (turn) => {
+        onTurn = turn;
+        return {
+          connect: async () => {},
+          sendAudio: () => {},
+          close: () => {},
+        };
+      },
       tts: () => ({
         connect: async () => {},
         sendText: () => {},
@@ -57,7 +62,22 @@ function fixture(
       ...options,
     },
   );
-  return { session, interview, events, audioFrames, reports: () => reports };
+  async function turn(text: string, index = 0) {
+    onTurn({
+      event: "EndOfTurn",
+      transcript: text,
+      turn_index: index,
+    } as ListenV2TurnInfo);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  return {
+    session,
+    interview,
+    events,
+    audioFrames,
+    turn,
+    reports: () => reports,
+  };
 }
 describe("interview persistence and orchestration", () => {
   test("starts with a question and saves one response per unique answer", async () => {
@@ -66,14 +86,9 @@ describe("interview persistence and orchestration", () => {
       calls++;
       yield "How would you test this component?";
     });
-    await f.session.handle({ type: "start", voice: false });
-    const answer = {
-      type: "answer",
-      id: crypto.randomUUID(),
-      text: "I would test the user-visible behavior.",
-    } as const;
-    await f.session.handle(answer);
-    await f.session.handle(answer);
+    await f.session.handle({ type: "start" });
+    await f.turn("I would test the user-visible behavior.");
+    await f.turn("I would test the user-visible behavior.");
     const saved = interviews.get(f.interview.id)!;
     expect(saved.messages.map((m) => m.role)).toEqual([
       "assistant",
@@ -82,7 +97,7 @@ describe("interview persistence and orchestration", () => {
     ]);
     expect(calls).toBe(2);
     const start = saved.startedAt;
-    await f.session.handle({ type: "start", voice: false });
+    await f.session.handle({ type: "start" });
     expect(interviews.get(saved.id)?.startedAt).toBe(start);
     f.session.close();
   });
@@ -96,7 +111,7 @@ describe("interview persistence and orchestration", () => {
       await gate;
       yield "This late chunk must never appear.";
     });
-    const pending = f.session.handle({ type: "start", voice: false });
+    const pending = f.session.handle({ type: "start" });
     await new Promise((resolve) => setTimeout(resolve, 5));
     f.session.interrupt();
     release();
@@ -119,7 +134,7 @@ describe("interview persistence and orchestration", () => {
       },
       { speechEnabled: true },
     );
-    await f.session.handle({ type: "start", voice: true });
+    await f.session.handle({ type: "start" });
     f.session.interrupt();
     expect(interviews.get(f.interview.id)!.messages[0]?.status).toBe(
       "interrupted",
@@ -131,7 +146,7 @@ describe("interview persistence and orchestration", () => {
       },
       { speechEnabled: true },
     );
-    await acknowledged.session.handle({ type: "start", voice: true });
+    await acknowledged.session.handle({ type: "start" });
     await acknowledged.session.handle({ type: "played", responseId: 1 });
     acknowledged.session.interrupt();
     expect(interviews.get(acknowledged.interview.id)!.messages[0]?.status).toBe(
@@ -158,13 +173,9 @@ describe("interview persistence and orchestration", () => {
         yield "Stale output.";
       } else yield "A follow-up question.";
     });
-    const opening = f.session.handle({ type: "start", voice: false });
+    const opening = f.session.handle({ type: "start" });
     await began;
-    await f.session.handle({
-      type: "answer",
-      id: crypto.randomUUID(),
-      text: "Here is my answer.",
-    });
+    await f.turn("Here is my answer.");
     release();
     await opening;
     const saved = interviews.get(f.interview.id)!.messages;
@@ -177,7 +188,7 @@ describe("interview persistence and orchestration", () => {
     ]);
     f.session.close();
   });
-  test("typed answers receive spoken replies and replay does not duplicate the transcript", async () => {
+  test("voice interviews receive spoken replies and replay does not duplicate the transcript", async () => {
     const f = fixture(
       async function* () {
         yield "Tell me about React.";
@@ -192,17 +203,18 @@ describe("interview persistence and orchestration", () => {
         }),
       },
     );
-    await f.session.handle({ type: "start", voice: false });
+    await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(1);
     await f.session.handle({ type: "played", responseId: 1 });
     await f.session.handle({ type: "speak" });
     expect(f.audioFrames.length).toBe(2);
-    await f.session.handle({ type: "start", voice: false });
+    await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(3);
     expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
     f.session.close();
   });
-  test("failed transcription does not disable speech synthesis", async () => {
+  test("failed transcription leaves the draft unstarted and can be retried", async () => {
+    let fail = true;
     const f = fixture(
       async function* () {
         yield "Describe an HTTP cache.";
@@ -211,7 +223,7 @@ describe("interview persistence and orchestration", () => {
         speechEnabled: true,
         stt: () => ({
           connect: async () => {
-            throw new Error("Transcription failed");
+            if (fail) throw new Error("Transcription failed");
           },
           sendAudio: () => {},
           close: () => {},
@@ -224,12 +236,17 @@ describe("interview persistence and orchestration", () => {
         }),
       },
     );
-    await f.session.handle({ type: "start", voice: true });
+    await f.session.handle({ type: "start" });
     expect(
       f.events.some(
         (event) => event.type === "error" && event.scope === "voice",
       ),
     ).toBe(true);
+    expect(f.audioFrames).toHaveLength(0);
+    expect(interviews.get(f.interview.id)!.status).toBe("draft");
+    expect(interviews.get(f.interview.id)!.startedAt).toBeNull();
+    fail = false;
+    await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(1);
     expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
     f.session.close();
@@ -238,15 +255,11 @@ describe("interview persistence and orchestration", () => {
     const f = fixture(async function* () {
       yield "What is a closure?";
     });
-    await f.session.handle({ type: "start", voice: false });
+    await f.session.handle({ type: "start" });
     await f.session.finish();
     const ended = interviews.get(f.interview.id)?.endedAt;
     await f.session.finish();
-    await f.session.handle({
-      type: "answer",
-      id: crypto.randomUUID(),
-      text: "Too late.",
-    });
+    await f.turn("Too late.");
     expect(interviews.get(f.interview.id)?.endedAt).toBe(ended);
     expect(f.reports()).toBe(1);
     expect(interviews.get(f.interview.id)?.messages).toHaveLength(1);

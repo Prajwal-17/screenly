@@ -6,7 +6,6 @@ import {
   Mic,
   MicOff,
   Square,
-  Send,
   Loader2,
   RefreshCw,
   VolumeX,
@@ -40,7 +39,6 @@ export default function InterviewPage() {
   const dialog = useRef<HTMLDialogElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const state = useInterviewStore();
-  const [answer, setAnswer] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const finish = useMutation({
     mutationFn: () => api.finish(id),
@@ -150,9 +148,7 @@ export default function InterviewPage() {
                       onClick={() =>
                         state.errorScope === "speech"
                           ? void controller.current?.speakLatest()
-                          : void controller.current?.start(
-                              state.errorScope === "voice",
-                            )
+                          : void controller.current?.start()
                       }
                     >
                       {state.errorScope === "speech"
@@ -197,8 +193,8 @@ export default function InterviewPage() {
                   capabilities={capabilities.data}
                   disabled={!state.connected}
                   starting={state.starting}
-                  onStart={(voice, download) =>
-                    void controller.current?.start(voice, download)
+                  onStart={(download) =>
+                    void controller.current?.start(download)
                   }
                 />
                 {state.status === "disconnected" && !state.error && (
@@ -308,8 +304,8 @@ export default function InterviewPage() {
                       <span className="eyebrow">Your answer</span>
                       <span style={{ fontSize: 11, color: "var(--subtle)" }}>
                         {state.micActive
-                          ? "Speak naturally, or type below"
-                          : "Think it through. Take your time."}
+                          ? "Speak naturally. Take your time."
+                          : "Retry your microphone to continue."}
                       </span>
                     </div>
                     {state.micActive && (
@@ -317,46 +313,6 @@ export default function InterviewPage() {
                         <span style={{ width: `${state.level * 100}%` }} />
                       </div>
                     )}
-                    <form
-                      className="answer-form"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (answer.trim()) {
-                          try {
-                            controller.current?.answer(answer.trim());
-                            setAnswer("");
-                          } catch (error) {
-                            useInterviewStore.setState({
-                              error:
-                                error instanceof Error
-                                  ? error.message
-                                  : "Could not send.",
-                            });
-                          }
-                        }
-                      }}
-                    >
-                      <textarea
-                        className="input"
-                        aria-label="Your interview answer"
-                        placeholder="Type your answer…"
-                        value={answer}
-                        maxLength={6000}
-                        onChange={(e) => setAnswer(e.target.value)}
-                        rows={2}
-                      />
-                      <button
-                        className="button"
-                        aria-label="Send answer"
-                        disabled={
-                          !answer.trim() ||
-                          !state.connected ||
-                          state.status === "finishing"
-                        }
-                      >
-                        <Send size={17} />
-                      </button>
-                    </form>
                   </div>
                 </div>
                 <div className="surface transcript-panel">

@@ -1,6 +1,6 @@
 # Forma · AI Interviewer
 
-A technical interview practice app built for learning and portfolio use. Choose a role, experience level, topics, and duration; have an adaptive voice or typed conversation; then review your saved transcript and feedback.
+A technical interview practice app built for learning and portfolio use. Choose a role, experience level, topics, and duration; have an adaptive voice conversation; then review your saved transcript and feedback scored out of 10.
 
 ![Forma landing page](docs/screenshots/landing.png)
 
@@ -11,13 +11,13 @@ A technical interview practice app built for learning and portfolio use. Choose 
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
 - Adaptive follow-ups using session settings and conversation history.
-- Microphone/speaker checks, mute, interruption, typed fallback, and optional microphone recording download.
+- Microphone/speaker checks, mute, interruption, and optional microphone recording download.
 - Saved conversations, structured feedback, searchable history, deletion, and transcript export.
 - Session ownership checks, duplicate-answer protection, bounded provider waits, and recovery after disconnection.
 
 ## Requirements
 
-Bun 1.3.5+ (verified with 1.4.3), Node.js 20.9+, and an OpenAI-compatible Chat Completions provider. Deepgram is needed for voice; typed interviews only need the LLM.
+Bun 1.3.5+ (verified with 1.4.3), Node.js 20.9+, and an OpenAI-compatible Chat Completions provider. Deepgram is required for microphone transcription and spoken replies.
 
 ## Local setup
 
@@ -56,7 +56,7 @@ bun run dev
 
 Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone before starting.
 
-If the LLM is not configured, setup and history remain available, and the start screen explains what to configure. If microphone transcription fails, continue by typing; TTS remains enabled. Use **Hear question** to replay the latest question or **Retry speech** after a speech failure. Finalized messages remain saved.
+If the LLM is not configured, setup and history remain available, and the start screen explains what to configure. If microphone transcription fails, retry the microphone; TTS remains enabled. Microphone access and a working transcription connection are required to start. Use **Hear question** to replay the latest question or **Retry speech** after a speech failure. Finalized messages remain saved.
 
 For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Email/password works without Google credentials.
 

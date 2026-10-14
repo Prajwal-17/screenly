@@ -31,7 +31,9 @@ async function playbackCount(page: Page) {
 }
 test("complete practice journey, recovery, history, and mobile layout", async ({
   page,
+  context,
 }) => {
+  await context.grantPermissions(["microphone"]);
   await trackSpeakerPlayback(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -72,43 +74,68 @@ test("complete practice journey, recovery, history, and mobile layout", async ({
     await capture(page, { path: "docs/screenshots/setup.png", fullPage: true });
   await page.getByRole("button", { name: "Prepare my interview" }).click();
   await expect(page).toHaveURL(/\/interviews\/[a-f0-9-]+$/);
-  await page.getByLabel("Typed answers", { exact: true }).check();
+  await expect(page.getByLabel("Typed answers", { exact: true })).toHaveCount(
+    0,
+  );
+  // A denied microphone must leave the session in preflight without a text fallback.
+  await page.evaluate(() => {
+    const media = navigator.mediaDevices;
+    const original = media.getUserMedia.bind(media);
+    media.getUserMedia = async () => {
+      media.getUserMedia = original;
+      throw new DOMException("Microphone denied", "NotAllowedError");
+    };
+  });
   await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
+  await expect(page.locator(".error[role=alert]")).toContainText(
+    "Microphone access is unavailable",
+  );
+  await expect(
+    page.getByRole("button", { name: "Start interview", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("00:00 / 20:00", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Retry microphone", exact: true })
+    .click();
+  await expect(page.getByLabel("Your interview answer")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send answer" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByText(/You mentioned testing behavior/).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
   await expect.poll(() => playbackCount(page)).toBeGreaterThan(0);
   const firstPlayback = await playbackCount(page);
   await page
     .getByRole("button", { name: "Hear question", exact: true })
     .click();
   await expect.poll(() => playbackCount(page)).toBeGreaterThan(firstPlayback);
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
-  await page
-    .getByLabel("Your interview answer")
-    .fill(
-      "I test what the user can see, including loading and success states.",
-    );
-  await page.getByRole("button", { name: "Send answer" }).click();
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
   await expect(
-    page.getByText(/You mentioned testing behavior/).first(),
+    page.getByText("Listening to you", { exact: true }),
   ).toBeVisible();
   // The controlled provider fails once; the UI must preserve the conversation.
-  await page
-    .getByLabel("Your interview answer")
-    .fill("I would test a failed request and show a retry control.");
-  await page.getByRole("button", { name: "Send answer" }).click();
+  await page.request.post("http://localhost:8791/turn", {
+    data: {
+      transcript: "I would test a failed request and show a retry control.",
+    },
+  });
   await expect(page.locator(".error[role=alert]")).toContainText(
     "could not respond",
   );
-  await page
-    .getByLabel("Your interview answer")
-    .fill(
-      "I would mock a rejected request and assert that the retry control appears.",
-    );
-  await page.getByRole("button", { name: "Send answer" }).click();
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
+  await page.request.post("http://localhost:8791/turn", {
+    data: {
+      transcript:
+        "I would mock a rejected request and assert that the retry control appears.",
+    },
+  });
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".error[role=alert]")).toHaveCount(0);
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
@@ -123,7 +150,7 @@ test("complete practice journey, recovery, history, and mobile layout", async ({
   await expect(
     page.getByRole("heading", { name: /Here’s where you stand/ }),
   ).toBeVisible();
-  await expect(page.getByText("78", { exact: true })).toBeVisible();
+  await expect(page.getByText("7.8", { exact: true })).toBeVisible();
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
       path: "docs/screenshots/feedback.png",
@@ -135,7 +162,7 @@ test("complete practice journey, recovery, history, and mobile layout", async ({
     /forma-interview.*\.txt/,
   );
   await page.reload();
-  await expect(page.getByText("78", { exact: true })).toBeVisible();
+  await expect(page.getByText("7.8", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "History", exact: true }).click();
   await expect(
     page.getByText("Frontend interview", { exact: true }),

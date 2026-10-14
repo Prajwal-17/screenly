@@ -14,9 +14,8 @@ export function Preflight({
   capabilities?: Capabilities;
   disabled: boolean;
   starting: boolean;
-  onStart: (voice: boolean, download: boolean) => void;
+  onStart: (download: boolean) => void;
 }) {
-  const [voice, setVoice] = useState(true);
   const [download, setDownload] = useState(false);
   const [checked, setChecked] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -90,7 +89,7 @@ export function Preflight({
       };
     } catch {
       setError(
-        "Allow microphone access in your browser, or choose typed answers.",
+        "Allow microphone access in your browser, then check your microphone again.",
       );
       setTesting(false);
     }
@@ -123,86 +122,55 @@ export function Preflight({
           ? "Your transcript is saved. Resume the interview for the time remaining."
           : "We’ll start the clock when you’re ready. The interviewer will open with a question tailored to your focus."}
       </p>
-      <div className="choices" style={{ marginBottom: 22 }}>
-        <label className="choice">
-          <input
-            type="radio"
-            checked={voice}
-            onChange={() => setVoice(true)}
-            name="answer-mode"
-          />
-          Voice conversation
-        </label>
-        <label className="choice">
-          <input
-            type="radio"
-            checked={!voice}
-            onChange={() => setVoice(false)}
-            name="answer-mode"
-          />
-          Typed answers
-        </label>
+      <div className="row" style={{ flexWrap: "wrap" }}>
+        <button
+          className="button secondary"
+          disabled={testing}
+          onClick={() => void testMic()}
+        >
+          {testing ? (
+            <Loader2 className="spin" size={16} />
+          ) : checked ? (
+            <Check size={16} />
+          ) : (
+            <Mic size={16} />
+          )}{" "}
+          {testing
+            ? "Listening for 4 seconds…"
+            : checked
+              ? "Microphone checked"
+              : "Check microphone"}
+        </button>
+        <button className="button ghost" onClick={() => void testSound()}>
+          <Volume2 size={16} />
+          Test sound
+        </button>
       </div>
-      <p style={{ fontSize: 12, marginBottom: 18 }}>
-        The interviewer speaks in both modes. Choose whether to answer with your
-        microphone or keyboard.
+      <div className="meter" aria-label="Microphone input level">
+        <span style={{ width: `${level}%` }} />
+      </div>
+      <label className="row" style={{ fontSize: 12, color: "var(--subtle)" }}>
+        <input
+          type="checkbox"
+          checked={download}
+          onChange={(e) => setDownload(e.target.checked)}
+          style={{ accentColor: "var(--accent)" }}
+        />
+        Download my microphone recording when I finish
+      </label>
+      <p style={{ fontSize: 11, margin: "10px 0 0" }}>
+        Headphones help keep the conversation clear.
       </p>
-      {voice && (
-        <>
-          <div className="row" style={{ flexWrap: "wrap" }}>
-            <button
-              className="button secondary"
-              disabled={testing}
-              onClick={() => void testMic()}
-            >
-              {testing ? (
-                <Loader2 className="spin" size={16} />
-              ) : checked ? (
-                <Check size={16} />
-              ) : (
-                <Mic size={16} />
-              )}{" "}
-              {testing
-                ? "Listening for 4 seconds…"
-                : checked
-                  ? "Microphone checked"
-                  : "Check microphone"}
-            </button>
-            <button className="button ghost" onClick={() => void testSound()}>
-              <Volume2 size={16} />
-              Test sound
-            </button>
-          </div>
-          <div className="meter" aria-label="Microphone input level">
-            <span style={{ width: `${level}%` }} />
-          </div>
-          <label
-            className="row"
-            style={{ fontSize: 12, color: "var(--subtle)" }}
-          >
-            <input
-              type="checkbox"
-              checked={download}
-              onChange={(e) => setDownload(e.target.checked)}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Download my microphone recording when I finish
-          </label>
-          <p style={{ fontSize: 11, margin: "10px 0 0" }}>
-            Headphones help keep the conversation clear.
-          </p>
-        </>
-      )}
       {capabilities && !capabilities.llm && (
         <div className="notice" style={{ marginTop: 20 }}>
           Set the backend’s LLM API key, base URL, and model, then restart it to
           enable the interviewer.
         </div>
       )}
-      {capabilities && voice && !capabilities.voice && (
+      {capabilities && !capabilities.voice && (
         <div className="notice" style={{ marginTop: 15 }}>
-          Voice needs a Deepgram API key. Typed interviews are available when
-          the LLM is configured.
+          Set the backend’s Deepgram API key, then restart it to enable voice
+          interviews.
         </div>
       )}
       {error && (
@@ -222,11 +190,11 @@ export function Preflight({
             starting ||
             testing ||
             !capabilities?.llm ||
-            (voice && !capabilities?.voice)
+            !capabilities?.voice
           }
           onClick={() => {
             cleanup.current();
-            onStart(voice, download);
+            onStart(download);
           }}
         >
           {starting ? (

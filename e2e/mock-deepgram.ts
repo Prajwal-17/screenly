@@ -1,17 +1,46 @@
 type State = {
   listen: boolean;
   answered: boolean;
+  turnIndex: number;
   timer: ReturnType<typeof setTimeout> | null;
 };
+const listeners = new Set<Bun.ServerWebSocket<State>>();
+function emitTurn(socket: Bun.ServerWebSocket<State>, transcript: string) {
+  const turnIndex = socket.data.turnIndex++;
+  socket.send(
+    JSON.stringify({
+      type: "TurnInfo",
+      event: "StartOfTurn",
+      turn_index: turnIndex,
+      sequence_id: turnIndex * 2,
+      transcript: "",
+    }),
+  );
+  socket.send(
+    JSON.stringify({
+      type: "TurnInfo",
+      event: "EndOfTurn",
+      turn_index: turnIndex,
+      sequence_id: turnIndex * 2 + 1,
+      transcript,
+    }),
+  );
+}
 const server = Bun.serve<State>({
   port: 8791,
-  fetch(request, server) {
+  async fetch(request, server) {
     const url = new URL(request.url);
+    if (url.pathname === "/turn" && request.method === "POST") {
+      const { transcript } = (await request.json()) as { transcript: string };
+      for (const socket of listeners) emitTurn(socket, transcript);
+      return new Response("ok");
+    }
     if (url.pathname === "/") return new Response("ok");
     return server.upgrade(request, {
       data: {
         listen: url.pathname.endsWith("listen"),
         answered: false,
+        turnIndex: 0,
         timer: null,
       },
     })
@@ -20,6 +49,7 @@ const server = Bun.serve<State>({
   },
   websocket: {
     open(socket) {
+      if (socket.data.listen) listeners.add(socket);
       socket.send(JSON.stringify({ type: "Connected" }));
     },
     message(socket, data) {
@@ -27,24 +57,7 @@ const server = Bun.serve<State>({
         if (socket.data.answered) return;
         socket.data.answered = true;
         socket.data.timer = setTimeout(() => {
-          socket.send(
-            JSON.stringify({
-              type: "TurnInfo",
-              event: "StartOfTurn",
-              turn_index: 0,
-              sequence_id: 0,
-              transcript: "",
-            }),
-          );
-          socket.send(
-            JSON.stringify({
-              type: "TurnInfo",
-              event: "EndOfTurn",
-              turn_index: 0,
-              sequence_id: 1,
-              transcript: "I test the component behavior and loading states.",
-            }),
-          );
+          emitTurn(socket, "I test the component behavior and loading states.");
         }, 1500);
         return;
       }
@@ -72,6 +85,7 @@ const server = Bun.serve<State>({
       }
     },
     close(socket) {
+      listeners.delete(socket);
       if (socket.data.timer) clearTimeout(socket.data.timer);
     },
   },

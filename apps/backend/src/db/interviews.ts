@@ -10,6 +10,23 @@ import { db } from "./index";
 import { interviewMessage, interviewSession } from "./schema";
 
 type Row = typeof interviewSession.$inferSelect;
+export function normalizeStoredFeedback(
+  feedback: (Omit<Feedback, "scoreScale"> & { scoreScale?: 10 }) | null,
+): Feedback | null {
+  if (!feedback) return null;
+  if (feedback.scoreScale === 10) return feedback as Feedback;
+  const convert = (score: number | null) =>
+    score === null ? null : Math.round(score) / 10;
+  return {
+    ...feedback,
+    scoreScale: 10,
+    overallScore: convert(feedback.overallScore),
+    dimensions: feedback.dimensions.map((dimension) => ({
+      ...dimension,
+      score: convert(dimension.score),
+    })),
+  };
+}
 function serialize(row: Row): Interview {
   return {
     id: row.id,
@@ -19,7 +36,7 @@ function serialize(row: Row): Interview {
     startedAt: row.startedAt,
     endedAt: row.endedAt,
     feedbackStatus: row.feedbackStatus,
-    feedback: row.feedback,
+    feedback: normalizeStoredFeedback(row.feedback),
     feedbackModel: row.feedbackModel,
   };
 }
