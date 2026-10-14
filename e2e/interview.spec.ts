@@ -8,9 +8,31 @@ async function capture(
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ ...options, animations: "disabled" });
 }
+async function trackSpeakerPlayback(page: Page) {
+  await page.addInitScript(() => {
+    const target = window as Window & { formaPcmStarts: number };
+    target.formaPcmStarts = 0;
+    const create = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function () {
+      const source = create.call(this);
+      const start = source.start.bind(source);
+      source.start = (...args: Parameters<AudioBufferSourceNode["start"]>) => {
+        target.formaPcmStarts++;
+        start(...args);
+      };
+      return source;
+    };
+  });
+}
+async function playbackCount(page: Page) {
+  return page.evaluate(
+    () => (window as Window & { formaPcmStarts: number }).formaPcmStarts,
+  );
+}
 test("complete practice journey, recovery, history, and mobile layout", async ({
   page,
 }) => {
+  await trackSpeakerPlayback(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -54,6 +76,13 @@ test("complete practice journey, recovery, history, and mobile layout", async ({
   await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
+  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
+  await expect.poll(() => playbackCount(page)).toBeGreaterThan(0);
+  const firstPlayback = await playbackCount(page);
+  await page
+    .getByRole("button", { name: "Hear question", exact: true })
+    .click();
+  await expect.poll(() => playbackCount(page)).toBeGreaterThan(firstPlayback);
   await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
   await page
     .getByLabel("Your interview answer")
@@ -168,6 +197,9 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   page,
   context,
 }) => {
+  await trackSpeakerPlayback(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await context.grantPermissions(["microphone"]);
   await page.goto("/auth/sign-in");
   await page.getByRole("button", { name: "Create an account" }).click();
@@ -184,6 +216,19 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
     .click();
   await page.getByRole("button", { name: "Prepare my interview" }).click();
   await page
+    .getByRole("button", { name: "Check microphone", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Microphone checked", exact: true }),
+  ).toBeVisible({ timeout: 10000 });
+  // Checking again, starting, and unmounting must not close a closed context.
+  await page
+    .getByRole("button", { name: "Microphone checked", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Microphone checked", exact: true }),
+  ).toBeVisible({ timeout: 10000 });
+  await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
   await expect(
@@ -194,6 +239,7 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
       exact: true,
     }),
   ).toBeVisible();
+  await expect.poll(() => playbackCount(page)).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Mute", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Unmute", exact: true }),
@@ -212,4 +258,5 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   await expect(
     page.getByRole("heading", { name: /Here’s where you stand/ }),
   ).toBeVisible();
+  expect(errors).toEqual([]);
 });

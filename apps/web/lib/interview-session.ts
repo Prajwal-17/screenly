@@ -1,3 +1,4 @@
+import { closeAudioContext } from "./audio-context";
 import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
 import { initialState, useInterviewStore } from "@/store/interviewStore";
 import { API_URL } from "./api";
@@ -121,7 +122,11 @@ export class Session {
         streaming: s.streaming + event.text,
       }));
     }
-    if (event.type === "audio-start") this.responseId = event.responseId;
+    if (event.type === "audio-start") {
+      this.responseId = event.responseId;
+      if (useInterviewStore.getState().errorScope === "speech")
+        useInterviewStore.setState({ error: "", errorScope: null });
+    }
     if (event.type === "audio-end")
       void this.player.drain().then(() => {
         if (!this.disposed && event.responseId === this.responseId) {
@@ -139,7 +144,11 @@ export class Session {
       useInterviewStore.setState({ streaming: "" });
     }
     if (event.type === "error") {
-      useInterviewStore.setState({ error: event.message, starting: false });
+      useInterviewStore.setState({
+        error: event.message,
+        errorScope: event.scope,
+        starting: false,
+      });
       if (event.scope === "voice") this.stopCapture();
     }
     if (event.type === "finished") {
@@ -155,7 +164,7 @@ export class Session {
   }
   async start(voice: boolean, download = false) {
     if (useInterviewStore.getState().starting) return;
-    useInterviewStore.setState({ starting: true, error: "" });
+    useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
       await this.player.unlock();
       if (this.disposed) return;
@@ -271,17 +280,28 @@ export class Session {
     this.worklet = null;
     this.source?.disconnect();
     this.source = null;
-    void this.ctx?.close();
+    void closeAudioContext(this.ctx);
     this.ctx = null;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     if (!this.disposed)
       useInterviewStore.setState({ micActive: false, level: 0, muted: false });
   }
+  async speakLatest() {
+    try {
+      await this.player.unlock();
+      this.send({ type: "speak" });
+    } catch {
+      useInterviewStore.setState({
+        error: "Could not play speech. Reconnect and retry.",
+        errorScope: "speech",
+      });
+    }
+  }
   answer(text: string) {
     this.interrupt();
     this.send({ type: "answer", id: crypto.randomUUID(), text });
-    useInterviewStore.setState({ error: "" });
+    useInterviewStore.setState({ error: "", errorScope: null });
   }
   interrupt() {
     this.player.stop();

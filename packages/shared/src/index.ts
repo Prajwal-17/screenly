@@ -100,6 +100,7 @@ export const clientEventSchema = z.discriminatedUnion("type", [
     text: z.string().trim().min(1).max(6000),
   }),
   z.object({ type: z.literal("interrupt") }),
+  z.object({ type: z.literal("speak") }),
   z.object({
     type: z.literal("played"),
     responseId: z.number().int().nonnegative(),
@@ -117,7 +118,11 @@ export type ServerEvent =
   | { type: "audio-end"; responseId: number }
   | { type: "interrupted"; responseId: number }
   | { type: "finished"; id: string }
-  | { type: "error"; message: string; scope: "voice" | "llm" | "session" };
+  | {
+      type: "error";
+      message: string;
+      scope: "voice" | "speech" | "llm" | "session";
+    };
 
 // Prefix speaker audio with its response ID so cancelled replies cannot play late.
 export function packAudio(

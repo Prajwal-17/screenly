@@ -19,20 +19,26 @@ beforeAll(() => {
     .values({ id: userId, name: "Candidate", email: "candidate@example.com" })
     .run();
 });
-function fixture(reply: SessionDependencies["reply"]) {
+function fixture(
+  reply: SessionDependencies["reply"],
+  options: Partial<SessionDependencies> = {},
+) {
   const interview = interviews.create(userId, {
     ...settings,
     topics: [...settings.topics],
   });
   const events: ServerEvent[] = [];
+  const audioFrames: Uint8Array[] = [];
   let reports = 0;
   const session = new InterviewSession(
     interview.id,
     (event) => {
-      if (!(event instanceof Uint8Array)) events.push(event);
+      if (event instanceof Uint8Array) audioFrames.push(event);
+      else events.push(event);
     },
     {
       store: interviews,
+      speechEnabled: false,
       reply,
       feedback: async () => {
         reports++;
@@ -48,9 +54,10 @@ function fixture(reply: SessionDependencies["reply"]) {
         flush: async () => {},
         close: () => {},
       }),
+      ...options,
     },
   );
-  return { session, interview, events, reports: () => reports };
+  return { session, interview, events, audioFrames, reports: () => reports };
 }
 describe("interview persistence and orchestration", () => {
   test("starts with a question and saves one response per unique answer", async () => {
@@ -106,18 +113,24 @@ describe("interview persistence and orchestration", () => {
     f.session.close();
   });
   test("speech remains interruptible until browser playback is acknowledged", async () => {
-    const f = fixture(async function* () {
-      yield "Explain an HTTP cache.";
-    });
+    const f = fixture(
+      async function* () {
+        yield "Explain an HTTP cache.";
+      },
+      { speechEnabled: true },
+    );
     await f.session.handle({ type: "start", voice: true });
     f.session.interrupt();
     expect(interviews.get(f.interview.id)!.messages[0]?.status).toBe(
       "interrupted",
     );
     f.session.close();
-    const acknowledged = fixture(async function* () {
-      yield "Explain an HTTP cache.";
-    });
+    const acknowledged = fixture(
+      async function* () {
+        yield "Explain an HTTP cache.";
+      },
+      { speechEnabled: true },
+    );
     await acknowledged.session.handle({ type: "start", voice: true });
     await acknowledged.session.handle({ type: "played", responseId: 1 });
     acknowledged.session.interrupt();
@@ -162,6 +175,63 @@ describe("interview persistence and orchestration", () => {
       ["user", "complete", "Here is my answer."],
       ["assistant", "complete", "A follow-up question."],
     ]);
+    f.session.close();
+  });
+  test("typed answers receive spoken replies and replay does not duplicate the transcript", async () => {
+    const f = fixture(
+      async function* () {
+        yield "Tell me about React.";
+      },
+      {
+        speechEnabled: true,
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => audio(new Uint8Array([1, 0, 2, 0])),
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
+    await f.session.handle({ type: "start", voice: false });
+    expect(f.audioFrames.length).toBe(1);
+    await f.session.handle({ type: "played", responseId: 1 });
+    await f.session.handle({ type: "speak" });
+    expect(f.audioFrames.length).toBe(2);
+    await f.session.handle({ type: "start", voice: false });
+    expect(f.audioFrames.length).toBe(3);
+    expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
+    f.session.close();
+  });
+  test("failed transcription does not disable speech synthesis", async () => {
+    const f = fixture(
+      async function* () {
+        yield "Describe an HTTP cache.";
+      },
+      {
+        speechEnabled: true,
+        stt: () => ({
+          connect: async () => {
+            throw new Error("Transcription failed");
+          },
+          sendAudio: () => {},
+          close: () => {},
+        }),
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => audio(new Uint8Array([1, 0, 2, 0])),
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
+    await f.session.handle({ type: "start", voice: true });
+    expect(
+      f.events.some(
+        (event) => event.type === "error" && event.scope === "voice",
+      ),
+    ).toBe(true);
+    expect(f.audioFrames.length).toBe(1);
+    expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
     f.session.close();
   });
   test("finishing is idempotent and prevents later answers", async () => {

@@ -5,7 +5,7 @@ export class STTService {
   private socket: DeepgramSocket | null = null;
   constructor(
     private onTurn: (event: ListenV2TurnInfo) => void,
-    private onError: () => void,
+    private onError: (error: Error) => void,
   ) {}
   async connect() {
     const url = new URL("/v2/listen", env.DEEPGRAM_WS_URL);

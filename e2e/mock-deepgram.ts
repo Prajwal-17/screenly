@@ -56,8 +56,20 @@ const server = Bun.serve<State>({
           samples[i] = Math.sin((i / 24000) * 440 * Math.PI * 2) * 1000;
         socket.send(new Uint8Array(samples.buffer));
       }
-      if (event.type === "Flush")
+      if (event.type === "Flush") {
         socket.send(JSON.stringify({ type: "Flushed" }));
+        socket.data.timer = setTimeout(
+          () =>
+            socket.send(
+              JSON.stringify({
+                type: "SpeechMetadata",
+                speech_id: "fixture-speech",
+                audio_duration_ms: 100,
+              }),
+            ),
+          50,
+        );
+      }
     },
     close(socket) {
       if (socket.data.timer) clearTimeout(socket.data.timer);

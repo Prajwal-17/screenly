@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Mic, Volume2, Check, ArrowRight, Loader2 } from "lucide-react";
+import { closeAudioContext } from "@/lib/audio-context";
 import type { InterviewDetail, Capabilities } from "@repo/shared";
 export function Preflight({
   interview,
@@ -46,7 +47,7 @@ export function Preflight({
       await ctx.resume();
       if (!mounted.current) {
         stream.getTracks().forEach((t) => t.stop());
-        void ctx.close();
+        void closeAudioContext(ctx);
         return;
       }
       const source = ctx.createMediaStreamSource(stream);
@@ -78,12 +79,14 @@ export function Preflight({
         setLevel(0);
       }, 4000);
       cleanup.current = () => {
+        if (!active) return;
         active = false;
+        cleanup.current = () => {};
         clearTimeout(timer);
         cancelAnimationFrame(frame);
         source.disconnect();
         stream.getTracks().forEach((t) => t.stop());
-        void ctx.close();
+        void closeAudioContext(ctx);
       };
     } catch {
       setError(
@@ -103,7 +106,7 @@ export function Preflight({
     gain.connect(ctx.destination);
     oscillator.start();
     oscillator.stop(ctx.currentTime + 0.25);
-    oscillator.onended = () => void ctx.close();
+    oscillator.onended = () => void closeAudioContext(ctx);
   }
   return (
     <div className="surface preflight">
@@ -140,6 +143,10 @@ export function Preflight({
           Typed answers
         </label>
       </div>
+      <p style={{ fontSize: 12, marginBottom: 18 }}>
+        The interviewer speaks in both modes. Choose whether to answer with your
+        microphone or keyboard.
+      </p>
       {voice && (
         <>
           <div className="row" style={{ flexWrap: "wrap" }}>

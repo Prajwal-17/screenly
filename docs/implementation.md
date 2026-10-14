@@ -58,3 +58,9 @@ Screenshots were captured from controlled test sessions and contain illustrative
 ## Current Deepgram defaults
 
 English recognition uses `flux-general-en`; synthesis uses `flux-kit-en`. These are the current Flux conversational families, with Kit selected as Deepgram’s default agent voice. Choosing Kit changes the voice, not the model generation. See the root README for sources and environment override instructions.
+
+## Audio recovery
+
+Microphone transcription and speech output are independent. Typed answers still receive spoken replies when Deepgram is configured, and transcription failures do not disable TTS. **Hear question** replays the last question without generating another LLM response or adding duplicate transcript messages. Speech errors have their own retry action.
+
+Flux `Flushed` acknowledges text flushing; it does not mean all audio has arrived. The speech transport waits for `SpeechMetadata` before ending synthesis. Audio contexts use idempotent, shared cleanup so repeated microphone checks, starting, and navigation cannot close an already closed context. Browser tests track actual PCM playback and exercise repeated microphone checks.

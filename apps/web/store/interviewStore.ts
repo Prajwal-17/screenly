@@ -11,6 +11,7 @@ type State = {
   streaming: string;
   partial: string;
   error: string;
+  errorScope: "voice" | "speech" | "llm" | "session" | null;
   connected: boolean;
   muted: boolean;
   micActive: boolean;
@@ -24,6 +25,7 @@ export const initialState: State = {
   streaming: "",
   partial: "",
   error: "",
+  errorScope: null,
   connected: false,
   muted: false,
   micActive: false,

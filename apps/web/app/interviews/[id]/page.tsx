@@ -10,6 +10,7 @@ import {
   Loader2,
   RefreshCw,
   VolumeX,
+  Volume2,
   ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
@@ -146,9 +147,19 @@ export default function InterviewPage() {
                         border: 0,
                         padding: 0,
                       }}
-                      onClick={() => void controller.current?.start(false)}
+                      onClick={() =>
+                        state.errorScope === "speech"
+                          ? void controller.current?.speakLatest()
+                          : void controller.current?.start(
+                              state.errorScope === "voice",
+                            )
+                      }
                     >
-                      Retry with typed answers
+                      {state.errorScope === "speech"
+                        ? "Retry speech"
+                        : state.errorScope === "voice"
+                          ? "Retry microphone"
+                          : "Retry interviewer"}
                     </button>
                   ) : (
                     <button
@@ -243,6 +254,20 @@ export default function InterviewPage() {
                       </div>
                     </div>
                     <div className="session-controls">
+                      <button
+                        className="button secondary"
+                        disabled={
+                          !lastQuestion ||
+                          !state.connected ||
+                          !capabilities.data?.voice ||
+                          state.status === "thinking" ||
+                          state.status === "finishing"
+                        }
+                        onClick={() => void controller.current?.speakLatest()}
+                      >
+                        <Volume2 size={16} />
+                        Hear question
+                      </button>
                       {state.micActive && (
                         <button
                           className="button secondary"

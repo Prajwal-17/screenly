@@ -5,7 +5,7 @@ import { DeepgramSocket } from "./deepgramSocket";
 export class TTSService {
   private socket: DeepgramSocket | null = null;
   private closed = false;
-  private failed = false;
+  private failure: Error | null = null;
   private resolveFlush: (() => void) | null = null;
   private rejectFlush: ((error: Error) => void) | null = null;
   constructor(private onAudio: (data: Uint8Array) => void) {}
@@ -18,14 +18,15 @@ export class TTSService {
     }).toString();
     this.socket = new DeepgramSocket(url, env.DEEPGRAM_API_KEY ?? "", {
       json: (message) => {
-        if (message.type === "Flushed") this.resolveFlush?.();
+        // Flushed only acknowledges the text buffer; audio can still be arriving.
+        if (message.type === "SpeechMetadata") this.resolveFlush?.();
       },
       audio: (data) => {
         if (!this.closed) this.onAudio(data);
       },
-      error: () => {
-        this.failed = true;
-        this.rejectFlush?.(new Error("Speech is unavailable."));
+      error: (error) => {
+        this.failure = error;
+        this.rejectFlush?.(error);
       },
     });
     await this.socket.connect();
@@ -36,7 +37,7 @@ export class TTSService {
   }
   async flush() {
     if (this.closed) return;
-    if (this.failed) throw new Error("Speech is unavailable.");
+    if (this.failure) throw this.failure;
     let timer: ReturnType<typeof setTimeout>;
     try {
       await new Promise<void>((resolve, reject) => {

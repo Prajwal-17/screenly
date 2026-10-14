@@ -1,3 +1,4 @@
+import { closeAudioContext } from "./audio-context";
 export class AudioPlayer {
   private ctx: AudioContext | null = null;
   private sources = new Set<AudioBufferSourceNode>();
@@ -49,7 +50,7 @@ export class AudioPlayer {
   }
   close() {
     this.stop();
-    void this.ctx?.close();
+    void closeAudioContext(this.ctx);
     this.ctx = null;
   }
 }

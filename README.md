@@ -56,7 +56,7 @@ bun run dev
 
 Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone before starting.
 
-If the LLM is not configured, setup and history remain available, and the start screen explains what to configure. If speech fails, continue by typing; finalized messages remain saved.
+If the LLM is not configured, setup and history remain available, and the start screen explains what to configure. If microphone transcription fails, continue by typing; TTS remains enabled. Use **Hear question** to replay the latest question or **Retry speech** after a speech failure. Finalized messages remain saved.
 
 For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Email/password works without Google credentials.
 
