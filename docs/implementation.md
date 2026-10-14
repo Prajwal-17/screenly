@@ -10,7 +10,7 @@ Technical interview practice for frontend, backend, and full-stack roles. Experi
 2. Check microphone input and speaker output.
 3. Connect the authenticated session socket; start voice or typed mode.
 4. The server marks the session active and opens with a question.
-5. The browser captures 16 kHz mono PCM16 in an AudioWorklet.
+5. The browser captures 16 kHz mono PCM16 in recommended 80 ms chunks in an AudioWorklet.
 6. Deepgram Flux emits partial transcripts and finalized end-of-turn events.
 7. A unique source key prevents repeated turn events from generating duplicate answers.
 8. The LLM streams text; useful phrase chunks reach Deepgram speech synthesis.
@@ -54,3 +54,7 @@ Live checks require valid provider credentials. The implementation environment's
 ## Portfolio review
 
 Screenshots were captured from controlled test sessions and contain illustrative provider responses. Follow the README to run your own interviews with your chosen model. Useful later additions include behavioral interviews, job-description context, richer comparison across sessions, and multilingual practice.
+
+## Current Deepgram defaults
+
+English recognition uses `flux-general-en`; synthesis uses `flux-kit-en`. These are the current Flux conversational families, with Kit selected as Deepgram’s default agent voice. Choosing Kit changes the voice, not the model generation. See the root README for sources and environment override instructions.

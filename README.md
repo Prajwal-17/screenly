@@ -38,6 +38,16 @@ LLM_MODEL=your-chosen-chat-model
 DEEPGRAM_API_KEY=your-deepgram-key
 ```
 
+The voice defaults follow Deepgram’s current conversational model family:
+
+- **Transcription:** `flux-general-en`, recommended for English real-time agents with built-in turn detection.
+- **Speech:** `flux-kit-en`, Deepgram’s default agent voice and a featured all-rounder (British English).
+- **Capture:** 16 kHz mono PCM16 in the recommended 80 ms chunks.
+
+Both model names remain configurable using `DEEPGRAM_STT_MODEL` and `DEEPGRAM_TTS_MODEL`. Existing `.env` overrides take precedence; change `DEEPGRAM_TTS_MODEL=flux-kit-en` there to select Kit. Alexis remains a supported featured voice in the same current Flux family.
+
+Sources checked October 14, 2026: [Flux STT quickstart](https://developers.deepgram.com/docs/flux/quickstart), [Flux TTS overview](https://developers.deepgram.com/docs/flux-tts/overview), [Flux voice catalog](https://developers.deepgram.com/docs/flux-tts/voices), and [Deepgram changelog](https://developers.deepgram.com/changelog).
+
 The LLM endpoint and model are configurable; DeepSeek is only the example endpoint. Select a model that supports Chat Completions streaming and JSON output when instructed. No provider key is sent to the browser.
 
 ```sh

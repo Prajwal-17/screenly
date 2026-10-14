@@ -2,7 +2,8 @@
 class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.buffer = new Int16Array(1600);
+    // Deepgram recommends 80 ms chunks at 16 kHz for Flux turn detection.
+    this.buffer = new Int16Array(1280);
     this.index = 0;
     this.energy = 0;
   }
