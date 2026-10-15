@@ -1,0 +1,1 @@
+ALTER TABLE `user_profile` ADD `onboarding` text DEFAULT '{"step":0,"pendingImport":null}' NOT NULL;
