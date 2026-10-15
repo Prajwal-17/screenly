@@ -12,7 +12,18 @@ import {
   Volume2,
 } from "lucide-react";
 import { Workspace } from "@/components/workspace";
-import { Loading, ErrorState } from "@/components/common";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import {
+  Loading,
+  ErrorState,
+  InlineAlert,
+  PageTitle,
+  ConfirmAction,
+  Eyebrow,
+} from "@/components/common";
 import { LiveTranscript } from "@/components/transcript";
 import { AnswerComposer } from "@/components/answer-composer";
 import { Preflight } from "@/components/preflight";
@@ -36,7 +47,6 @@ export default function InterviewPage() {
     queryFn: api.capabilities,
   });
   const controller = useRef<Session | null>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
   const state = useInterviewStore();
   const [now, setNow] = useState(() => Date.now());
   const finish = useMutation({
@@ -87,6 +97,26 @@ export default function InterviewPage() {
     finishing: "Saving interview",
     disconnected: "Connection paused",
   };
+  const finishTrigger = (label: string, saved = false) => (
+    <ConfirmAction
+      title="Finish interview?"
+      description="This ends the interview and generates feedback from saved answers. Unsent text will not be included."
+      confirmLabel="Finish and view feedback"
+      cancelLabel="Keep going"
+      pending={finish.isPending}
+      onConfirm={() => finish.mutate()}
+      trigger={
+        <Button
+          variant={saved ? "outline" : "destructive"}
+          size={saved ? "default" : "sm"}
+          disabled={finish.isPending}
+        >
+          <Square className="size-3.5" />
+          {label}
+        </Button>
+      }
+    />
+  );
   return (
     <Workspace>
       {query.isPending ? (
@@ -99,37 +129,27 @@ export default function InterviewPage() {
       ) : (
         interview && (
           <>
-            <div className="page-title">
-              <div>
-                <h1>{interview.role} interview</h1>
-                <p>
-                  {interview.level} · {interview.topics.join(" · ")}
-                </p>
-              </div>
-              <span
-                className="tag"
-                aria-label="Elapsed time and session duration"
-                style={{
-                  fontVariantNumeric: "tabular-nums",
-                  fontSize: 13,
-                  padding: "9px 13px",
-                }}
-              >
-                {clock(elapsed(interview, now))} / {interview.duration}:00
-              </span>
-            </div>
+            <PageTitle
+              title={`${interview.role} interview`}
+              description={`${interview.level} · ${interview.topics.join(" · ")}`}
+              action={
+                <Badge
+                  variant="outline"
+                  className="px-3 py-2 text-[13px] font-normal tabular-nums"
+                  aria-label="Elapsed time and session duration"
+                >
+                  {clock(elapsed(interview, now))} / {interview.duration}:00
+                </Badge>
+              }
+            />
             {(state.error || finish.error) && (
-              <div className="error" role="alert" style={{ marginBottom: 20 }}>
-                {state.error || finish.error?.message}
-                <div style={{ marginTop: 10 }}>
+              <InlineAlert className="mb-5">
+                <p>{state.error || finish.error?.message}</p>
+                <div className="mt-2">
                   {state.connected ? (
-                    <button
-                      className="text-link"
-                      style={{
-                        background: "transparent",
-                        border: 0,
-                        padding: 0,
-                      }}
+                    <Button
+                      variant="link"
+                      size="sm"
                       onClick={() =>
                         finish.error
                           ? finish.mutate()
@@ -145,38 +165,34 @@ export default function InterviewPage() {
                           : state.errorScope === "voice"
                             ? "Retry microphone"
                             : "Retry interviewer"}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      className="text-link"
-                      style={{
-                        background: "transparent",
-                        border: 0,
-                        padding: 0,
-                      }}
+                    <Button
+                      variant="link"
+                      size="sm"
                       onClick={() => controller.current?.connect()}
                     >
-                      <RefreshCw size={13} />
+                      <RefreshCw />
                       Reconnect
-                    </button>
+                    </Button>
                   )}
                 </div>
-              </div>
+              </InlineAlert>
             )}
             {capabilities.error && (
-              <div className="error" role="alert" style={{ marginBottom: 20 }}>
+              <InlineAlert className="mb-5">
                 Could not check service availability.{" "}
-                <button
-                  className="text-link"
-                  style={{ border: 0, background: "transparent" }}
+                <Button
+                  variant="link"
+                  size="sm"
                   onClick={() => void capabilities.refetch()}
                 >
                   Try again
-                </button>
-              </div>
+                </Button>
+              </InlineAlert>
             )}
             {!started ? (
-              <>
+              <div className="space-y-5">
                 <Preflight
                   interview={interview}
                   capabilities={capabilities.data}
@@ -187,54 +203,49 @@ export default function InterviewPage() {
                   }
                 />
                 {state.status === "disconnected" && !state.error && (
-                  <div className="notice" style={{ marginTop: 18 }}>
+                  <InlineAlert variant="warning">
                     Your conversation is saved.{" "}
-                    <button
-                      className="text-link"
-                      style={{ background: "transparent", border: 0 }}
+                    <Button
+                      variant="link"
+                      size="sm"
                       onClick={() => controller.current?.connect()}
                     >
                       Reconnect to resume
-                    </button>
-                  </div>
+                    </Button>
+                  </InlineAlert>
                 )}
-                {interview.status === "active" && (
-                  <button
-                    className="button ghost"
-                    style={{ marginTop: 18 }}
-                    onClick={() => dialog.current?.showModal()}
-                  >
-                    Finish saved interview
-                  </button>
-                )}
-              </>
+                {interview.status === "active" &&
+                  finishTrigger("Finish saved interview", true)}
+              </div>
             ) : (
-              <div className="session-grid">
-                <div className="stack">
-                  <div className="surface">
-                    <div className="interview-stage">
-                      <div className="stage-label">
-                        <span className="eyebrow">
-                          {state.streaming
-                            ? "Interviewer · responding"
-                            : "Current question"}
-                        </span>
-                      </div>
-                      <p className="stage-question">
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(310px,1fr)]">
+                <div className="space-y-6">
+                  <Card className="gap-0 overflow-hidden py-0">
+                    <CardContent className="flex min-h-[295px] flex-col items-start p-6 xl:p-8">
+                      <Eyebrow className="mb-6">
+                        {state.streaming
+                          ? "Interviewer · responding"
+                          : "Current question"}
+                      </Eyebrow>
+                      <p className="font-heading text-[clamp(22px,2vw,29px)] leading-relaxed tracking-tight whitespace-pre-wrap">
                         {lastQuestion || "Waiting for the first question…"}
                       </p>
-                      <div className="stage-status" role="status">
+                      <div
+                        className="mt-auto flex items-center gap-2 pt-6 text-xs text-muted-foreground"
+                        role="status"
+                      >
                         {state.status === "thinking" ? (
-                          <Loader2 size={13} className="spin" />
+                          <Loader2 className="size-3.5 animate-spin" />
                         ) : (
-                          <span className="dot" />
+                          <span className="size-1.5 rounded-full bg-current" />
                         )}
                         {statusLabels[state.status]}
                       </div>
-                    </div>
-                    <div className="session-controls">
-                      <button
-                        className="button secondary"
+                    </CardContent>
+                    <CardFooter className="flex-wrap gap-2 bg-transparent px-6 py-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
                         disabled={
                           !lastQuestion ||
                           !state.connected ||
@@ -244,44 +255,35 @@ export default function InterviewPage() {
                         }
                         onClick={() => void controller.current?.speakLatest()}
                       >
-                        <Volume2 size={16} />
+                        <Volume2 />
                         Hear question
-                      </button>
+                      </Button>
                       {state.micActive && (
-                        <button
-                          className="button secondary"
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => controller.current?.mute()}
                           aria-pressed={state.muted}
                         >
-                          {state.muted ? (
-                            <MicOff size={16} />
-                          ) : (
-                            <Mic size={16} />
-                          )}{" "}
+                          {state.muted ? <MicOff /> : <Mic />}
                           {state.muted ? "Unmute" : "Mute"}
-                        </button>
+                        </Button>
                       )}
-                      <button
-                        className="button ghost"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         disabled={
                           state.status !== "speaking" &&
                           state.status !== "thinking"
                         }
                         onClick={() => controller.current?.interrupt()}
                       >
-                        <VolumeX size={16} />
+                        <VolumeX />
                         Interrupt
-                      </button>
-                      <button
-                        className="button danger"
-                        disabled={finish.isPending}
-                        onClick={() => dialog.current?.showModal()}
-                      >
-                        <Square size={14} />
-                        Finish interview
-                      </button>
-                    </div>
-                  </div>
+                      </Button>
+                      {finishTrigger("Finish interview")}
+                    </CardFooter>
+                  </Card>
                   {state.typed ? (
                     <AnswerComposer
                       interviewId={id}
@@ -290,44 +292,37 @@ export default function InterviewPage() {
                       }
                     />
                   ) : (
-                    <div className="surface pad">
-                      <div className="between">
-                        <span className="eyebrow">Microphone</span>
-                        <button
-                          className="text-link"
-                          disabled={
-                            !state.connected || state.status !== "listening"
-                          }
-                          onClick={() =>
-                            void controller.current?.start(undefined, true)
-                          }
-                        >
-                          Type instead
-                        </button>
-                      </div>
-                      {state.micActive ? (
-                        <div
-                          className="meter"
-                          role="meter"
-                          aria-label="Microphone input level"
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={Math.round(
-                            Math.min(100, state.level * 100),
-                          )}
-                        >
-                          <span
-                            style={{
-                              width: `${Math.min(100, state.level * 100)}%`,
-                            }}
-                          />
+                    <Card>
+                      <CardContent>
+                        <div className="flex items-center justify-between gap-4">
+                          <Eyebrow>Microphone</Eyebrow>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            disabled={
+                              !state.connected || state.status !== "listening"
+                            }
+                            onClick={() =>
+                              void controller.current?.start(undefined, true)
+                            }
+                          >
+                            Type instead
+                          </Button>
                         </div>
-                      ) : (
-                        <p style={{ marginTop: 12, fontSize: 12 }}>
-                          Retry your microphone or choose typed answers.
-                        </p>
-                      )}
-                    </div>
+                        {state.micActive ? (
+                          <Progress
+                            className="mt-5 [&_[data-slot=progress-indicator]]:bg-success"
+                            role="meter"
+                            aria-label="Microphone input level"
+                            value={Math.min(100, state.level * 100)}
+                          />
+                        ) : (
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            Retry your microphone or choose typed answers.
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
                 <LiveTranscript
@@ -337,36 +332,6 @@ export default function InterviewPage() {
                 />
               </div>
             )}
-            <dialog ref={dialog} aria-labelledby="finish-title">
-              <h2 id="finish-title">Finish interview?</h2>
-              <p>
-                This ends the interview and generates feedback from saved
-                answers. Unsent text will not be included.
-              </p>
-              <div className="row" style={{ justifyContent: "flex-end" }}>
-                <button
-                  className="button ghost"
-                  onClick={() => dialog.current?.close()}
-                >
-                  Keep going
-                </button>
-                <button
-                  className="button"
-                  disabled={finish.isPending}
-                  onClick={() => {
-                    dialog.current?.close();
-                    finish.mutate();
-                  }}
-                >
-                  {finish.isPending ? (
-                    <Loader2 size={16} className="spin" />
-                  ) : (
-                    <Square size={13} />
-                  )}
-                  Finish and view feedback
-                </button>
-              </div>
-            </dialog>
           </>
         )
       )}

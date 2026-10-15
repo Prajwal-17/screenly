@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   roles,
@@ -13,7 +13,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Workspace } from "@/components/workspace";
-import { PageTitle, Reveal } from "@/components/common";
+import { PageTitle, InlineAlert } from "@/components/common";
+import { ChoiceGroup, ChoiceLabel } from "@/components/form-choices";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FieldSet, FieldLegend, FieldError } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "@/lib/api";
 const roleTopics: Record<
   InterviewSettings["role"],
@@ -58,155 +65,191 @@ export default function Setup() {
   });
   return (
     <Workspace>
-      <Reveal>
-        <PageTitle title="New interview" />
-        <form
-          onSubmit={form.handleSubmit((v) => {
-            if (!mutation.isPending) mutation.mutate(v);
-          })}
-          className="setup-layout"
-        >
-          <div className="surface">
-            <fieldset className="setup-section">
-              <legend className="sr-only">Role</legend>
-              <h3>Role</h3>
-              <div className="choices">
-                {roles.map((role) => (
-                  <label key={role} className="choice">
-                    <input
-                      type="radio"
-                      value={role}
-                      {...form.register("role")}
-                    />
-                    {role}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className="setup-section">
-              <legend className="sr-only">Experience</legend>
-              <h3>Experience</h3>
-              <div className="choices">
-                {levels.map((level) => (
-                  <label key={level} className="choice">
-                    <input
-                      type="radio"
-                      value={level}
-                      {...form.register("level")}
-                    />
-                    {level}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset
-              className="setup-section"
+      <PageTitle title="New interview" />
+      <form
+        onSubmit={form.handleSubmit((v) => {
+          if (!mutation.isPending) mutation.mutate(v);
+        })}
+        className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(250px,1fr)]"
+      >
+        <Card className="gap-0 divide-y py-0">
+          <CardContent className="py-6">
+            <FieldSet>
+              <FieldLegend className="font-heading text-lg tracking-tight">
+                Role
+              </FieldLegend>
+              <Controller
+                name="role"
+                control={form.control}
+                render={({ field }) => (
+                  <ChoiceGroup
+                    label="Role"
+                    name={field.name}
+                    options={roles}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )}
+              />
+            </FieldSet>
+          </CardContent>
+          <CardContent className="py-6">
+            <FieldSet>
+              <FieldLegend className="font-heading text-lg tracking-tight">
+                Experience
+              </FieldLegend>
+              <Controller
+                name="level"
+                control={form.control}
+                render={({ field }) => (
+                  <ChoiceGroup
+                    label="Experience"
+                    name={field.name}
+                    options={levels}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )}
+              />
+            </FieldSet>
+          </CardContent>
+          <CardContent className="py-6">
+            <FieldSet
               aria-describedby={
-                form.formState.errors.topics ? "topics-error" : undefined
+                form.formState.errors.topics ? "topics-error" : "topics-hint"
               }
             >
-              <legend className="sr-only">Topics</legend>
-              <h3>
+              <FieldLegend className="font-heading text-lg tracking-tight">
                 Topics{" "}
-                <small
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "var(--font-body)",
-                    letterSpacing: 0,
-                  }}
+                <span
+                  id="topics-hint"
+                  className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground"
                 >
                   Choose 1–6
-                </small>
-              </h3>
-              <div className="choices">
-                {topics.map((topic) => (
-                  <label key={topic} className="choice">
-                    <input
-                      type="checkbox"
-                      value={topic}
-                      {...form.register("topics")}
-                    />
-                    {topic}
-                  </label>
-                ))}
-              </div>
-              {form.formState.errors.topics && (
-                <p
-                  id="topics-error"
-                  className="error"
-                  role="alert"
-                  style={{ marginTop: 16 }}
-                >
-                  {form.formState.errors.topics.message}
-                </p>
-              )}
-            </fieldset>
-            <fieldset className="setup-section">
-              <legend className="sr-only">Duration</legend>
-              <h3>Duration</h3>
-              <div className="choices">
-                {([10, 20, 30] as const).map((duration) => (
-                  <button
-                    type="button"
-                    key={duration}
-                    className={`choice ${values.duration === duration ? "selected" : ""}`}
-                    aria-pressed={values.duration === duration}
-                    onClick={() => form.setValue("duration", duration)}
+                </span>
+              </FieldLegend>
+              <Controller
+                name="topics"
+                control={form.control}
+                render={({ field }) => (
+                  <div className="flex flex-wrap gap-2">
+                    {topics.map((topic) => (
+                      <ChoiceLabel
+                        key={topic}
+                        htmlFor={`topic-${encodeURIComponent(topic)}`}
+                      >
+                        <Checkbox
+                          id={`topic-${encodeURIComponent(topic)}`}
+                          name={field.name}
+                          value={topic}
+                          checked={field.value.includes(topic)}
+                          onBlur={field.onBlur}
+                          onCheckedChange={(checked) =>
+                            field.onChange(
+                              checked
+                                ? [...field.value, topic]
+                                : field.value.filter((t) => t !== topic),
+                            )
+                          }
+                          aria-invalid={!!form.formState.errors.topics}
+                        />
+                        {topic}
+                      </ChoiceLabel>
+                    ))}
+                  </div>
+                )}
+              />
+              <FieldError
+                id="topics-error"
+                errors={[form.formState.errors.topics]}
+              />
+            </FieldSet>
+          </CardContent>
+          <CardContent className="py-6">
+            <FieldSet>
+              <FieldLegend className="font-heading text-lg tracking-tight">
+                Duration
+              </FieldLegend>
+              <Controller
+                name="duration"
+                control={form.control}
+                render={({ field }) => (
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    aria-label="Duration"
+                    value={String(field.value)}
+                    onValueChange={(value) => {
+                      if (value) field.onChange(Number(value));
+                    }}
+                    className="flex-wrap"
                   >
-                    {duration} minutes
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          </div>
-          <aside className="surface pad stack">
-            <h2>Session summary</h2>
+                    {[10, 20, 30].map((duration) => (
+                      <ToggleGroupItem
+                        key={duration}
+                        value={String(duration)}
+                        className="h-11 rounded-md border px-4 text-[13px] data-[state=on]:border-primary/60 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+                      >
+                        {duration} minutes
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                )}
+              />
+            </FieldSet>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Session summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
             <div>
-              <div className="summary-line">
-                <span>Role</span>
-                <span>{values.role}</span>
-              </div>
-              <div className="summary-line">
-                <span>Experience</span>
-                <span>{values.level}</span>
-              </div>
-              <div className="summary-line">
-                <span>Duration</span>
-                <span>{values.duration} minutes</span>
-              </div>
-              <div className="summary-topics">
+              <dl className="space-y-3 text-[13px]">
+                {[
+                  ["Role", values.role],
+                  ["Experience", values.level],
+                  ["Duration", `${values.duration} minutes`],
+                ].map(([label, value]) => (
+                  <div className="flex justify-between gap-3" key={label}>
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="mt-4 flex flex-wrap gap-1.5">
                 {values.topics?.map((t) => (
-                  <span key={t} className="tag">
+                  <Badge key={t} variant="outline">
                     {t}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             </div>
-            <p style={{ fontSize: 12 }}>
+            <p className="text-xs text-muted-foreground">
               Check your microphone or choose typed answers before starting.
             </p>
             {capabilities.data && !capabilities.data.llm && (
-              <div className="notice">
+              <InlineAlert variant="warning">
                 The interviewer is unavailable. You can save your setup and
                 return later.
-              </div>
+              </InlineAlert>
             )}
             {mutation.error && (
-              <div className="error" role="alert">
-                {mutation.error.message}
-              </div>
+              <InlineAlert>{mutation.error.message}</InlineAlert>
             )}
-            <button className="button" disabled={mutation.isPending}>
+            <Button className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? (
-                <Loader2 size={16} className="spin" />
+                <Loader2 className="animate-spin" />
               ) : (
-                <ArrowRight size={16} />
+                <ArrowRight />
               )}
               Continue to setup check
-            </button>
-          </aside>
-        </form>
-      </Reveal>
+            </Button>
+          </CardContent>
+        </Card>
+      </form>
     </Workspace>
   );
 }

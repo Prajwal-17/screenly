@@ -4,14 +4,14 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 const heading = localFont({
   src: "./fonts/GeneralSans-Variable.woff2",
-  variable: "--font-heading",
+  variable: "--font-general-sans",
   weight: "200 700",
   display: "swap",
   fallback: ["Arial", "sans-serif"],
 });
 const body = localFont({
   src: "./fonts/Switzer-Variable.woff2",
-  variable: "--font-body",
+  variable: "--font-switzer",
   weight: "100 900",
   display: "swap",
   fallback: ["Arial", "sans-serif"],

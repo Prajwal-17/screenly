@@ -4,12 +4,31 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LayoutDashboard, History, Plus, LogOut, Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { InlineAlert } from "@/components/common";
+import { cn } from "@/lib/utils";
 export function Brand() {
   return (
-    <Link href="/" className="brand" aria-label="Screenly home">
-      <span className="brand-mark" aria-hidden="true">
-        <i />
-      </span>
+    <Link
+      href="/"
+      className="inline-flex items-center gap-2.5 rounded-sm font-heading text-[25px] font-semibold tracking-[-0.06em]"
+      aria-label="Screenly home"
+    >
+      <svg
+        viewBox="0 0 28 28"
+        className="size-7"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M8 3H2v22h6M20 3h6v22h-6"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <circle cx="14" cy="14" r="3.5" className="fill-primary" />
+      </svg>
       <span>screenly</span>
     </Link>
   );
@@ -28,8 +47,11 @@ export function Workspace({ children }: { children: React.ReactNode }) {
   }, [path, session]);
   if (isPending || !session)
     return (
-      <div className="loading" role="status" style={{ minHeight: "100dvh" }}>
-        <Loader2 size={20} className="spin" />
+      <div
+        className="flex min-h-dvh items-center justify-center gap-2 text-muted-foreground"
+        role="status"
+      >
+        <Loader2 className="size-5 animate-spin" />
         Loading…
       </div>
     );
@@ -39,40 +61,60 @@ export function Workspace({ children }: { children: React.ReactNode }) {
     { href: "/history", label: "History", icon: History },
   ];
   return (
-    <div className="workspace">
-      <a href="#workspace-content" className="skip-link">
+    <div className="min-h-dvh">
+      <a
+        href="#workspace-content"
+        className="fixed top-4 left-4 z-50 -translate-y-24 rounded-md border bg-card px-4 py-2 focus:translate-y-0"
+      >
         Skip to content
       </a>
-      <aside className="sidebar">
-        <Brand />
-        <nav className="nav-links" aria-label="Main navigation">
+      <aside className="flex border-b bg-secondary/60 px-6 py-5 min-[761px]:fixed min-[761px]:inset-y-0 min-[761px]:left-0 min-[761px]:w-48 min-[761px]:flex-col min-[761px]:border-r min-[761px]:border-b-0 min-[761px]:px-4 min-[761px]:py-8 xl:w-56 max-[760px]:flex-col">
+        <div className="min-[761px]:px-3">
+          <Brand />
+        </div>
+        <nav
+          className="mt-5 flex flex-wrap gap-1 min-[761px]:mt-16 min-[761px]:flex-col"
+          aria-label="Main navigation"
+        >
           {nav.map(({ href, label, icon: Icon }) => (
-            <Link
+            <Button
               key={href}
-              href={href}
-              className={`nav-link ${path === href ? "active" : ""}`}
-              aria-current={path === href ? "page" : undefined}
+              asChild
+              variant="ghost"
+              className={cn(
+                "justify-start gap-3 px-3 text-[13px]",
+                path === href &&
+                  "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
             >
-              <Icon size={18} aria-hidden="true" />
-              {label}
-            </Link>
+              <Link
+                href={href}
+                aria-current={path === href ? "page" : undefined}
+              >
+                <Icon className="size-[18px]" aria-hidden="true" />
+                {label}
+              </Link>
+            </Button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="user-row">
-            <span className="avatar" aria-hidden="true">
-              {session.user.name.slice(0, 2).toUpperCase()}
-            </span>
-            <span className="user-name" title={session.user.name}>
+        <div className="mt-4 space-y-4 min-[761px]:mt-auto">
+          {error && <InlineAlert>{error}</InlineAlert>}
+          <Separator />
+          <div className="flex items-center gap-2.5">
+            <Avatar className="size-8">
+              <AvatarFallback className="bg-muted text-[11px]">
+                {session.user.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span
+              className="min-w-0 flex-1 truncate text-xs"
+              title={session.user.name}
+            >
               {session.user.name}
             </span>
-            <button
-              className="icon-button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               aria-label="Sign out"
               disabled={signingOut}
               onClick={async () => {
@@ -80,7 +122,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
                 setError("");
                 try {
                   const result = await authClient.signOut();
-                  if (result.error) throw new Error("Sign out failed. Retry.");
+                  if (result.error) throw new Error();
                   router.push("/");
                 } catch {
                   setError("Could not sign out. Retry.");
@@ -89,20 +131,22 @@ export function Workspace({ children }: { children: React.ReactNode }) {
                 }
               }}
             >
-              <LogOut size={16} />
-            </button>
+              <LogOut />
+            </Button>
           </div>
         </div>
       </aside>
       <main
         id="workspace-content"
-        className="workspace-main content"
         tabIndex={-1}
+        className="min-w-0 p-6 outline-none min-[761px]:ml-48 min-[761px]:p-8 xl:ml-56 xl:p-12"
       >
-        <p className="desktop-notice">
-          Use a wider window for interview practice.
-        </p>
-        {children}
+        <div className="mx-auto max-w-[1300px]">
+          <p className="mb-6 text-xs text-muted-foreground min-[761px]:hidden">
+            Use a wider window for interview practice.
+          </p>
+          {children}
+        </div>
       </main>
     </div>
   );

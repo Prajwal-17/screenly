@@ -1,6 +1,6 @@
 # Screenly frontend
 
-Next.js App Router, Tailwind CSS, Motion, React Hook Form, TanStack Query, and Zustand.
+Next.js App Router, Tailwind CSS 4, shadcn/ui (Radix), React Hook Form, TanStack Query, and Zustand.
 
 Copy `.env.example` to `.env.local`, start the backend, and run:
 
@@ -15,3 +15,5 @@ Routes include the landing page, email/Google authentication, dashboard, setup, 
 See [the root README](../../README.md) for complete setup, screenshots, and checks.
 
 The UI uses a shared light desktop shell and local General Sans/Switzer fonts. Dev, build, and typecheck download missing font files directly from Fontshare; see the root README and DESIGN.md for provenance and offline setup.
+
+All presentation uses the shadcn primitives in `components/ui` and Tailwind utilities. Theme tokens and base typography live in `app/globals.css`; route-level CSS classes and inline static styling are not used. See `DESIGN.md` at the repository root for the component inventory and composition rules.

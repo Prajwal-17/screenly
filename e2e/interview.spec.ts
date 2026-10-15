@@ -3,8 +3,7 @@ async function capture(
   page: Page,
   options: { path: string; fullPage: boolean },
 ) {
-  const reveal = page.locator(".content > div").first();
-  if (await reveal.count()) await expect(reveal).toHaveCSS("opacity", "1");
+  await page.evaluate(() => document.fonts.ready);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ ...options, animations: "disabled" });
 }
@@ -95,7 +94,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
-  await expect(page.locator(".error[role=alert]")).toContainText(
+  await expect(page.locator("[data-slot=alert][role=alert]")).toContainText(
     "Microphone access is unavailable",
   );
   await expect(
@@ -130,7 +129,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
       transcript: "I would test a failed request and show a retry control.",
     },
   });
-  await expect(page.locator(".error[role=alert]")).toContainText(
+  await expect(page.locator("[data-slot=alert][role=alert]")).toContainText(
     "could not respond",
   );
   await page.request.post("http://localhost:8791/turn", {
@@ -142,7 +141,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await expect(
     page.getByText("Listening to you", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".error[role=alert]")).toHaveCount(0);
+  await expect(page.locator("[data-slot=alert][role=alert]")).toHaveCount(0);
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
       path: "docs/screenshots/interview.png",
@@ -175,7 +174,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await expect(page.getByText("7.8", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "History", exact: true }).click();
   await expect(
-    page.getByText("Frontend interview", { exact: true }),
+    page.getByRole("link", { name: /^Frontend interview/ }),
   ).toBeVisible();
   await page.setViewportSize({ width: 640, height: 720 });
   await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
@@ -345,6 +344,24 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await expect(
     page.getByRole("checkbox", { name: "Databases", exact: true }),
   ).toBeChecked();
+  await page.getByRole("radio", { name: "Senior", exact: true }).check();
+  await expect(
+    page.getByRole("radio", { name: "Senior", exact: true }),
+  ).toBeChecked();
+  await page.getByRole("checkbox", { name: "APIs", exact: true }).uncheck();
+  await page
+    .getByRole("checkbox", { name: "Databases", exact: true })
+    .uncheck();
+  await page.getByRole("button", { name: "Continue to setup check" }).click();
+  await expect(page.locator("[data-slot=field-error]")).toContainText(
+    "Choose at least one topic",
+  );
+  await page.getByRole("checkbox", { name: "APIs", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Databases", exact: true }).check();
+  await page.getByRole("radio", { name: "10 minutes", exact: true }).click();
+  await expect(
+    page.getByRole("radio", { name: "10 minutes", exact: true }),
+  ).toBeChecked();
   await page.getByRole("button", { name: "Continue to setup check" }).click();
   await expect(page).toHaveURL(/\/interviews\/[a-f0-9-]+$/);
   const interviewUrl = page.url();
@@ -357,7 +374,7 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await page
     .getByRole("button", { name: "Check microphone", exact: true })
     .click();
-  await expect(page.locator(".error[role=alert]")).toContainText(
+  await expect(page.locator("[data-slot=alert][role=alert]")).toContainText(
     "choose typed answers",
   );
   await page.getByRole("radio", { name: "Typed answers", exact: true }).check();
@@ -458,11 +475,11 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await page
     .getByRole("button", { name: "Finish interview", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText(
+  await expect(page.getByRole("alertdialog")).toContainText(
     "Unsent text will not be included",
   );
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("alertdialog")).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Finish interview", exact: true }),
   ).toBeFocused();
@@ -484,10 +501,14 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await expect(
     page.getByRole("heading", { name: "Summary", exact: true }),
   ).toBeVisible();
-  const review = page.locator("details.answer-review").first();
-  await review.locator("summary").focus();
+  const review = page.getByRole("button", { name: "Answer 1", exact: true });
+  await review.focus();
   await page.keyboard.press("Enter");
-  await expect(review.locator("blockquote")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Answer 1", exact: true })
+      .locator("blockquote"),
+  ).toBeVisible();
   await page.goto(interviewUrl);
   await expect(page).toHaveURL(/\/feedback$/);
   await page
@@ -504,7 +525,7 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
     .getByRole("textbox", { name: "Search interviews" })
     .fill("Backend");
   await expect(
-    page.getByText("Backend interview", { exact: true }),
+    page.getByRole("link", { name: /^Backend interview/ }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");

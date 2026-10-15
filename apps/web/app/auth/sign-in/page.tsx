@@ -4,6 +4,16 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldError,
+} from "@/components/ui/field";
+import { InlineAlert } from "@/components/common";
 import { Brand } from "@/components/workspace";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
@@ -45,15 +55,18 @@ export default function SignIn() {
     }
   });
   return (
-    <div className="auth-shell">
+    <div className="min-h-dvh px-6 py-8 md:px-16">
       <Brand />
-      <main className="auth-main">
-        <div className="auth-card">
-          <h1>{signup ? "Create an account" : "Sign in"}</h1>
+      <main className="grid min-h-[calc(100dvh-8rem)] place-items-center py-12">
+        <div className="w-full max-w-[380px]">
+          <h1 className="mb-8 text-3xl">
+            {signup ? "Create an account" : "Sign in"}
+          </h1>
           {capabilities.data?.google && (
             <>
-              <button
-                className="button secondary"
+              <Button
+                variant="outline"
+                className="w-full"
                 disabled={social}
                 onClick={async () => {
                   setSocial(true);
@@ -75,84 +88,92 @@ export default function SignIn() {
                 }}
               >
                 {social ? (
-                  <Loader2 size={17} className="spin" />
+                  <Loader2 className="animate-spin" />
                 ) : (
-                  <span style={{ fontWeight: 700 }}>G</span>
+                  <span className="font-bold">G</span>
                 )}
                 Continue with Google
-              </button>
-              <div className="auth-or">or</div>
+              </Button>
+              <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+                <Separator className="flex-1" />
+                or
+                <Separator className="flex-1" />
+              </div>
             </>
           )}
           <form onSubmit={submit}>
-            {signup && (
-              <div className="field">
-                <label htmlFor="name">Your name</label>
-                <input
-                  id="name"
+            <FieldGroup>
+              {signup && (
+                <Field>
+                  <FieldLabel htmlFor="name">Your name</FieldLabel>
+                  <Input
+                    id="name"
+                    required
+                    maxLength={80}
+                    autoComplete="name"
+                    placeholder="Your name"
+                    {...form.register("name", {
+                      required: signup,
+                      maxLength: 80,
+                    })}
+                  />
+                </Field>
+              )}
+              <Field>
+                <FieldLabel htmlFor="email">Email address</FieldLabel>
+                <Input
+                  id="email"
                   required
-                  className="input"
-                  maxLength={80}
-                  autoComplete="name"
-                  placeholder="Your name"
-                  {...form.register("name", {
-                    required: signup,
-                    maxLength: 80,
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  {...form.register("email", { required: true })}
+                />
+              </Field>
+              <Field data-invalid={!!form.formState.errors.password}>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <Input
+                  id="password"
+                  required
+                  type="password"
+                  minLength={signup ? 8 : 1}
+                  aria-invalid={!!form.formState.errors.password}
+                  aria-describedby={
+                    form.formState.errors.password
+                      ? "password-error"
+                      : undefined
+                  }
+                  autoComplete={signup ? "new-password" : "current-password"}
+                  placeholder={
+                    signup ? "At least 8 characters" : "Your password"
+                  }
+                  {...form.register("password", {
+                    required: true,
+                    minLength: signup ? 8 : 1,
                   })}
                 />
-              </div>
-            )}
-            <div className="field">
-              <label htmlFor="email">Email address</label>
-              <input
-                id="email"
-                required
-                className="input"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                {...form.register("email", { required: true })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                required
-                minLength={signup ? 8 : 1}
-                aria-invalid={!!form.formState.errors.password}
-                className="input"
-                type="password"
-                autoComplete={signup ? "new-password" : "current-password"}
-                placeholder={signup ? "At least 8 characters" : "Your password"}
-                {...form.register("password", {
-                  required: true,
-                  minLength: signup ? 8 : 1,
-                })}
-              />
-              {form.formState.errors.password && (
-                <small role="alert">
-                  Use at least {signup ? 8 : 1} characters.
-                </small>
-              )}
-            </div>
-            {error && (
-              <div className="error" role="alert">
-                {error}
-              </div>
-            )}
-            <button className="button" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? (
-                <Loader2 size={16} className="spin" />
-              ) : (
-                <ArrowRight size={16} />
-              )}{" "}
-              {signup ? "Create account" : "Sign in"}
-            </button>
+                {form.formState.errors.password && (
+                  <FieldError id="password-error">
+                    Use at least {signup ? 8 : 1} characters.
+                  </FieldError>
+                )}
+              </Field>
+              {error && <InlineAlert>{error}</InlineAlert>}
+              <Button disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <ArrowRight />
+                )}
+                {signup ? "Create account" : "Sign in"}
+              </Button>
+            </FieldGroup>
           </form>
-          <p className="auth-switch">
+          <p className="mt-6 text-center text-[13px] text-muted-foreground">
             {signup ? "Already have an account?" : "New to Screenly?"}{" "}
-            <button
+            <Button
+              variant="link"
+              size="sm"
               onClick={() => {
                 setSignup(!signup);
                 setError("");
@@ -160,7 +181,7 @@ export default function SignIn() {
               }}
             >
               {signup ? "Sign in" : "Create an account"}
-            </button>
+            </Button>
           </p>
         </div>
       </main>

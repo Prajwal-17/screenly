@@ -7,6 +7,5 @@ playwright-report/
 docs/screenshots/
 *.tsbuildinfo
 
-# Generated migration metadata and existing component templates
+# Generated migration metadata
 apps/backend/drizzle/
-apps/web/components/ui/

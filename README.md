@@ -67,7 +67,7 @@ When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT
 
 Development, type checks, and builds run `scripts/prepare-fonts.ts` to obtain unmodified variable WOFF2 files directly from Fontshare and then serve them locally with `next/font/local`. A fresh build needs access to `api.fontshare.com` and `cdn.fontshare.com`; subsequent builds reuse the local files. For offline builds, obtain both families from Fontshare and place `GeneralSans-Variable.woff2` and `Switzer-Variable.woff2` in `apps/web/app/fonts`.
 
-Fontshare's FFL 2.0 permits self-hosting but prohibits redistributing the binaries through a repository, so they are ignored by Git. The [license and provenance](apps/web/app/fonts/SOURCE.txt) are retained. See [DESIGN.md](DESIGN.md) for the light-only visual system, route responsibilities, and desktop reflow policy.
+Fontshare's FFL 2.0 permits self-hosting but prohibits redistributing the binaries through a repository, so they are ignored by Git. The [license and provenance](apps/web/app/fonts/SOURCE.txt) are retained. shadcn/ui primitives form the base of every screen; Tailwind utilities apply the shared visual tokens and layout. See [DESIGN.md](DESIGN.md) for the component layer, light-only visual system, route responsibilities, and desktop reflow policy.
 
 ## Commands
 
@@ -94,7 +94,7 @@ The suite starts its own frontend, backend, LLM fixture, and voice fixture. It u
 
 ## Architecture
 
-- `apps/web`: Next.js, React, Tailwind, Motion, React Hook Form, TanStack Query, Zustand.
+- `apps/web`: Next.js, React, Tailwind CSS 4, shadcn/ui (Radix), React Hook Form, TanStack Query, Zustand.
 - `apps/backend`: Bun, Hono, Better Auth, Drizzle, SQLite, OpenAI library.
 - `packages/shared`: Zod request/report schemas, domain types, and the audio frame contract.
 - `e2e`: controlled provider fixtures and Playwright journeys.

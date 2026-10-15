@@ -1,44 +1,78 @@
 "use client";
-import {
-  Loader2,
-  ArrowRight,
-  AudioLines,
-  AlertCircle,
-  Trash2,
-} from "lucide-react";
+import { Loader2, ArrowRight, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { Interview } from "@repo/shared";
 import { formatDate, interviewLink } from "@/lib/api";
-export function Reveal({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>;
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+export function Eyebrow({ className, ...props }: React.ComponentProps<"span">) {
+  return (
+    <span
+      className={cn(
+        "text-[11px] font-medium tracking-widest text-muted-foreground uppercase",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 export function PageTitle({
-  eyebrow,
   title,
   description,
   action,
 }: {
-  eyebrow?: string;
   title: string;
   description?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <div className="page-title">
+    <header className="mb-8 flex flex-wrap items-end justify-between gap-6">
       <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
-        {description && <p>{description}</p>}
+        {description && (
+          <p className="mt-2 text-muted-foreground">{description}</p>
+        )}
       </div>
       {action}
-    </div>
+    </header>
   );
 }
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="loading" role="status">
-      <Loader2 size={19} className="spin" />
-      {label}
+    <div className="space-y-4 py-8" role="status">
+      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        {label}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3" aria-hidden="true">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+      </div>
     </div>
   );
 }
@@ -50,71 +84,145 @@ export function ErrorState({
   retry?: () => void;
 }) {
   return (
-    <div className="surface empty" role="alert">
-      <div className="empty-icon">
-        <AlertCircle size={24} />
-      </div>
-      <h3>Could not load this page</h3>
-      <p>{message}</p>
-      {retry && (
-        <button className="button secondary" onClick={retry}>
-          Retry
-        </button>
-      )}
-    </div>
+    <Alert variant="destructive">
+      <AlertTitle>Could not load this page</AlertTitle>
+      <AlertDescription className="space-y-3">
+        <p>{message}</p>
+        {retry && (
+          <Button variant="outline" size="sm" onClick={retry}>
+            Retry
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+}
+export function InlineAlert({
+  children,
+  variant = "destructive",
+  className,
+}: {
+  children: React.ReactNode;
+  variant?: "destructive" | "warning";
+  className?: string;
+}) {
+  return (
+    <Alert
+      variant={variant}
+      role={variant === "warning" ? "status" : "alert"}
+      className={className}
+    >
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
   );
 }
 export function EmptyState() {
   return (
-    <div className="empty">
-      <div className="empty-icon">
-        <AudioLines size={24} />
-      </div>
-      <h3>No interviews yet</h3>
-      <p>Choose a focus to start practicing.</p>
-      <Link className="button" href="/interviews/new">
-        New interview <ArrowRight size={16} />
-      </Link>
-    </div>
+    <Card>
+      <CardContent className="py-6 text-center">
+        <h3>No interviews yet</h3>
+        <p className="mt-2 mb-5 text-muted-foreground">
+          Choose a focus to start practicing.
+        </p>
+        <Button asChild>
+          <Link href="/interviews/new">
+            New interview <ArrowRight />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+export function ConfirmAction({
+  trigger,
+  title,
+  description,
+  confirmLabel,
+  cancelLabel = "Keep it",
+  onConfirm,
+  pending,
+  destructive = false,
+}: {
+  trigger: React.ReactElement;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  pending?: boolean;
+  destructive?: boolean;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogAction
+            variant={destructive ? "destructive" : "default"}
+            disabled={pending}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 export function InterviewRows({
   interviews,
   onDelete,
+  deleting = false,
 }: {
   interviews: Interview[];
   onDelete?: (interview: Interview) => void;
+  deleting?: boolean;
 }) {
+  if (!interviews.length) return <EmptyState />;
   return (
-    <div className="surface" style={{ overflow: "hidden" }}>
-      {interviews.length ? (
-        interviews.map((item) => (
-          <div
-            key={item.id}
-            className={onDelete ? "interview-row" : "contents"}
-          >
-            <Link
-              className={`table-row ${onDelete ? "with-delete" : ""}`}
-              href={interviewLink(item)}
-            >
-              <div>
-                <div className="table-name">{item.role} interview</div>
-                <div className="table-topic">
-                  {item.topics.slice(0, 3).join(" · ")}
-                </div>
-              </div>
-              <div className="table-level">
-                <span className="tag">{item.level}</span>
-              </div>
-              <div
-                className="table-date"
-                style={{ fontSize: 11, color: "var(--subtle)" }}
-              >
+    <Card className="overflow-hidden py-0">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="pl-6">Interview</TableHead>
+            <TableHead className="hidden lg:table-cell">Experience</TableHead>
+            <TableHead className="hidden md:table-cell">Date</TableHead>
+            <TableHead>Status / score</TableHead>
+            {onDelete && (
+              <TableHead className="w-14">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {interviews.map((item) => (
+            <TableRow key={item.id}>
+              <TableCell className="py-5 pl-6">
+                <Link
+                  className="block rounded-sm font-medium hover:text-primary"
+                  href={interviewLink(item)}
+                >
+                  {item.role} interview
+                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                    {item.topics.slice(0, 3).join(" · ")}
+                  </span>
+                </Link>
+              </TableCell>
+              <TableCell className="hidden lg:table-cell">
+                <Badge variant="outline">{item.level}</Badge>
+              </TableCell>
+              <TableCell className="hidden text-xs text-muted-foreground tabular-nums md:table-cell">
                 {formatDate(item.createdAt)}
-              </div>
-              <div>
-                <span
-                  className={`tag ${item.status === "completed" ? "green" : "amber"}`}
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant={item.status === "completed" ? "success" : "warning"}
                 >
                   {item.status === "completed"
                     ? item.feedback?.overallScore != null
@@ -123,24 +231,35 @@ export function InterviewRows({
                     : item.status === "active"
                       ? "Resume"
                       : "Ready"}
-                </span>
-              </div>
-              {!onDelete && <ArrowRight size={15} color="var(--subtle)" />}
-            </Link>
-            {onDelete && (
-              <button
-                className="icon-button row-delete"
-                aria-label={`Delete ${item.role} interview`}
-                onClick={() => onDelete(item)}
-              >
-                <Trash2 size={15} />
-              </button>
-            )}
-          </div>
-        ))
-      ) : (
-        <EmptyState />
-      )}
-    </div>
+                </Badge>
+              </TableCell>
+              {onDelete && (
+                <TableCell className="pr-4 text-right">
+                  <ConfirmAction
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-destructive hover:bg-destructive-soft hover:text-destructive"
+                        aria-label={`Delete ${item.role} interview`}
+                        disabled={deleting}
+                      >
+                        <Trash2 />
+                      </Button>
+                    }
+                    title="Delete interview?"
+                    description="This removes the session, its conversation, and feedback from your history. This cannot be undone."
+                    confirmLabel="Delete interview"
+                    destructive
+                    pending={deleting}
+                    onConfirm={() => onDelete(item)}
+                  />
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Card>
   );
 }

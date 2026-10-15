@@ -6,11 +6,12 @@ import { roles } from "@repo/shared";
 import { Workspace } from "@/components/workspace";
 import {
   PageTitle,
-  Reveal,
   InterviewRows,
   Loading,
   ErrorState,
 } from "@/components/common";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
 import { api, elapsed } from "@/lib/api";
 const focusTopics = {
@@ -35,74 +36,91 @@ export default function Dashboard() {
     : null;
   return (
     <Workspace>
-      <Reveal>
-        <PageTitle
-          title="Overview"
-          action={
-            <Link className="button" href="/interviews/new">
-              <Plus size={16} />
+      <PageTitle
+        title="Overview"
+        action={
+          <Button asChild>
+            <Link href="/interviews/new">
+              <Plus />
               New interview
             </Link>
-          }
+          </Button>
+        }
+      />
+      {query.isPending ? (
+        <Loading />
+      ) : query.error ? (
+        <ErrorState
+          message={query.error.message}
+          retry={() => void query.refetch()}
         />
-        {query.isPending ? (
-          <Loading />
-        ) : query.error ? (
-          <ErrorState
-            message={query.error.message}
-            retry={() => void query.refetch()}
-          />
-        ) : (
-          <>
-            <div className="grid-3" aria-label="Practice statistics">
-              <div className="surface metric">
-                <div className="metric-label">Completed interviews</div>
-                <div className="metric-value">{completed.length}</div>
-              </div>
-              <div className="surface metric">
-                <div className="metric-label">Minutes practiced</div>
-                <div className="metric-value">
-                  {Math.round(
-                    items.reduce((sum, i) => sum + elapsed(i), 0) / 60,
-                  )}
-                </div>
-              </div>
-              <div className="surface metric">
-                <div className="metric-label">Average score</div>
-                <div className="metric-value">
-                  {average ?? "—"}
-                  {average !== null && <span>/ 10</span>}
-                </div>
-              </div>
-            </div>
-            <div className="between section-row">
-              <h2>Recent interviews</h2>
-              <Link href="/history" className="text-link">
-                View history <ArrowRight size={14} />
+      ) : (
+        <>
+          <div
+            className="grid gap-4 sm:grid-cols-3"
+            aria-label="Practice statistics"
+          >
+            {[
+              { label: "Completed interviews", value: completed.length },
+              {
+                label: "Minutes practiced",
+                value: Math.round(
+                  items.reduce((sum, i) => sum + elapsed(i), 0) / 60,
+                ),
+              },
+              { label: "Average score", value: average ?? "—" },
+            ].map((metric) => (
+              <Card key={metric.label}>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    {metric.label}
+                  </p>
+                  <div className="mt-3 font-heading text-4xl tracking-tight tabular-nums">
+                    {metric.value}
+                    {metric.label === "Average score" && average !== null && (
+                      <span className="ml-1 font-sans text-sm text-muted-foreground">
+                        / 10
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="mt-8 mb-4 flex items-center justify-between gap-4">
+            <h2 className="text-xl">Recent interviews</h2>
+            <Button asChild variant="link" size="sm">
+              <Link href="/history">
+                View history <ArrowRight />
               </Link>
-            </div>
-            <InterviewRows interviews={items.slice(0, 5)} />
-          </>
-        )}
-        <div className="section-row">
-          <h2>Choose a focus</h2>
-        </div>
-        <div className="focus-grid">
-          {roles.map((role) => (
-            <Link
-              key={role}
-              className="focus-link"
-              href={`/interviews/new?role=${encodeURIComponent(role)}`}
-            >
-              <div>
-                <strong>{role}</strong>
-                <small>{focusTopics[role]}</small>
-              </div>
-              <ArrowRight size={18} />
+            </Button>
+          </div>
+          <InterviewRows interviews={items.slice(0, 5)} />
+        </>
+      )}
+      <h2 className="mt-8 mb-4 text-xl">Choose a focus</h2>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {roles.map((role) => (
+          <Button
+            key={role}
+            asChild
+            variant="secondary"
+            className="h-auto justify-between rounded-md border-t-2 border-border px-6 py-6 whitespace-normal hover:border-primary hover:bg-accent"
+          >
+            <Link href={`/interviews/new?role=${encodeURIComponent(role)}`}>
+              <span>
+                <strong className="block font-heading text-lg font-medium tracking-tight">
+                  {role}
+                </strong>
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                  {focusTopics[role]}
+                </span>
+              </span>
+              <ArrowRight />
             </Link>
-          ))}
-        </div>
-      </Reveal>
+          </Button>
+        ))}
+      </div>
     </Workspace>
   );
 }
