@@ -13,6 +13,7 @@ export class Session {
   private worklet: AudioWorkletNode | null = null;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
+  private retainedRecording: Blob | null = null;
   private download = false;
   private responseId = 0;
   private cancelled = new Set<number>();
@@ -79,6 +80,7 @@ export class Session {
           connected: false,
           status: "disconnected",
           starting: false,
+          submitting: false,
         });
     };
     socket.onerror = () => {
@@ -89,6 +91,11 @@ export class Session {
     };
   }
   private event(event: ServerEvent) {
+    if (event.type === "answer-saved")
+      useInterviewStore.setState({
+        savedAnswerId: event.id,
+        submitting: false,
+      });
     if (event.type === "ready") {
       useInterviewStore.setState({
         interview: event.interview,
@@ -151,6 +158,7 @@ export class Session {
         error: event.message,
         errorScope: event.scope,
         starting: false,
+        submitting: false,
       });
       if (event.scope === "voice") this.stopCapture();
     }
@@ -165,15 +173,19 @@ export class Session {
       throw new Error("Reconnect before continuing.");
     this.socket.send(JSON.stringify(event));
   }
-  async start(download = this.download) {
+  async start(
+    download = this.download,
+    typed = useInterviewStore.getState().typed,
+  ) {
     if (useInterviewStore.getState().starting) return;
     useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
-      await this.player.unlock();
+      if (!typed) await this.player.unlock();
       if (this.disposed) return;
       this.download = download;
       try {
-        await this.capture();
+        if (typed) this.stopCapture(false, true);
+        else await this.capture();
       } catch {
         this.stopCapture();
         useInterviewStore.setState({
@@ -187,7 +199,8 @@ export class Session {
         this.stopCapture();
         return;
       }
-      this.send({ type: "start" });
+      useInterviewStore.setState({ typed, partial: "" });
+      this.send({ type: "start", typed });
     } catch (error) {
       useInterviewStore.setState({
         error: error instanceof Error ? error.message : "Could not start.",
@@ -258,23 +271,30 @@ export class Session {
     }
     useInterviewStore.setState({ micActive: true, muted: false });
   }
-  private stopCapture(save = false) {
+  private downloadRecording(blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `screenly-recording-${this.id}.${blob.type.includes("mp4") ? "m4a" : "webm"}`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  private stopCapture(save = false, retain = false) {
     const recorder = this.recorder;
     if (recorder && recorder.state !== "inactive") {
       recorder.onstop = () => {
-        if (save && this.chunks.length) {
-          const url = URL.createObjectURL(
-            new Blob(this.chunks, { type: recorder.mimeType }),
-          );
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `forma-recording-${this.id}.${recorder.mimeType.includes("mp4") ? "m4a" : "webm"}`;
-          link.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        if (this.chunks.length) {
+          const blob = new Blob(this.chunks, { type: recorder.mimeType });
+          if (save) this.downloadRecording(blob);
+          else if (retain) this.retainedRecording = blob;
         }
         this.chunks = [];
       };
       recorder.stop();
+    }
+    if (save && this.retainedRecording) {
+      this.downloadRecording(this.retainedRecording);
+      this.retainedRecording = null;
     }
     this.recorder = null;
     this.worklet?.disconnect();
@@ -288,6 +308,23 @@ export class Session {
     this.stream = null;
     if (!this.disposed)
       useInterviewStore.setState({ micActive: false, level: 0, muted: false });
+  }
+  answer(id: string, text: string) {
+    const state = useInterviewStore.getState();
+    if (state.submitting || state.status !== "listening") return;
+    try {
+      this.send({ type: "answer", id, text });
+      useInterviewStore.setState({
+        submitting: true,
+        error: "",
+        errorScope: null,
+      });
+    } catch {
+      useInterviewStore.setState({
+        error: "Answer not sent. Reconnect and retry; your draft is kept.",
+        errorScope: "session",
+      });
+    }
   }
   async speakLatest() {
     try {

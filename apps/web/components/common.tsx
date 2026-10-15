@@ -7,19 +7,10 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { motion } from "motion/react";
 import type { Interview } from "@repo/shared";
 import { formatDate, interviewLink } from "@/lib/api";
 export function Reveal({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22 }}
-    >
-      {children}
-    </motion.div>
-  );
+  return <div>{children}</div>;
 }
 export function PageTitle({
   eyebrow,
@@ -27,27 +18,23 @@ export function PageTitle({
   description,
   action,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   action?: React.ReactNode;
 }) {
   return (
     <div className="page-title">
       <div>
-        <div className="eyebrow">{eyebrow}</div>
+        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
       {action}
     </div>
   );
 }
-export function Loading({
-  label = "Loading your interviews…",
-}: {
-  label?: string;
-}) {
+export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
     <div className="loading" role="status">
       <Loader2 size={19} className="spin" />
@@ -63,15 +50,15 @@ export function ErrorState({
   retry?: () => void;
 }) {
   return (
-    <div className="surface empty">
+    <div className="surface empty" role="alert">
       <div className="empty-icon">
         <AlertCircle size={24} />
       </div>
-      <h3>Something needs another try</h3>
+      <h3>Could not load this page</h3>
       <p>{message}</p>
       {retry && (
         <button className="button secondary" onClick={retry}>
-          Try again
+          Retry
         </button>
       )}
     </div>
@@ -83,13 +70,10 @@ export function EmptyState() {
       <div className="empty-icon">
         <AudioLines size={24} />
       </div>
-      <h3>Your first conversation is waiting</h3>
-      <p>
-        Pick a role and a few topics. We’ll take it one thoughtful question at a
-        time.
-      </p>
+      <h3>No interviews yet</h3>
+      <p>Choose a focus to start practicing.</p>
       <Link className="button" href="/interviews/new">
-        Start an interview <ArrowRight size={16} />
+        New interview <ArrowRight size={16} />
       </Link>
     </div>
   );
@@ -157,15 +141,6 @@ export function InterviewRows({
       ) : (
         <EmptyState />
       )}
-    </div>
-  );
-}
-export function Wave({ active = false }: { active?: boolean }) {
-  return (
-    <div className={`wave ${active ? "active" : ""}`} aria-hidden="true">
-      {Array.from({ length: 7 }, (_, i) => (
-        <i key={i} />
-      ))}
     </div>
   );
 }

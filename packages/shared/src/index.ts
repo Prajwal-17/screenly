@@ -17,8 +17,8 @@ export const settingsSchema = z.object({
   level: z.enum(levels),
   topics: z
     .array(z.enum(topics))
-    .min(1)
-    .max(6)
+    .min(1, "Choose at least one topic.")
+    .max(6, "Choose up to six topics.")
     .refine(
       (items) => new Set(items).size === items.length,
       "Choose unique topics",
@@ -94,7 +94,16 @@ export type Interview = InterviewSettings & {
 export type InterviewDetail = Interview & { messages: InterviewMessage[] };
 export type Capabilities = { google: boolean; voice: boolean; llm: boolean };
 export const clientEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("start") }).strict(),
+  z
+    .object({ type: z.literal("start"), typed: z.boolean().optional() })
+    .strict(),
+  z
+    .object({
+      type: z.literal("answer"),
+      id: z.uuid(),
+      text: z.string().trim().min(1).max(12000),
+    })
+    .strict(),
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("speak") }),
   z.object({
@@ -106,6 +115,7 @@ export const clientEventSchema = z.discriminatedUnion("type", [
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 export type ServerEvent =
   | { type: "ready"; interview: InterviewDetail }
+  | { type: "answer-saved"; id: string }
   | { type: "status"; status: LiveStatus }
   | { type: "partial"; text: string }
   | { type: "message"; message: InterviewMessage }

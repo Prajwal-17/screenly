@@ -1,23 +1,24 @@
-# Forma · AI Interviewer
+# Screenly · Technical interview practice
 
-A technical interview practice app built for learning and portfolio use. Choose a role, experience level, topics, and duration; have an adaptive voice conversation; then review your saved transcript and feedback scored out of 10.
+A technical interview practice app built for learning and portfolio use. Choose a role, experience level, topics, and duration; practice with voice or typed answers; then review your saved transcript and feedback scored out of 10.
 
-![Forma landing page](docs/screenshots/landing.png)
+![Screenly landing page](docs/screenshots/landing.png)
 
 ## What works
 
-- Premium dark interface with responsive workspace navigation and reduced-motion support.
+- Light desktop workspace with warm neutrals, restrained orange accents, local General Sans/Switzer fonts, and keyboard access.
 - Google OAuth (optional) and email/password authentication.
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
 - Adaptive follow-ups using session settings and conversation history.
-- Microphone/speaker checks, mute, interruption, and optional microphone recording download.
+- Microphone/speaker checks, mute, interruption, replay, typed fallback, and optional microphone recording download.
+- Recoverable typed drafts and acknowledged, deduplicated answer submissions.
 - Saved conversations, structured feedback, searchable history, deletion, and transcript export.
 - Session ownership checks, duplicate-answer protection, bounded provider waits, and recovery after disconnection.
 
 ## Requirements
 
-Bun 1.3.5+ (verified with 1.4.3), Node.js 20.9+, and an OpenAI-compatible Chat Completions provider. Deepgram is required for microphone transcription and spoken replies.
+Bun 1.3.5+ (verified with 1.4.3), Node.js 20.9+, and an OpenAI-compatible Chat Completions provider. Deepgram is required for microphone transcription and spoken replies. Typed interviews need only the LLM provider.
 
 ## Local setup
 
@@ -54,13 +55,19 @@ The LLM endpoint and model are configurable; DeepSeek is only the example endpoi
 bun run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone before starting.
+Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone or choose typed answers before starting.
 
-If the LLM is not configured, setup and history remain available, and the start screen explains what to configure. If microphone transcription fails, retry the microphone; TTS remains enabled. Microphone access and a working transcription connection are required to start. Use **Hear question** to replay the latest question or **Retry speech** after a speech failure. Finalized messages remain saved.
+If the LLM is not configured, setup and history remain available, and the start screen shows that the interviewer is unavailable. If microphone transcription fails, retry the microphone; TTS remains enabled. Voice mode requires microphone access and a working transcription connection before the timer starts. Choose **Typed answers** in setup check to continue without a microphone, or **Type instead** during a voice interview. Typed drafts are kept in this tab through disconnects and reloads; the field clears only after the server acknowledges the saved answer. Retried submissions use the same ID to prevent duplicates. Use **Hear question** to replay the latest question or **Retry speech** after a speech failure. Finalized messages remain saved.
 
 For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Email/password works without Google credentials.
 
 When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT_PUBLIC_API_URL` together. The browser derives its WebSocket URL from the API origin. The frontend API URL is a build-time Next.js setting. Microphone access works on localhost or HTTPS.
+
+## Fonts and desktop layout
+
+Development, type checks, and builds run `scripts/prepare-fonts.ts` to obtain unmodified variable WOFF2 files directly from Fontshare and then serve them locally with `next/font/local`. A fresh build needs access to `api.fontshare.com` and `cdn.fontshare.com`; subsequent builds reuse the local files. For offline builds, obtain both families from Fontshare and place `GeneralSans-Variable.woff2` and `Switzer-Variable.woff2` in `apps/web/app/fonts`.
+
+Fontshare's FFL 2.0 permits self-hosting but prohibits redistributing the binaries through a repository, so they are ignored by Git. The [license and provenance](apps/web/app/fonts/SOURCE.txt) are retained. See [DESIGN.md](DESIGN.md) for the light-only visual system, route responsibilities, and desktop reflow policy.
 
 ## Commands
 
@@ -92,7 +99,7 @@ The suite starts its own frontend, backend, LLM fixture, and voice fixture. It u
 - `packages/shared`: Zod request/report schemas, domain types, and the audio frame contract.
 - `e2e`: controlled provider fixtures and Playwright journeys.
 - [Implementation notes](docs/implementation.md): voice lifecycle, storage, protocol, and verification.
-- [Screenshots](docs/screenshots): landing, dashboard, setup, interview, feedback, and mobile history.
+- [Screenshots](docs/screenshots): landing, authentication, overview, setup, preflight, voice/typed interview, feedback, and history.
 
 The backend owns interview timing, conversation history, and provider requests. The browser owns microphone capture and ordered playback. Deepgram turn detection establishes answer boundaries; no browser VAD model assets are required.
 

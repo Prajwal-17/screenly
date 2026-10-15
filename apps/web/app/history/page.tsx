@@ -37,9 +37,7 @@ export default function History() {
     <Workspace>
       <Reveal>
         <PageTitle
-          eyebrow="Your journey"
-          title="Every conversation, kept."
-          description="Revisit your answers, reconnect with your feedback, and see how far you’ve come."
+          title="History"
           action={
             <Link className="button" href="/interviews/new">
               <Plus size={16} />
@@ -47,9 +45,11 @@ export default function History() {
             </Link>
           }
         />
-        <div className="between" style={{ marginBottom: 22 }}>
+        <div className="between history-toolbar" style={{ marginBottom: 22 }}>
           <span style={{ color: "var(--subtle)", fontSize: 12 }}>
-            {query.data?.length ?? 0} interviews in your practice history
+            {query.data
+              ? `${query.data.length} interview${query.data.length === 1 ? "" : "s"}`
+              : ""}
           </span>
           <label className="row" style={{ maxWidth: 290 }}>
             <Search size={16} color="var(--subtle)" />
@@ -71,7 +71,7 @@ export default function History() {
           />
         ) : search && !items.length ? (
           <div className="surface empty">
-            <h3>No conversations match</h3>
+            <h3>No interviews match</h3>
             <p style={{ marginTop: 12 }}>Try another role or topic.</p>
           </div>
         ) : (
@@ -88,11 +88,11 @@ export default function History() {
             {remove.error.message}
           </div>
         )}
-        <dialog ref={dialog}>
-          <h2>Delete this interview?</h2>
+        <dialog ref={dialog} aria-labelledby="delete-title">
+          <h2 id="delete-title">Delete interview?</h2>
           <p>
             This removes the session, its conversation, and feedback from your
-            history.
+            history. This cannot be undone.
           </p>
           <div className="row" style={{ justifyContent: "flex-end" }}>
             <button

@@ -43,3 +43,6 @@ yarn-error.log*
 # Browser test artifacts
 test-results/
 playwright-report/
+
+# Fontshare FFL: obtain local copies rather than redistributing binaries
+apps/web/app/fonts/*-Variable.woff2

@@ -1,31 +1,16 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import {
-  ArrowUpRight,
-  LayoutDashboard,
-  History,
-  Plus,
-  LogOut,
-  Loader2,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { LayoutDashboard, History, Plus, LogOut, Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 export function Brand() {
   return (
-    <Link href="/" className="brand" aria-label="Forma home">
+    <Link href="/" className="brand" aria-label="Screenly home">
       <span className="brand-mark" aria-hidden="true">
         <i />
-        <i />
-        <i />
-        <i />
       </span>
-      <span>
-        forma
-        <span className="accent" style={{ fontSize: 18 }}>
-          .
-        </span>
-      </span>
+      <span>screenly</span>
     </Link>
   );
 }
@@ -33,14 +18,19 @@ export function Workspace({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
   const path = usePathname();
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
     if (!isPending && !session) router.replace("/auth/sign-in");
   }, [isPending, session, router]);
+  useEffect(() => {
+    if (session) document.getElementById("workspace-content")?.focus();
+  }, [path, session]);
   if (isPending || !session)
     return (
-      <div className="loading" style={{ minHeight: "100dvh" }}>
+      <div className="loading" role="status" style={{ minHeight: "100dvh" }}>
         <Loader2 size={20} className="spin" />
-        Opening your workspace…
+        Loading…
       </div>
     );
   const nav = [
@@ -50,11 +40,11 @@ export function Workspace({ children }: { children: React.ReactNode }) {
   ];
   return (
     <div className="workspace">
+      <a href="#workspace-content" className="skip-link">
+        Skip to content
+      </a>
       <aside className="sidebar">
         <Brand />
-        <p className="sidebar-caption">
-          A little practice. A lot of possibility.
-        </p>
         <nav className="nav-links" aria-label="Main navigation">
           {nav.map(({ href, label, icon: Icon }) => (
             <Link
@@ -63,40 +53,40 @@ export function Workspace({ children }: { children: React.ReactNode }) {
               className={`nav-link ${path === href ? "active" : ""}`}
               aria-current={path === href ? "page" : undefined}
             >
-              <Icon size={18} />
+              <Icon size={18} aria-hidden="true" />
               {label}
             </Link>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="practice-note">
-            <p className="eyebrow" style={{ marginBottom: 9 }}>
-              Keep showing up
+          {error && (
+            <p className="error" role="alert">
+              {error}
             </p>
-            <p>Confidence grows one conversation at a time.</p>
-            <Link
-              className="text-link"
-              href="/interviews/new"
-              style={{ marginTop: 12 }}
-            >
-              Find your next level <ArrowUpRight size={13} />
-            </Link>
-          </div>
+          )}
           <div className="user-row">
-            <span className="avatar">
+            <span className="avatar" aria-hidden="true">
               {session.user.name.slice(0, 2).toUpperCase()}
             </span>
-            <div>
-              <div className="user-name">{session.user.name}</div>
-              <small style={{ fontSize: 10 }}>Personal workspace</small>
-            </div>
+            <span className="user-name" title={session.user.name}>
+              {session.user.name}
+            </span>
             <button
               className="icon-button"
-              style={{ border: 0, width: 28, marginLeft: "auto" }}
               aria-label="Sign out"
+              disabled={signingOut}
               onClick={async () => {
-                await authClient.signOut();
-                router.push("/");
+                setSigningOut(true);
+                setError("");
+                try {
+                  const result = await authClient.signOut();
+                  if (result.error) throw new Error("Sign out failed. Retry.");
+                  router.push("/");
+                } catch {
+                  setError("Could not sign out. Retry.");
+                } finally {
+                  setSigningOut(false);
+                }
               }}
             >
               <LogOut size={16} />
@@ -104,40 +94,16 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </aside>
-      <div className="workspace-main">
-        <header className="topbar">
-          <Brand />
-          <span
-            className="topbar-crumb"
-            style={{ fontSize: 12, color: "var(--subtle)" }}
-          >
-            Workspace{" "}
-            <span style={{ margin: "0 12px", color: "#52624d" }}>/</span>{" "}
-            {path === "/dashboard"
-              ? "Overview"
-              : path === "/history"
-                ? "Interview history"
-                : path === "/interviews/new"
-                  ? "New interview"
-                  : "Your interview"}
-          </span>
-          <span className="tag green">
-            <span className="dot" />
-            Your next chapter starts here
-          </span>
-          <button
-            className="icon-button mobile-signout"
-            aria-label="Sign out"
-            onClick={async () => {
-              await authClient.signOut();
-              router.push("/");
-            }}
-          >
-            <LogOut size={17} />
-          </button>
-        </header>
-        <main className="content">{children}</main>
-      </div>
+      <main
+        id="workspace-content"
+        className="workspace-main content"
+        tabIndex={-1}
+      >
+        <p className="desktop-notice">
+          Use a wider window for interview practice.
+        </p>
+        {children}
+      </main>
     </div>
   );
 }

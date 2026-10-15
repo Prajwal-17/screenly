@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Plus, AudioLines, Clock, TrendingUp } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
+import { roles } from "@repo/shared";
 import { Workspace } from "@/components/workspace";
 import {
   PageTitle,
@@ -12,6 +13,11 @@ import {
 } from "@/components/common";
 import { authClient } from "@/lib/auth-client";
 import { api, elapsed } from "@/lib/api";
+const focusTopics = {
+  Frontend: "JavaScript · React",
+  Backend: "APIs · Databases",
+  "Full-stack": "System design · APIs",
+};
 export default function Dashboard() {
   const { data: session } = authClient.useSession();
   const query = useQuery({
@@ -31,9 +37,7 @@ export default function Dashboard() {
     <Workspace>
       <Reveal>
         <PageTitle
-          eyebrow="Your practice space"
-          title={`Make room for your next level${session?.user.name ? `, ${session.user.name.split(" ")[0]}` : ""}.`}
-          description="A little preparation today. A more confident conversation tomorrow."
+          title="Overview"
           action={
             <Link className="button" href="/interviews/new">
               <Plus size={16} />
@@ -41,75 +45,6 @@ export default function Dashboard() {
             </Link>
           }
         />
-        <div className="grid-3">
-          <div className="surface metric">
-            <div className="metric-label">
-              Completed interviews
-              <AudioLines size={16} />
-            </div>
-            <div className="metric-value">{completed.length}</div>
-            <small>Every conversation counts</small>
-          </div>
-          <div className="surface metric">
-            <div className="metric-label">
-              Minutes practiced
-              <Clock size={16} />
-            </div>
-            <div className="metric-value">
-              {Math.round(items.reduce((sum, i) => sum + elapsed(i), 0) / 60)}
-            </div>
-            <small>Time invested in yourself</small>
-          </div>
-          <div className="surface metric">
-            <div className="metric-label">
-              Average score
-              <TrendingUp size={16} />
-            </div>
-            <div className="metric-value accent">
-              {average ?? "—"}
-              {average !== null && (
-                <span style={{ fontSize: 15, color: "var(--subtle)" }}>
-                  /10
-                </span>
-              )}
-            </div>
-            <small>
-              {scores.length
-                ? "Across scored interviews"
-                : "Available after your first report"}
-            </small>
-          </div>
-        </div>
-        <div className="surface feature-banner" style={{ marginTop: 24 }}>
-          <div>
-            <div className="eyebrow accent">
-              The next step is a conversation
-            </div>
-            <h2>
-              Practice the parts
-              <br />
-              you want to get better at.
-            </h2>
-            <p>
-              Choose a focus. Think out loud. Get questions that meet you where
-              you are.
-            </p>
-            <Link className="button" href="/interviews/new">
-              Find your focus <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className="banner-art" aria-hidden="true">
-            {[32, 58, 96, 145, 180, 128, 72, 110, 155, 88, 47].map((h, i) => (
-              <i key={i} style={{ height: h }} />
-            ))}
-          </div>
-        </div>
-        <div className="between section-row">
-          <h2 style={{ fontSize: 20 }}>Recent conversations</h2>
-          <Link href="/history" className="text-link">
-            View history <ArrowRight size={14} />
-          </Link>
-        </div>
         {query.isPending ? (
           <Loading />
         ) : query.error ? (
@@ -118,8 +53,55 @@ export default function Dashboard() {
             retry={() => void query.refetch()}
           />
         ) : (
-          <InterviewRows interviews={items.slice(0, 5)} />
+          <>
+            <div className="grid-3" aria-label="Practice statistics">
+              <div className="surface metric">
+                <div className="metric-label">Completed interviews</div>
+                <div className="metric-value">{completed.length}</div>
+              </div>
+              <div className="surface metric">
+                <div className="metric-label">Minutes practiced</div>
+                <div className="metric-value">
+                  {Math.round(
+                    items.reduce((sum, i) => sum + elapsed(i), 0) / 60,
+                  )}
+                </div>
+              </div>
+              <div className="surface metric">
+                <div className="metric-label">Average score</div>
+                <div className="metric-value">
+                  {average ?? "—"}
+                  {average !== null && <span>/ 10</span>}
+                </div>
+              </div>
+            </div>
+            <div className="between section-row">
+              <h2>Recent interviews</h2>
+              <Link href="/history" className="text-link">
+                View history <ArrowRight size={14} />
+              </Link>
+            </div>
+            <InterviewRows interviews={items.slice(0, 5)} />
+          </>
         )}
+        <div className="section-row">
+          <h2>Choose a focus</h2>
+        </div>
+        <div className="focus-grid">
+          {roles.map((role) => (
+            <Link
+              key={role}
+              className="focus-link"
+              href={`/interviews/new?role=${encodeURIComponent(role)}`}
+            >
+              <div>
+                <strong>{role}</strong>
+                <small>{focusTopics[role]}</small>
+              </div>
+              <ArrowRight size={18} />
+            </Link>
+          ))}
+        </div>
       </Reveal>
     </Workspace>
   );

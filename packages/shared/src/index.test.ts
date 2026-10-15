@@ -7,17 +7,29 @@ import {
   clientEventSchema,
 } from "./index";
 describe("shared contracts", () => {
-  test("accepts voice starts and rejects text answers and mode selection", () => {
+  test("validates voice and typed starts and bounded, identifiable text answers", () => {
     expect(clientEventSchema.safeParse({ type: "start" }).success).toBe(true);
+    expect(
+      clientEventSchema.safeParse({ type: "start", typed: true }).success,
+    ).toBe(true);
     expect(
       clientEventSchema.safeParse({ type: "start", voice: false }).success,
     ).toBe(false);
+    const answer = {
+      type: "answer",
+      id: crypto.randomUUID(),
+      text: "An answer",
+    };
+    expect(clientEventSchema.safeParse(answer).success).toBe(true);
     expect(
-      clientEventSchema.safeParse({
-        type: "answer",
-        id: crypto.randomUUID(),
-        text: "An answer",
-      }).success,
+      clientEventSchema.safeParse({ ...answer, id: "invalid" }).success,
+    ).toBe(false);
+    expect(clientEventSchema.safeParse({ ...answer, text: "  " }).success).toBe(
+      false,
+    );
+    expect(
+      clientEventSchema.safeParse({ ...answer, text: "x".repeat(12001) })
+        .success,
     ).toBe(false);
   });
   test("audio preserves the reply ID and PCM samples", () => {

@@ -53,6 +53,7 @@ export default defineConfig({
     },
     {
       command: "bun run --cwd apps/web start",
+      env: { PORT: "3000" },
       url: "http://localhost:3000",
       reuseExistingServer: false,
     },

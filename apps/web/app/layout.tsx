@@ -2,18 +2,27 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import "./globals.css";
-const sans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-sans",
+const heading = localFont({
+  src: "./fonts/GeneralSans-Variable.woff2",
+  variable: "--font-heading",
+  weight: "200 700",
+  display: "swap",
+  fallback: ["Arial", "sans-serif"],
 });
-const mono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-mono",
+const body = localFont({
+  src: "./fonts/Switzer-Variable.woff2",
+  variable: "--font-body",
+  weight: "100 900",
+  display: "swap",
+  fallback: ["Arial", "sans-serif"],
 });
 export const metadata: Metadata = {
-  title: { default: "Forma — Find your next level", template: "%s · Forma" },
+  title: {
+    default: "Screenly · Technical interview practice",
+    template: "%s · Screenly",
+  },
   description:
-    "Thoughtful technical interview practice. A real conversation, adaptive questions, and clear feedback for your next step.",
+    "Practice technical interviews with adaptive questions and feedback grounded in your answers.",
 };
 export default function RootLayout({
   children,
@@ -21,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${heading.variable} ${body.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

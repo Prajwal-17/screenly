@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -9,11 +10,19 @@ import {
   type InterviewSettings,
 } from "@repo/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Workspace } from "@/components/workspace";
 import { PageTitle, Reveal } from "@/components/common";
 import { api } from "@/lib/api";
+const roleTopics: Record<
+  InterviewSettings["role"],
+  InterviewSettings["topics"]
+> = {
+  Frontend: ["JavaScript", "React"],
+  Backend: ["APIs", "Databases"],
+  "Full-stack": ["System design", "APIs"],
+};
 export default function Setup() {
   const router = useRouter();
   const client = useQueryClient();
@@ -26,6 +35,15 @@ export default function Setup() {
       duration: 20,
     },
   });
+  const { setValue } = form;
+  useEffect(() => {
+    const role = new URLSearchParams(window.location.search).get("role");
+    const valid = roles.find((r) => r === role);
+    if (valid) {
+      setValue("role", valid);
+      setValue("topics", roleTopics[valid]);
+    }
+  }, [setValue]);
   const values = useWatch({ control: form.control });
   const capabilities = useQuery({
     queryKey: ["capabilities"],
@@ -41,23 +59,17 @@ export default function Setup() {
   return (
     <Workspace>
       <Reveal>
-        <PageTitle
-          eyebrow="Make it yours"
-          title="What’s your next challenge?"
-          description="A few choices to shape a conversation around you."
-        />
+        <PageTitle title="New interview" />
         <form
-          onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+          onSubmit={form.handleSubmit((v) => {
+            if (!mutation.isPending) mutation.mutate(v);
+          })}
           className="setup-layout"
         >
           <div className="surface">
-            <fieldset
-              className="setup-section"
-              style={{ borderLeft: 0, borderRight: 0, borderTop: 0, margin: 0 }}
-            >
-              <legend className="sr-only">Your role</legend>
-              <h3>01 · Choose your role</h3>
-              <p>Focus on the work you want to do.</p>
+            <fieldset className="setup-section">
+              <legend className="sr-only">Role</legend>
+              <h3>Role</h3>
               <div className="choices">
                 {roles.map((role) => (
                   <label key={role} className="choice">
@@ -71,13 +83,9 @@ export default function Setup() {
                 ))}
               </div>
             </fieldset>
-            <fieldset
-              className="setup-section"
-              style={{ borderLeft: 0, borderRight: 0, borderTop: 0, margin: 0 }}
-            >
-              <legend className="sr-only">Experience level</legend>
-              <h3>02 · Set the depth</h3>
-              <p>Questions will adapt to your answers along the way.</p>
+            <fieldset className="setup-section">
+              <legend className="sr-only">Experience</legend>
+              <h3>Experience</h3>
               <div className="choices">
                 {levels.map((level) => (
                   <label key={level} className="choice">
@@ -93,11 +101,23 @@ export default function Setup() {
             </fieldset>
             <fieldset
               className="setup-section"
-              style={{ borderLeft: 0, borderRight: 0, borderTop: 0, margin: 0 }}
+              aria-describedby={
+                form.formState.errors.topics ? "topics-error" : undefined
+              }
             >
-              <legend className="sr-only">Interview topics</legend>
-              <h3>03 · Pick your focus</h3>
-              <p>Select one to six topics you’d like to explore.</p>
+              <legend className="sr-only">Topics</legend>
+              <h3>
+                Topics{" "}
+                <small
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "var(--font-body)",
+                    letterSpacing: 0,
+                  }}
+                >
+                  Choose 1–6
+                </small>
+              </h3>
               <div className="choices">
                 {topics.map((topic) => (
                   <label key={topic} className="choice">
@@ -111,18 +131,19 @@ export default function Setup() {
                 ))}
               </div>
               {form.formState.errors.topics && (
-                <p className="accent" role="alert" style={{ marginTop: 12 }}>
+                <p
+                  id="topics-error"
+                  className="error"
+                  role="alert"
+                  style={{ marginTop: 16 }}
+                >
                   {form.formState.errors.topics.message}
                 </p>
               )}
             </fieldset>
-            <fieldset
-              className="setup-section"
-              style={{ border: 0, margin: 0 }}
-            >
+            <fieldset className="setup-section">
               <legend className="sr-only">Duration</legend>
-              <h3>04 · Make some time</h3>
-              <p>A focused session that fits your day.</p>
+              <h3>Duration</h3>
               <div className="choices">
                 {([10, 20, 30] as const).map((duration) => (
                   <button
@@ -139,14 +160,7 @@ export default function Setup() {
             </fieldset>
           </div>
           <aside className="surface pad stack">
-            <div>
-              <div className="eyebrow accent">Your session</div>
-              <h2 style={{ marginTop: 13 }}>
-                A conversation
-                <br />
-                with a direction.
-              </h2>
-            </div>
+            <h2>Session summary</h2>
             <div>
               <div className="summary-line">
                 <span>Role</span>
@@ -167,28 +181,14 @@ export default function Setup() {
                   </span>
                 ))}
               </div>
-              <p style={{ fontSize: 12 }}>
-                You’ll check your microphone before the interview begins.
-              </p>
             </div>
-            <div style={{ fontSize: 12 }}>
-              <div className="check-row">
-                <Check size={14} className="accent" />
-                Questions that follow your answers
-              </div>
-              <div className="check-row">
-                <Check size={14} className="accent" />A transcript you can
-                revisit
-              </div>
-              <div className="check-row">
-                <Check size={14} className="accent" />
-                Feedback with a clear next step
-              </div>
-            </div>
+            <p style={{ fontSize: 12 }}>
+              Check your microphone or choose typed answers before starting.
+            </p>
             {capabilities.data && !capabilities.data.llm && (
               <div className="notice">
-                The interviewer needs its LLM configuration before a live
-                session can begin. You can still prepare your session.
+                The interviewer is unavailable. You can save your setup and
+                return later.
               </div>
             )}
             {mutation.error && (
@@ -202,7 +202,7 @@ export default function Setup() {
               ) : (
                 <ArrowRight size={16} />
               )}
-              Prepare my interview
+              Continue to setup check
             </button>
           </aside>
         </form>

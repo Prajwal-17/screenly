@@ -1,0 +1,11 @@
+General Sans (headings/brand), Switzer (body/controls)
+Copyright Indian Type Foundry. https://www.fontshare.com
+Official variable WOFF2 files, unmodified. General Sans: 200–700; Switzer: 100–900.
+License: ITF Free Font License 2.0 (17 August 2026), retained in FFL.txt.
+Section 01 permits self-hosting on the licensee's own website/application.
+Section 02 prohibits redistribution through repositories. Font binaries are
+therefore ignored by Git. scripts/prepare-fonts.ts obtains each developer/build's
+own copy directly from the official Fontshare API/CDN before dev/build/typecheck.
+For offline use obtain the families from Fontshare and copy the normal variable
+WOFF2 files into this directory using the filenames referenced by layout.tsx.
+No runtime requests to a font CDN are made by the application.

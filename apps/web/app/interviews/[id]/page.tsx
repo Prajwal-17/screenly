@@ -10,11 +10,11 @@ import {
   RefreshCw,
   VolumeX,
   Volume2,
-  ArrowLeft,
 } from "lucide-react";
-import Link from "next/link";
 import { Workspace } from "@/components/workspace";
-import { Loading, ErrorState, Wave } from "@/components/common";
+import { Loading, ErrorState } from "@/components/common";
+import { LiveTranscript } from "@/components/transcript";
+import { AnswerComposer } from "@/components/answer-composer";
 import { Preflight } from "@/components/preflight";
 import { Session } from "@/lib/interview-session";
 import { useInterviewStore } from "@/store/interviewStore";
@@ -37,7 +37,6 @@ export default function InterviewPage() {
   });
   const controller = useRef<Session | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
-  const transcript = useRef<HTMLDivElement>(null);
   const state = useInterviewStore();
   const [now, setNow] = useState(() => Date.now());
   const finish = useMutation({
@@ -66,14 +65,6 @@ export default function InterviewPage() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  useEffect(() => {
-    const element = transcript.current;
-    if (
-      element &&
-      element.scrollHeight - element.scrollTop - element.clientHeight < 160
-    )
-      element.scrollTop = element.scrollHeight;
-  }, [state.messages, state.streaming, state.partial]);
   const interview = state.interview?.id === id ? state.interview : query.data;
   const started = ["listening", "thinking", "speaking", "finishing"].includes(
     state.status,
@@ -83,21 +74,23 @@ export default function InterviewPage() {
     state.messages.filter((m) => m.role === "assistant").at(-1)?.content;
   const statusLabels = {
     connecting: "Connecting",
-    ready: "Ready when you are",
-    listening: state.muted
-      ? "Microphone muted"
-      : state.micActive
-        ? "Listening to you"
-        : "Your turn",
-    thinking: "Thinking about your answer",
-    speaking: "Your interviewer is speaking",
-    finishing: "Saving your conversation",
+    ready: "Ready",
+    listening: state.typed
+      ? "Your turn"
+      : state.muted
+        ? "Microphone muted"
+        : state.micActive
+          ? "Listening to you"
+          : "Your turn",
+    thinking: "Processing answer",
+    speaking: "Interviewer speaking",
+    finishing: "Saving interview",
     disconnected: "Connection paused",
   };
   return (
     <Workspace>
       {query.isPending ? (
-        <Loading label="Preparing your conversation…" />
+        <Loading label="Loading interview…" />
       ) : query.error ? (
         <ErrorState
           message={query.error.message}
@@ -106,26 +99,18 @@ export default function InterviewPage() {
       ) : (
         interview && (
           <>
-            <Link
-              href="/dashboard"
-              className="text-link"
-              style={{ marginBottom: 22 }}
-            >
-              <ArrowLeft size={14} />
-              Back to workspace
-            </Link>
             <div className="page-title">
               <div>
-                <div className="eyebrow">Your space to think out loud</div>
                 <h1>{interview.role} interview</h1>
                 <p>
                   {interview.level} · {interview.topics.join(" · ")}
                 </p>
               </div>
               <span
-                className="tag green"
+                className="tag"
+                aria-label="Elapsed time and session duration"
                 style={{
-                  fontFamily: "var(--font-mono)",
+                  fontVariantNumeric: "tabular-nums",
                   fontSize: 13,
                   padding: "9px 13px",
                 }}
@@ -146,16 +131,20 @@ export default function InterviewPage() {
                         padding: 0,
                       }}
                       onClick={() =>
-                        state.errorScope === "speech"
-                          ? void controller.current?.speakLatest()
-                          : void controller.current?.start()
+                        finish.error
+                          ? finish.mutate()
+                          : state.errorScope === "speech"
+                            ? void controller.current?.speakLatest()
+                            : void controller.current?.start()
                       }
                     >
-                      {state.errorScope === "speech"
-                        ? "Retry speech"
-                        : state.errorScope === "voice"
-                          ? "Retry microphone"
-                          : "Retry interviewer"}
+                      {finish.error
+                        ? "Retry finish"
+                        : state.errorScope === "speech"
+                          ? "Retry speech"
+                          : state.errorScope === "voice"
+                            ? "Retry microphone"
+                            : "Retry interviewer"}
                     </button>
                   ) : (
                     <button
@@ -193,8 +182,8 @@ export default function InterviewPage() {
                   capabilities={capabilities.data}
                   disabled={!state.connected}
                   starting={state.starting}
-                  onStart={(download) =>
-                    void controller.current?.start(download)
+                  onStart={(download, typed) =>
+                    void controller.current?.start(download, typed)
                   }
                 />
                 {state.status === "disconnected" && !state.error && (
@@ -225,20 +214,14 @@ export default function InterviewPage() {
                   <div className="surface">
                     <div className="interview-stage">
                       <div className="stage-label">
-                        <span className="eyebrow">Forma interviewer</span>
-                        <span className="tag">Technical practice</span>
-                      </div>
-                      <div className="voice-orb">
-                        <Wave
-                          active={
-                            state.status === "thinking" ||
-                            state.status === "speaking" ||
-                            (state.status === "listening" && state.level > 0.03)
-                          }
-                        />
+                        <span className="eyebrow">
+                          {state.streaming
+                            ? "Interviewer · responding"
+                            : "Current question"}
+                        </span>
                       </div>
                       <p className="stage-question">
-                        {lastQuestion || "Let’s find your starting point."}
+                        {lastQuestion || "Waiting for the first question…"}
                       </p>
                       <div className="stage-status" role="status">
                         {state.status === "thinking" ? (
@@ -299,79 +282,66 @@ export default function InterviewPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="surface pad">
-                    <div className="between">
-                      <span className="eyebrow">Your answer</span>
-                      <span style={{ fontSize: 11, color: "var(--subtle)" }}>
-                        {state.micActive
-                          ? "Speak naturally. Take your time."
-                          : "Retry your microphone to continue."}
-                      </span>
-                    </div>
-                    {state.micActive && (
-                      <div className="meter">
-                        <span style={{ width: `${state.level * 100}%` }} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="surface transcript-panel">
-                  <div className="between">
-                    <span className="eyebrow">Conversation</span>
-                    <span className="tag">{state.messages.length} turns</span>
-                  </div>
-                  <div
-                    className="transcript-list"
-                    ref={transcript}
-                    aria-live="polite"
-                    aria-relevant="additions"
-                  >
-                    {state.messages.length === 0 && !state.streaming && (
-                      <p style={{ fontSize: 13 }}>
-                        Your conversation will appear here as it unfolds.
-                      </p>
-                    )}
-                    {state.messages.map((m) => (
-                      <div
-                        key={m.id}
-                        className={`transcript-message ${m.role === "user" ? "candidate" : ""}`}
-                      >
-                        <div
-                          className={`eyebrow ${m.role === "assistant" ? "accent" : ""}`}
+                  {state.typed ? (
+                    <AnswerComposer
+                      interviewId={id}
+                      onSubmit={(answerId, text) =>
+                        controller.current?.answer(answerId, text)
+                      }
+                    />
+                  ) : (
+                    <div className="surface pad">
+                      <div className="between">
+                        <span className="eyebrow">Microphone</span>
+                        <button
+                          className="text-link"
+                          disabled={
+                            !state.connected || state.status !== "listening"
+                          }
+                          onClick={() =>
+                            void controller.current?.start(undefined, true)
+                          }
                         >
-                          {m.role === "assistant" ? "Forma" : "You"}
-                          {m.status === "interrupted" ? " · interrupted" : ""}
+                          Type instead
+                        </button>
+                      </div>
+                      {state.micActive ? (
+                        <div
+                          className="meter"
+                          role="meter"
+                          aria-label="Microphone input level"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(
+                            Math.min(100, state.level * 100),
+                          )}
+                        >
+                          <span
+                            style={{
+                              width: `${Math.min(100, state.level * 100)}%`,
+                            }}
+                          />
                         </div>
-                        <p>{m.content}</p>
-                      </div>
-                    ))}
-                    {state.streaming && (
-                      <div className="transcript-message" aria-hidden="true">
-                        <div className="eyebrow accent">Forma</div>
-                        <p>{state.streaming}</p>
-                      </div>
-                    )}
-                    {state.partial && (
-                      <div
-                        className="transcript-message candidate partial"
-                        aria-hidden="true"
-                      >
-                        <div className="eyebrow">You · speaking</div>
-                        <p>{state.partial}</p>
-                      </div>
-                    )}
-                  </div>
-                  <p style={{ fontSize: 11, marginTop: 20 }}>
-                    Finalized answers are saved to your history.
-                  </p>
+                      ) : (
+                        <p style={{ marginTop: 12, fontSize: 12 }}>
+                          Retry your microphone or choose typed answers.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
+                <LiveTranscript
+                  messages={state.messages}
+                  streaming={state.streaming}
+                  partial={state.partial}
+                />
               </div>
             )}
-            <dialog ref={dialog}>
-              <h2>Ready to reflect?</h2>
+            <dialog ref={dialog} aria-labelledby="finish-title">
+              <h2 id="finish-title">Finish interview?</h2>
               <p>
-                Finish this interview and turn your conversation into feedback.
-                You’ll find the transcript and report in your history.
+                This ends the interview and generates feedback from saved
+                answers. Unsent text will not be included.
               </p>
               <div className="row" style={{ justifyContent: "flex-end" }}>
                 <button
@@ -393,7 +363,7 @@ export default function InterviewPage() {
                   ) : (
                     <Square size={13} />
                   )}
-                  Finish & reflect
+                  Finish and view feedback
                 </button>
               </div>
             </dialog>

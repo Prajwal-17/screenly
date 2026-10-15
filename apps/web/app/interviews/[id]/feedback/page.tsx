@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useEffect } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowRight,
   Check,
   Download,
@@ -14,6 +13,7 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
+import { TranscriptMessage } from "@/components/transcript";
 import { Workspace } from "@/components/workspace";
 import { Loading, ErrorState, Reveal } from "@/components/common";
 import { api, formatDate, elapsed, clock } from "@/lib/api";
@@ -55,7 +55,7 @@ export default function Report() {
   return (
     <Workspace>
       {query.isPending ? (
-        <Loading label="Opening your reflection…" />
+        <Loading label="Loading feedback…" />
       ) : query.error ? (
         <ErrorState
           message={query.error.message}
@@ -64,21 +64,12 @@ export default function Report() {
       ) : (
         interview && (
           <Reveal>
-            <Link
-              href="/history"
-              className="text-link"
-              style={{ marginBottom: 22 }}
-            >
-              <ArrowLeft size={14} />
-              Your interview history
-            </Link>
             <div className="page-title">
               <div>
-                <div className="eyebrow">A moment to reflect</div>
-                <h1>{interview.role} interview</h1>
+                <h1>Feedback</h1>
                 <p>
-                  {formatDate(interview.createdAt)} · {interview.level} ·{" "}
-                  {clock(elapsed(interview))} practiced
+                  {interview.role} · {formatDate(interview.createdAt)} ·{" "}
+                  {interview.level} · {clock(elapsed(interview))} practiced
                 </p>
               </div>
               <div className="row">
@@ -100,7 +91,7 @@ export default function Report() {
             </div>
             {interview.status !== "completed" ? (
               <div className="surface empty">
-                <h3>This conversation is still open.</h3>
+                <h3>Interview in progress</h3>
                 <p style={{ marginTop: 12 }}>
                   Return to your interview to continue or finish it.
                 </p>
@@ -109,7 +100,7 @@ export default function Report() {
                 </Link>
               </div>
             ) : !feedback ? (
-              <div className="surface empty">
+              <div className="surface empty" role="status">
                 <div className="empty-icon">
                   {interview.feedbackStatus === "failed" ? (
                     <RefreshCw size={23} />
@@ -119,13 +110,13 @@ export default function Report() {
                 </div>
                 <h3>
                   {interview.feedbackStatus === "failed"
-                    ? "Your conversation is safe. Let’s try the report again."
-                    : "Turning your conversation into clarity."}
+                    ? "Feedback could not be generated"
+                    : "Generating feedback…"}
                 </h3>
                 <p style={{ marginTop: 12 }}>
                   {interview.feedbackStatus === "failed"
-                    ? "Feedback couldn’t be generated. Check the LLM configuration and retry; your saved answers are below."
-                    : "Your interviewer is reviewing your answers and looking for useful next steps. This can take a little time."}
+                    ? "Your transcript is saved below. Retry to generate feedback."
+                    : "Your saved transcript is available below."}
                 </p>
                 {interview.feedbackStatus === "failed" && (
                   <button
@@ -155,11 +146,7 @@ export default function Report() {
                       <Check size={12} />
                       Interview complete
                     </span>
-                    <h2>
-                      Here’s where you stand.
-                      <br />
-                      And where you can go.
-                    </h2>
+                    <h2>Summary</h2>
                     <p>{feedback.summary}</p>
                   </div>
                   <div className="score-ring">
@@ -173,10 +160,7 @@ export default function Report() {
                 </div>
                 <div className="grid-2" style={{ marginTop: 22 }}>
                   <section className="surface pad">
-                    <div className="eyebrow" style={{ marginBottom: 12 }}>
-                      The details behind the score
-                    </div>
-                    <h2>Your interview dimensions</h2>
+                    <h2>Score breakdown</h2>
                     {feedback.dimensions.map((d) => (
                       <div className="dimension" key={d.name}>
                         <div className="between">
@@ -206,13 +190,12 @@ export default function Report() {
                         ))
                       ) : (
                         <p style={{ fontSize: 13, marginTop: 15 }}>
-                          There isn’t enough evidence yet. Another conversation
-                          will give us more to work with.
+                          Not enough evidence in this session.
                         </p>
                       )}
                     </section>
                     <section className="surface pad">
-                      <h3>Room to grow</h3>
+                      <h3>Improve next</h3>
                       {feedback.improvements.length ? (
                         feedback.improvements.map((s, i) => (
                           <div className="insight" key={i}>
@@ -222,8 +205,7 @@ export default function Report() {
                         ))
                       ) : (
                         <p style={{ fontSize: 13, marginTop: 15 }}>
-                          Keep practicing to explore your understanding more
-                          deeply.
+                          No specific improvements identified.
                         </p>
                       )}
                     </section>
@@ -232,7 +214,7 @@ export default function Report() {
                 {feedback.answers.length > 0 && (
                   <section style={{ marginTop: 30 }}>
                     <h2 style={{ fontSize: 21, marginBottom: 18 }}>
-                      A closer look at your answers
+                      Answer review
                     </h2>
                     <div className="surface">
                       {feedback.answers.map((a, i) => {
@@ -240,8 +222,8 @@ export default function Report() {
                           (m) => m.id === a.messageId,
                         );
                         return (
-                          <div className="answer-review" key={a.messageId}>
-                            <div className="eyebrow accent">Answer {i + 1}</div>
+                          <details className="answer-review" key={a.messageId}>
+                            <summary>Answer {i + 1}</summary>
                             <blockquote>{message?.content}</blockquote>
                             <p>{a.observation}</p>
                             <p>
@@ -250,17 +232,14 @@ export default function Report() {
                               </span>
                               {a.suggestion}
                             </p>
-                          </div>
+                          </details>
                         );
                       })}
                     </div>
                   </section>
                 )}
                 <section className="surface pad" style={{ marginTop: 22 }}>
-                  <div className="eyebrow accent" style={{ marginBottom: 12 }}>
-                    Make the next conversation count
-                  </div>
-                  <h2 style={{ marginBottom: 15 }}>Three steps forward.</h2>
+                  <h2 style={{ marginBottom: 15 }}>Next steps</h2>
                   {feedback.nextSteps.map((s, i) => (
                     <div className="insight" key={i}>
                       <span className="step-number">{i + 1}</span>
@@ -271,10 +250,10 @@ export default function Report() {
                     className="between"
                     style={{ marginTop: 22, flexWrap: "wrap" }}
                   >
-                    <p style={{ fontSize: 12 }}>
-                      Keep your focus. Keep your momentum.
-                    </p>
-                    <Link className="button" href="/interviews/new">
+                    <Link
+                      className="button"
+                      href={`/interviews/new?role=${encodeURIComponent(interview.role)}`}
+                    >
                       <Plus size={16} />
                       Practice again
                     </Link>
@@ -289,41 +268,23 @@ export default function Report() {
               <div className="stack" style={{ marginTop: 24 }}>
                 {interview.messages.length ? (
                   interview.messages.map((m) => (
-                    <div
-                      className={`transcript-message ${m.role === "user" ? "candidate" : ""}`}
-                      key={m.id}
-                    >
-                      <div
-                        className={`eyebrow ${m.role === "assistant" ? "accent" : ""}`}
-                      >
-                        {m.role === "assistant" ? "Forma" : "You"}
-                        {m.status === "interrupted" ? " · interrupted" : ""}
-                      </div>
-                      <p>{m.content}</p>
-                    </div>
+                    <TranscriptMessage key={m.id} message={m} />
                   ))
                 ) : (
                   <p>No answers were recorded in this session.</p>
                 )}
               </div>
             </details>
-            {feedback && (
-              <p
-                style={{ fontSize: 11, marginTop: 20, color: "var(--subtle)" }}
-              >
-                Practice feedback · Rubric v1 · {interview.feedbackModel}
-              </p>
-            )}
             {remove.error && (
               <div className="error" role="alert" style={{ marginTop: 20 }}>
                 {remove.error.message}
               </div>
             )}
-            <dialog ref={dialog}>
-              <h2>Delete this interview?</h2>
+            <dialog ref={dialog} aria-labelledby="delete-title">
+              <h2 id="delete-title">Delete interview?</h2>
               <p>
                 This removes the saved conversation and feedback from your
-                history.
+                history. This cannot be undone.
               </p>
               <div className="row" style={{ justifyContent: "flex-end" }}>
                 <button

@@ -1,4 +1,5 @@
 // Local provider fixture for browser tests. The application has no mock-provider mode.
+const failedReports = new Set<string>();
 const server = Bun.serve({
   port: 8790,
   async fetch(request) {
@@ -41,6 +42,13 @@ const server = Bun.serve({
       return new Response(stream, {
         headers: { "Content-Type": "text/event-stream" },
       });
+    }
+    if (last.includes("feedback-retry") && !failedReports.has(last)) {
+      failedReports.add(last);
+      return Response.json(
+        { error: { message: "One-time feedback failure" } },
+        { status: 400 },
+      );
     }
     const transcript = JSON.parse(last).transcript as {
       id: string;

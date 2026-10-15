@@ -17,6 +17,9 @@ type State = {
   micActive: boolean;
   starting: boolean;
   level: number;
+  typed: boolean;
+  submitting: boolean;
+  savedAnswerId: string | null;
 };
 export const initialState: State = {
   interview: null,
@@ -31,5 +34,8 @@ export const initialState: State = {
   micActive: false,
   starting: false,
   level: 0,
+  typed: false,
+  submitting: false,
+  savedAnswerId: null,
 };
 export const useInterviewStore = create<State>(() => initialState);

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, AudioLines } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { Brand } from "@/components/workspace";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
@@ -46,42 +46,10 @@ export default function SignIn() {
   });
   return (
     <div className="auth-shell">
-      <aside className="auth-story">
-        <Brand />
-        <div className="auth-story-copy">
-          <span className="tag green">
-            <AudioLines size={13} />A little practice goes a long way
-          </span>
-          <h1>
-            Show up as
-            <br />
-            your best self.
-          </h1>
-          <p>
-            A space to think out loud, find your footing, and turn preparation
-            into confidence.
-          </p>
-          <div className="divider" />
-          <div className="eyebrow">
-            Your next opportunity deserves a little preparation.
-          </div>
-        </div>
-        <small>Forma · Thoughtful technical interview practice</small>
-      </aside>
+      <Brand />
       <main className="auth-main">
         <div className="auth-card">
-          <div className="mobile-brand">
-            <Brand />
-          </div>
-          <div className="eyebrow accent">
-            {signup ? "Your next chapter" : "Welcome back"}
-          </div>
-          <h2>{signup ? "Make space to grow." : "Keep moving forward."}</h2>
-          <p>
-            {signup
-              ? "Create your personal practice workspace."
-              : "Sign in and pick up where you left off."}
-          </p>
+          <h1>{signup ? "Create an account" : "Sign in"}</h1>
           {capabilities.data?.google && (
             <>
               <button
@@ -113,7 +81,7 @@ export default function SignIn() {
                 )}
                 Continue with Google
               </button>
-              <div className="auth-or">or continue with email</div>
+              <div className="auth-or">or</div>
             </>
           )}
           <form onSubmit={submit}>
@@ -122,7 +90,9 @@ export default function SignIn() {
                 <label htmlFor="name">Your name</label>
                 <input
                   id="name"
+                  required
                   className="input"
+                  maxLength={80}
                   autoComplete="name"
                   placeholder="Your name"
                   {...form.register("name", {
@@ -136,6 +106,7 @@ export default function SignIn() {
               <label htmlFor="email">Email address</label>
               <input
                 id="email"
+                required
                 className="input"
                 type="email"
                 autoComplete="email"
@@ -147,6 +118,9 @@ export default function SignIn() {
               <label htmlFor="password">Password</label>
               <input
                 id="password"
+                required
+                minLength={signup ? 8 : 1}
+                aria-invalid={!!form.formState.errors.password}
                 className="input"
                 type="password"
                 autoComplete={signup ? "new-password" : "current-password"}
@@ -173,11 +147,11 @@ export default function SignIn() {
               ) : (
                 <ArrowRight size={16} />
               )}{" "}
-              {signup ? "Create my workspace" : "Sign in"}
+              {signup ? "Create account" : "Sign in"}
             </button>
           </form>
           <p className="auth-switch">
-            {signup ? "Already have a workspace?" : "New to Forma?"}{" "}
+            {signup ? "Already have an account?" : "New to Screenly?"}{" "}
             <button
               onClick={() => {
                 setSignup(!signup);
@@ -187,9 +161,6 @@ export default function SignIn() {
             >
               {signup ? "Sign in" : "Create an account"}
             </button>
-          </p>
-          <p style={{ textAlign: "center", fontSize: 11, marginTop: 30 }}>
-            A personal space for practice and progress.
           </p>
         </div>
       </main>
