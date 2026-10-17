@@ -2,20 +2,12 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Mic,
-  MicOff,
-  Square,
-  Loader2,
-  RefreshCw,
-  VolumeX,
-  Volume2,
-} from "lucide-react";
+import { Mic, MicOff, Square, RefreshCw, VolumeX, Volume2 } from "lucide-react";
 import { Workspace } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { VoiceVisual } from "@/components/voice-visual";
 import {
   Loading,
   ErrorState,
@@ -81,19 +73,6 @@ export default function InterviewPage() {
   const lastQuestion =
     state.streaming ||
     state.messages.filter((m) => m.role === "assistant").at(-1)?.content;
-  const statusLabels = {
-    connecting: "Connecting",
-    ready: "Ready",
-    listening: state.muted
-      ? "Microphone muted"
-      : state.micActive
-        ? "Listening to you"
-        : "Microphone paused",
-    thinking: "Processing answer",
-    speaking: "Interviewer speaking",
-    finishing: "Saving interview",
-    disconnected: "Connection paused",
-  };
   const finishTrigger = (label: string, saved = false) => (
     <ConfirmAction
       title="Finish interview?"
@@ -215,31 +194,37 @@ export default function InterviewPage() {
                   finishTrigger("Finish saved interview", true)}
               </div>
             ) : (
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(310px,1fr)]">
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                 <div className="space-y-6">
                   <Card className="gap-0 overflow-hidden py-0">
-                    <CardContent className="flex min-h-[295px] flex-col items-start p-6 xl:p-8">
-                      <Eyebrow className="mb-6">
+                    <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-2">
+                      <Eyebrow>Voice interview</Eyebrow>
+                      <Badge variant="outline" className="gap-1.5">
+                        <span
+                          className="size-1.5 rounded-full bg-primary"
+                          aria-hidden="true"
+                        />
+                        Live session
+                      </Badge>
+                    </div>
+                    <VoiceVisual
+                      status={state.status}
+                      muted={state.muted}
+                      micActive={state.micActive}
+                      level={state.level}
+                      error={!!state.error}
+                    />
+                    <CardContent className="border-t p-6 xl:px-8">
+                      <Eyebrow className="mb-3 block">
                         {state.streaming
                           ? "Interviewer · responding"
                           : "Current question"}
                       </Eyebrow>
-                      <p className="max-w-[65ch] font-sans text-2xl leading-[1.4] font-medium tracking-[-0.01em] whitespace-pre-wrap lg:text-[28px] xl:text-[30px]">
+                      <p className="max-w-[65ch] text-[22px] leading-[1.4] font-medium tracking-[-0.01em] whitespace-pre-wrap sm:text-2xl">
                         {lastQuestion || "Waiting for the first question…"}
                       </p>
-                      <div
-                        className="mt-auto flex items-center gap-2 pt-6 text-xs text-muted-foreground"
-                        role="status"
-                      >
-                        {state.status === "thinking" ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <span className="size-1.5 rounded-full bg-current" />
-                        )}
-                        {statusLabels[state.status]}
-                      </div>
                     </CardContent>
-                    <CardFooter className="flex-wrap gap-2 bg-transparent px-6 py-4">
+                    <CardFooter className="justify-center flex-wrap gap-2 bg-transparent px-4 py-4 sm:px-6">
                       <Button
                         variant="outline"
                         size="sm"
@@ -280,25 +265,6 @@ export default function InterviewPage() {
                       </Button>
                       {finishTrigger("Finish interview")}
                     </CardFooter>
-                  </Card>
-                  <Card>
-                    <CardContent>
-                      <div className="flex items-center justify-between gap-4">
-                        <Eyebrow>Microphone</Eyebrow>
-                      </div>
-                      {state.micActive ? (
-                        <Progress
-                          className="mt-5 [&_[data-slot=progress-indicator]]:bg-success"
-                          role="meter"
-                          aria-label="Microphone input level"
-                          value={Math.min(100, state.level * 100)}
-                        />
-                      ) : (
-                        <p className="mt-3 text-xs text-muted-foreground">
-                          Retry your microphone to continue speaking.
-                        </p>
-                      )}
-                    </CardContent>
                   </Card>
                 </div>
                 <LiveTranscript

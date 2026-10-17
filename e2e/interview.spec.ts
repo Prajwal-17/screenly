@@ -281,11 +281,49 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
     }),
   ).toBeVisible();
   await expect.poll(() => playbackCount(page)).toBeGreaterThan(0);
+  const visual = page.locator("[data-slot=voice-visual]");
+  await expect(visual).toHaveAttribute("data-state", "listening");
+  expect(
+    await visual.evaluate(
+      (node) => node.getAnimations({ subtree: true }).length,
+    ),
+  ).toBeGreaterThan(0);
+  await page
+    .getByRole("button", { name: "Pause animation", exact: true })
+    .click();
+  expect(
+    await visual.evaluate(
+      (node) => node.getAnimations({ subtree: true }).length,
+    ),
+  ).toBe(0);
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Resume animation", exact: true })
+    .click();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(
+    await visual.evaluate(
+      (node) => node.getAnimations({ subtree: true }).length,
+    ),
+  ).toBe(0);
+  await expect(
+    page.getByRole("button", { name: "Pause animation", exact: true }),
+  ).toBeHidden();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.getByRole("button", { name: "Mute", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Unmute", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  await expect(visual).toHaveAttribute("data-state", "muted");
+  expect(
+    await visual.evaluate(
+      (node) => node.getAnimations({ subtree: true }).length,
+    ),
+  ).toBe(0);
   await page.getByRole("button", { name: "Unmute", exact: true }).click();
+  await expect(visual).toHaveAttribute("data-state", "listening");
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Resume interview", exact: true }),
@@ -452,6 +490,15 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   ).toBeVisible();
   for (const width of [1280, 1440, 640, 360]) {
     await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() =>
+        page
+          .getByRole("log")
+          .evaluate(
+            (node) => node.scrollHeight - node.scrollTop - node.clientHeight,
+          ),
+      )
+      .toBeLessThan(64);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -480,6 +527,42 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
       ),
     ),
   ).toBe(true);
+  const log = page.getByRole("log");
+  const longAnswer =
+    "I would measure latency and error rates, then verify the observed behavior. ".repeat(
+      20,
+    );
+  await page.request.post("http://localhost:8791/turn", {
+    data: { transcript: longAnswer },
+  });
+  await expect(log).toContainText(longAnswer.trim());
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
+  await log.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  await expect(
+    page.getByRole("button", { name: "Jump to latest", exact: true }),
+  ).toBeVisible();
+  await page.request.post("http://localhost:8791/turn", {
+    data: { transcript: "I would investigate the slowest request first." },
+  });
+  await expect(log).toContainText(
+    "I would investigate the slowest request first.",
+  );
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
+  expect(await log.evaluate((node) => node.scrollTop)).toBe(0);
+  await page
+    .getByRole("button", { name: "Jump to latest", exact: true })
+    .click();
+  expect(
+    await log.evaluate(
+      (node) => node.scrollHeight - node.scrollTop - node.clientHeight,
+    ),
+  ).toBeLessThan(64);
   await page
     .getByRole("button", { name: "Finish interview", exact: true })
     .click();

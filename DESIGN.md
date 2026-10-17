@@ -41,20 +41,20 @@ Green brand actions do not imply success. Pair actual status with text and an ic
 
 Geist Sans and Geist Mono are committed local variable fonts (100–900), loaded through `next/font/local`. `--font-geist-sans` maps to Tailwind `--font-sans` and the compatibility `--font-heading`; `--font-geist-mono` maps to `--font-mono`. No font variable refers to itself. Geist Mono is reserved for code; metadata uses Sans. License/provenance live beside the font files. No font download is required for a build.
 
-| Role                        | Mobile / desktop              | Weight                | Line height |
-| --------------------------- | ----------------------------- | --------------------- | ----------- |
-| Optional landing display    | 36 / 44px                     | 500                   | 1.2         |
-| Page heading                | 30 / 36px                     | 500                   | 1.25        |
-| Section heading             | 22 / 24px                     | 500                   | 1.3         |
-| Component heading           | 18px                          | 500                   | 1.4         |
-| Interview question          | 24 / 28–30px                  | 500                   | 1.4         |
-| Body, transcripts, feedback | 16px                          | 400                   | 1.7         |
-| Controls and labels         | 14px; mobile text inputs 16px | 500; entered text 400 | 1.4         |
-| Metadata                    | 12–13px                       | 400                   | 1.5         |
+| Role                     | Mobile / desktop              | Weight                | Line height |
+| ------------------------ | ----------------------------- | --------------------- | ----------- |
+| Optional landing display | 36 / 44px                     | 500                   | 1.2         |
+| Page heading             | 30 / 36px                     | 500                   | 1.25        |
+| Section heading          | 22 / 24px                     | 500                   | 1.3         |
+| Component heading        | 18px                          | 500                   | 1.4         |
+| Interview question       | 24 / 28–30px                  | 500                   | 1.4         |
+| Body and feedback        | 16px                          | 400                   | 1.7         |
+| Controls and labels      | 14px; mobile text inputs 16px | 500; entered text 400 | 1.4         |
+| Metadata                 | 12–13px                       | 400                   | 1.5         |
 
 Large headings use `-0.015em` tracking; smaller headings use `-0.01em`. Reading text, labels, and controls have normal tracking. Let headings wrap naturally. Keep reading copy around 60–75 characters where space permits. Timers and scores use tabular numerals; numeric scores may use larger type without becoming page headings.
 
-Use the shared 4, 8, 12, 16, 24, 32, 48, and 64px spacing scale. Labels/helpers have 8px gaps, related controls 12–16px, panels 16–24px padding, and form groups 24px gaps. Radii: 6px small nested elements, 8px controls, 12px panels, 16px dialogs. Default surfaces are flat with subtle borders; dialogs use a restrained shadow. Avoid decorative gradients, glows, or tinted panels throughout the workspace.
+Use the shared 4, 8, 12, 16, 24, 32, 48, and 64px spacing scale. Labels/helpers have 8px gaps, related controls 12–16px, panels 16–24px padding, and form groups 24px gaps. Radii: 6px small nested elements, 8px controls, 12px panels, 16px dialogs. Default surfaces are flat with subtle borders; dialogs use a restrained shadow. Keep workspace surfaces neutral. The live voice orb is a scoped exception: Jade shading and fluid motion communicate the active voice experience; gradients do not extend to panels, text, or brand accents.
 
 ## Components and interaction
 
@@ -67,7 +67,7 @@ The existing shadcn/ui Radix sources in `apps/web/components/ui` are the compone
 - **Panels and tables:** use neutral cards only for distinct concepts. Wrap role names, topics, and long messages. Keep row actions visible, with a labeled delete action and confirmation. Table scrolling stays inside its container when necessary.
 - **Status:** inline persistent errors/warnings have icons and text. Service warnings use polite status announcements; errors use alerts. Streaming/partial transcript text remains excluded from repeated announcements. Do not put timers in live regions.
 - **Dialogs and disclosures:** Radix owns keyboard operation, focus trapping, Escape dismissal, and trigger focus restoration. Dialogs fit the viewport and scroll internally. Long disclosure content grows naturally.
-- **Motion:** use specific color/transform transitions, usually 150ms; dialogs use 200ms. No routine bounce or repeated decorative recording animation. Global `prefers-reduced-motion` support collapses animations/transitions; microphone/progress motion can be disabled independently.
+- **Motion:** use specific color/transform transitions, usually 150ms; dialogs use 200ms. No routine bounce. The voice orb has purposeful ongoing motion only while listening, thinking, or speaking; a pause/resume control and reduced-motion support stop it. Global `prefers-reduced-motion` support collapses animations/transitions; microphone/progress motion can be disabled independently.
 
 ## Routes and responsive behavior
 
@@ -87,6 +87,14 @@ Support 360px and wider using the same controls and flow. The existing rail beco
 ## Spoken interview interaction
 
 Candidates answer exclusively by speaking to the agent through their microphone. Do not provide an answer text field, answer-mode selector, keyboard submission action, or text fallback. Microphone permission and transcription must succeed before starting or resuming. Retain independent microphone/speech retry actions, interruption, mute, server timing, optional audio download, and read-only transcripts/feedback.
+
+## Voice stage and conversation
+
+The active interview pairs a voice stage with a read-only conversation. `VoiceVisual` displays the real session status, microphone mute/availability, and actual input level. The orb responds to microphone amplitude only while listening. Speaking/thinking movement indicates session state; it does not pretend to measure the agent’s audio volume. Muted/error/inactive states are still and labeled. Animation is decorative (`aria-hidden`); a separate polite status label carries the meaning. Pause/resume controls affect presentation only and never stop the microphone or interview timer. System reduced-motion preferences disable all orb motion.
+
+Orb keyframes and shading live in `voice-visual.module.css`, scoped to that component and using the existing Jade tokens. Other layouts and component styles continue using Tailwind utilities. No new animation/styling framework or audio resource is introduced.
+
+Conversation turns use left-aligned agent bubbles and right-aligned candidate bubbles, distinct icons/labels, actual saved timestamps, and explicit interruption labels. Reading copy is 15px with 1.7 line height. In-progress speech/transcription has a dashed bubble and stays excluded from repeated live announcements; finalized turns remain in the polite log. Scrolling upward preserves the reading position when new turns arrive; “Jump to latest” resumes automatic following. Long text wraps at mobile widths. Transcripts remain read-only throughout the live and feedback views.
 
 ## Product boundaries and verification
 

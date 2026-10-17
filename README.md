@@ -7,6 +7,7 @@ A technical interview practice app built for learning and portfolio use. Choose 
 ## What works
 
 - Responsive light workspace with neutral surfaces, Jade actions, local Geist typography, and keyboard access.
+- Animated voice orb tied to real session states and microphone input, with pause/reduced-motion support and readable agent/candidate conversation bubbles.
 - Google OAuth (optional) and email/password authentication.
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
