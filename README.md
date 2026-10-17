@@ -6,7 +6,7 @@ A technical interview practice app built for learning and portfolio use. Choose 
 
 ## What works
 
-- Light desktop workspace with warm neutrals, restrained orange accents, local General Sans/Switzer fonts, and keyboard access.
+- Responsive light workspace with neutral surfaces, Jade actions, local Geist typography, and keyboard access.
 - Google OAuth (optional) and email/password authentication.
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
@@ -63,11 +63,11 @@ For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and registe
 
 When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT_PUBLIC_API_URL` together. The browser derives its WebSocket URL from the API origin. The frontend API URL is a build-time Next.js setting. Microphone access works on localhost or HTTPS.
 
-## Fonts and desktop layout
+## Fonts and responsive layout
 
-Development, type checks, and builds run `scripts/prepare-fonts.ts` to obtain unmodified variable WOFF2 files directly from Fontshare and then serve them locally with `next/font/local`. A fresh build needs access to `api.fontshare.com` and `cdn.fontshare.com`; subsequent builds reuse the local files. For offline builds, obtain both families from Fontshare and place `GeneralSans-Variable.woff2` and `Switzer-Variable.woff2` in `apps/web/app/fonts`.
+Geist Sans and Geist Mono variable fonts are committed in `apps/web/app/fonts` under the SIL Open Font License 1.1 and served with `next/font/local`. Development, type checks, and builds need no font downloads. [License and provenance](apps/web/app/fonts/SOURCE.txt) are retained beside the font files. Geist Sans covers headings, reading text, and controls; Geist Mono is reserved for code.
 
-Fontshare's FFL 2.0 permits self-hosting but prohibits redistributing the binaries through a repository, so they are ignored by Git. The [license and provenance](apps/web/app/fonts/SOURCE.txt) are retained. shadcn/ui primitives form the base of every screen; Tailwind utilities apply the shared visual tokens and layout. See [DESIGN.md](DESIGN.md) for the component layer, light-only visual system, route responsibilities, and desktop reflow policy.
+The approved **Jade** light palette uses quiet neutral surfaces and green actions, with separate semantic status colors. shadcn/ui primitives and Tailwind CSS 4 utilities apply the shared tokens across the existing routes. The same interview flow reflows from 360px through desktop widths. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
 
 ## Commands
 

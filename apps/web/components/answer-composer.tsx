@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -59,15 +59,16 @@ export function AnswerComposer({
           <Field>
             <FieldLabel
               htmlFor="answer"
-              className="text-[11px] tracking-widest text-muted-foreground uppercase"
+              className="text-xs tracking-normal text-muted-foreground"
             >
               Your answer
             </FieldLabel>
             <Textarea
               id="answer"
               aria-label="Your interview answer"
+              aria-describedby="answer-hint"
               placeholder="Explain your approach…"
-              className="min-h-36 resize-y leading-relaxed"
+              className="min-h-36 resize-y leading-[1.7]"
               maxLength={12000}
               value={draft.text}
               disabled={submitting}
@@ -84,7 +85,11 @@ export function AnswerComposer({
             />
           </Field>
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="text-xs text-muted-foreground" role="status">
+            <span
+              id="answer-hint"
+              className="text-xs text-muted-foreground"
+              role="status"
+            >
               {!connected
                 ? "Reconnect to send. Your draft is kept."
                 : submitting
@@ -92,6 +97,7 @@ export function AnswerComposer({
                   : `${draft.text.length.toLocaleString()} / 12,000`}
             </span>
             <Button
+              loading={submitting}
               disabled={
                 !connected ||
                 status !== "listening" ||
@@ -99,8 +105,8 @@ export function AnswerComposer({
                 !draft.text.trim()
               }
             >
-              {submitting ? <Loader2 className="animate-spin" /> : <Send />}Send
-              answer
+              <Send aria-hidden="true" />
+              Send answer
             </Button>
           </div>
         </form>

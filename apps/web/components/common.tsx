@@ -1,5 +1,12 @@
 "use client";
-import { Loader2, ArrowRight, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  ArrowRight,
+  Trash2,
+  CircleAlert,
+  TriangleAlert,
+  Check,
+} from "lucide-react";
 import Link from "next/link";
 import type { Interview } from "@repo/shared";
 import { formatDate, interviewLink } from "@/lib/api";
@@ -33,7 +40,7 @@ export function Eyebrow({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "text-[11px] font-medium tracking-widest text-muted-foreground uppercase",
+        "text-xs font-medium tracking-normal text-muted-foreground",
         className,
       )}
       {...props}
@@ -51,10 +58,12 @@ export function PageTitle({
 }) {
   return (
     <header className="mb-8 flex flex-wrap items-end justify-between gap-6">
-      <div>
+      <div className="min-w-0">
         <h1>{title}</h1>
         {description && (
-          <p className="mt-2 text-muted-foreground">{description}</p>
+          <p className="mt-2 max-w-[75ch] text-muted-foreground">
+            {description}
+          </p>
         )}
       </div>
       {action}
@@ -85,6 +94,7 @@ export function ErrorState({
 }) {
   return (
     <Alert variant="destructive">
+      <CircleAlert aria-hidden="true" />
       <AlertTitle>Could not load this page</AlertTitle>
       <AlertDescription className="space-y-3">
         <p>{message}</p>
@@ -112,6 +122,11 @@ export function InlineAlert({
       role={variant === "warning" ? "status" : "alert"}
       className={className}
     >
+      {variant === "warning" ? (
+        <TriangleAlert aria-hidden="true" />
+      ) : (
+        <CircleAlert aria-hidden="true" />
+      )}
       <AlertDescription>{children}</AlertDescription>
     </Alert>
   );
@@ -186,13 +201,13 @@ export function InterviewRows({
   if (!interviews.length) return <EmptyState />;
   return (
     <Card className="overflow-hidden py-0">
-      <Table>
+      <Table className="table-fixed">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="pl-6">Interview</TableHead>
+            <TableHead className="pl-4 sm:pl-6">Interview</TableHead>
             <TableHead className="hidden lg:table-cell">Experience</TableHead>
             <TableHead className="hidden md:table-cell">Date</TableHead>
-            <TableHead>Status / score</TableHead>
+            <TableHead className="w-24 sm:w-32">Status / score</TableHead>
             {onDelete && (
               <TableHead className="w-14">
                 <span className="sr-only">Actions</span>
@@ -203,9 +218,9 @@ export function InterviewRows({
         <TableBody>
           {interviews.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="py-5 pl-6">
+              <TableCell className="py-5 pl-4 sm:pl-6">
                 <Link
-                  className="block rounded-sm font-medium hover:text-primary"
+                  className="block rounded-sm font-medium wrap-anywhere hover:text-link-hover"
                   href={interviewLink(item)}
                 >
                   {item.role} interview
@@ -224,6 +239,12 @@ export function InterviewRows({
                 <Badge
                   variant={item.status === "completed" ? "success" : "warning"}
                 >
+                  {item.status === "completed" && (
+                    <>
+                      <Check aria-hidden="true" />
+                      <span className="sr-only">Completed: </span>
+                    </>
+                  )}
                   {item.status === "completed"
                     ? item.feedback?.overallScore != null
                       ? `${item.feedback.overallScore}/10`
@@ -240,7 +261,7 @@ export function InterviewRows({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        className="text-destructive hover:bg-destructive-soft hover:text-destructive"
+                        className="text-destructive hover:bg-destructive-surface hover:text-destructive"
                         aria-label={`Delete ${item.role} interview`}
                         disabled={deleting}
                       >

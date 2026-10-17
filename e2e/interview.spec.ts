@@ -344,6 +344,12 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await expect(
     page.getByRole("checkbox", { name: "Databases", exact: true }),
   ).toBeChecked();
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
   await page.getByRole("radio", { name: "Senior", exact: true }).check();
   await expect(
     page.getByRole("radio", { name: "Senior", exact: true }),
@@ -395,6 +401,12 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   ).toBe(1);
   const draft =
     "I would start with request validation and error handling. ".repeat(12);
+  await answer.fill(draft + "x".repeat(180));
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
   await answer.fill(draft);
   await page.reload();
   await page.getByRole("radio", { name: "Typed answers", exact: true }).check();
@@ -438,7 +450,7 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
     ),
   ).toBe(0);
   // Inspect both desktop baselines and effective 200% zoom reflow while active.
-  for (const width of [1280, 1440, 640]) {
+  for (const width of [1280, 1440, 640, 360]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
       await page.evaluate(
@@ -501,6 +513,12 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await expect(
     page.getByRole("heading", { name: "Summary", exact: true }),
   ).toBeVisible();
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
   const review = page.getByRole("button", { name: "Answer 1", exact: true });
   await review.focus();
   await page.keyboard.press("Enter");
@@ -527,6 +545,11 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await expect(
     page.getByRole("link", { name: /^Backend interview/ }),
   ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");
   await page.goto("/history");

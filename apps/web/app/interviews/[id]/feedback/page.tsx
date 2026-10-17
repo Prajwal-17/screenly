@@ -96,7 +96,7 @@ export default function Report() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-destructive hover:bg-destructive-soft hover:text-destructive"
+                        className="text-destructive hover:bg-destructive-surface hover:text-destructive"
                         aria-label="Delete interview"
                         disabled={remove.isPending}
                       >
@@ -150,14 +150,10 @@ export default function Report() {
                   </p>
                   {interview.feedbackStatus === "failed" && (
                     <Button
-                      disabled={retry.isPending}
+                      loading={retry.isPending}
                       onClick={() => retry.mutate()}
                     >
-                      {retry.isPending ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        <RefreshCw />
-                      )}
+                      <RefreshCw aria-hidden="true" />
                       Retry feedback
                     </Button>
                   )}
@@ -176,15 +172,15 @@ export default function Report() {
                         Interview complete
                       </Badge>
                       <h2 className="my-3">Summary</h2>
-                      <p className="leading-relaxed text-muted-foreground">
+                      <p className="max-w-[75ch] leading-[1.7] text-muted-foreground">
                         {feedback.summary}
                       </p>
                     </div>
                     <div className="flex min-h-28 flex-col items-center justify-center gap-1 border-t pt-6 text-center tabular-nums md:border-t-0 md:border-l md:pt-0">
-                      <strong className="font-heading text-6xl leading-none font-medium tracking-tight">
+                      <strong className="font-sans text-5xl leading-[1.2] font-medium tracking-[-0.015em]">
                         {feedback.overallScore ?? "—"}
                       </strong>
-                      <span className="mt-2 text-[11px] text-muted-foreground">
+                      <span className="mt-2 text-xs text-muted-foreground">
                         {feedback.overallScore === null
                           ? "More evidence needed"
                           : "Overall · out of 10"}
@@ -214,7 +210,7 @@ export default function Report() {
                               aria-label={`${d.name} score`}
                             />
                           )}
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-sm text-muted-foreground">
                             {d.explanation}
                           </p>
                         </div>
@@ -235,7 +231,7 @@ export default function Report() {
                                 className="flex gap-3 py-3 first:pt-0 last:pb-0"
                               >
                                 <Check className="mt-1 size-4 shrink-0 text-success" />
-                                <span className="text-[13px] leading-relaxed">
+                                <span className="text-base leading-[1.7]">
                                   {s}
                                 </span>
                               </li>
@@ -261,7 +257,7 @@ export default function Report() {
                                 className="flex gap-3 py-3 first:pt-0 last:pb-0"
                               >
                                 <Lightbulb className="mt-1 size-4 shrink-0 text-warning" />
-                                <span className="text-[13px] leading-relaxed">
+                                <span className="text-base leading-[1.7]">
                                   {s}
                                 </span>
                               </li>
@@ -292,8 +288,8 @@ export default function Report() {
                             <AccordionTrigger className="py-5">
                               Answer {i + 1}
                             </AccordionTrigger>
-                            <AccordionContent className="space-y-3 text-[13px]">
-                              <blockquote className="border-l-2 border-primary/30 pl-4 leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                            <AccordionContent className="space-y-3 text-base">
+                              <blockquote className="border-l-2 border-border pl-4 leading-[1.7] whitespace-pre-wrap text-muted-foreground">
                                 {
                                   interview.messages.find(
                                     (m) => m.id === a.messageId,
@@ -328,7 +324,7 @@ export default function Report() {
                           <span className="grid size-7 shrink-0 place-items-center rounded-full border text-xs text-muted-foreground">
                             {i + 1}
                           </span>
-                          <span className="text-[13px] leading-relaxed">
+                          <span className="text-base leading-[1.7]">
                             {step}
                           </span>
                         </li>

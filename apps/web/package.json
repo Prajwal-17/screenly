@@ -5,11 +5,11 @@
   "private": true,
   "scripts": {
     "format": "prettier --write .",
-    "dev": "bun ../../scripts/prepare-fonts.ts && next dev --port 3000",
-    "build": "bun ../../scripts/prepare-fonts.ts && next build",
+    "dev": "next dev --port 3000",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
-    "check-types": "bun ../../scripts/prepare-fonts.ts && next typegen && tsc --noEmit"
+    "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.0",

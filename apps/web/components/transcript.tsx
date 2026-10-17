@@ -9,20 +9,22 @@ export function TranscriptMessage({ message }: { message: InterviewMessage }) {
   return (
     <div
       className={cn(
-        "text-[13px]",
-        message.role === "user" && "rounded-md bg-muted/70 px-4 py-3.5",
+        "min-w-0 text-base",
+        message.role === "user" && "rounded-md bg-muted px-4 py-3.5",
       )}
     >
       <Eyebrow
         className={cn(
-          "mb-2 block text-[10px]",
+          "mb-2 block text-xs",
           message.role === "assistant" && "text-primary",
         )}
       >
         {message.role === "assistant" ? "Interviewer" : "You"}
         {message.status === "interrupted" ? " · interrupted" : ""}
       </Eyebrow>
-      <p className="leading-relaxed whitespace-pre-wrap">{message.content}</p>
+      <p className="max-w-[75ch] leading-[1.7] whitespace-pre-wrap">
+        {message.content}
+      </p>
     </div>
   );
 }
@@ -50,7 +52,7 @@ export function LiveTranscript({
       <CardContent>
         <div
           ref={transcript}
-          className="flex h-[360px] flex-col gap-6 overflow-y-auto overscroll-contain rounded-sm pr-1 outline-offset-4 [scrollbar-width:thin] lg:h-[clamp(360px,61vh,700px)] focus-visible:outline-2 focus-visible:outline-ring"
+          className="flex h-[360px] min-w-0 flex-col gap-6 overflow-y-auto overscroll-contain rounded-sm pr-1 outline-offset-4 [scrollbar-width:thin] lg:h-[clamp(360px,61vh,700px)] focus-visible:outline-2 focus-visible:outline-ring [&>div]:shrink-0"
           role="log"
           aria-label="Saved conversation"
           aria-live="polite"
@@ -72,22 +74,22 @@ export function LiveTranscript({
             <TranscriptMessage key={message.id} message={message} />
           ))}
           {streaming && (
-            <div aria-hidden="true" className="text-[13px]">
-              <Eyebrow className="mb-2 block text-[10px] text-primary">
+            <div aria-hidden="true" className="min-w-0 text-base">
+              <Eyebrow className="mb-2 block text-xs text-primary">
                 Interviewer · responding
               </Eyebrow>
-              <p className="leading-relaxed whitespace-pre-wrap">{streaming}</p>
+              <p className="leading-[1.7] whitespace-pre-wrap">{streaming}</p>
             </div>
           )}
           {partial && (
             <div
               aria-hidden="true"
-              className="rounded-md bg-muted/70 px-4 py-3.5 text-[13px] text-muted-foreground italic"
+              className="min-w-0 rounded-md bg-muted px-4 py-3 text-base text-muted-foreground"
             >
-              <Eyebrow className="mb-2 block text-[10px]">
+              <Eyebrow className="mb-2 block text-xs">
                 You · transcribing
               </Eyebrow>
-              <p className="leading-relaxed whitespace-pre-wrap">{partial}</p>
+              <p className="leading-[1.7] whitespace-pre-wrap">{partial}</p>
             </div>
           )}
         </div>

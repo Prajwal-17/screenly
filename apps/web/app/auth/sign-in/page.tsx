@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -67,7 +67,7 @@ export default function SignIn() {
               <Button
                 variant="outline"
                 className="w-full"
-                disabled={social}
+                loading={social}
                 onClick={async () => {
                   setSocial(true);
                   setError("");
@@ -87,11 +87,9 @@ export default function SignIn() {
                   }
                 }}
               >
-                {social ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <span className="font-bold">G</span>
-                )}
+                <span className="font-medium" aria-hidden="true">
+                  G
+                </span>
                 Continue with Google
               </Button>
               <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
@@ -159,12 +157,8 @@ export default function SignIn() {
                 )}
               </Field>
               {error && <InlineAlert>{error}</InlineAlert>}
-              <Button disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <ArrowRight />
-                )}
+              <Button loading={form.formState.isSubmitting}>
+                <ArrowRight aria-hidden="true" />
                 {signup ? "Create account" : "Sign in"}
               </Button>
             </FieldGroup>

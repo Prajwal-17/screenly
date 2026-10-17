@@ -226,6 +226,7 @@ export function Preflight({
             {interview.duration} minutes · {interview.topics.join(", ")}
           </span>
           <Button
+            loading={starting}
             disabled={
               disabled ||
               starting ||
@@ -239,7 +240,7 @@ export function Preflight({
               onStart(download && !typed, typed);
             }}
           >
-            {starting ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+            <ArrowRight aria-hidden="true" />
             {interview.status === "active"
               ? "Resume interview"
               : "Start interview"}

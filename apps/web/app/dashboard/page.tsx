@@ -75,7 +75,7 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">
                     {metric.label}
                   </p>
-                  <div className="mt-3 font-heading text-4xl tracking-tight tabular-nums">
+                  <div className="mt-3 font-heading text-4xl tracking-[-0.01em] tabular-nums">
                     {metric.value}
                     {metric.label === "Average score" && average !== null && (
                       <span className="ml-1 font-sans text-sm text-muted-foreground">
@@ -105,11 +105,11 @@ export default function Dashboard() {
             key={role}
             asChild
             variant="secondary"
-            className="h-auto justify-between rounded-md border-t-2 border-border px-6 py-6 whitespace-normal hover:border-primary hover:bg-accent"
+            className="h-auto justify-between rounded-lg border border-border bg-card px-6 py-6 whitespace-normal hover:border-input hover:bg-muted"
           >
             <Link href={`/interviews/new?role=${encodeURIComponent(role)}`}>
               <span>
-                <strong className="block font-heading text-lg font-medium tracking-tight">
+                <strong className="block font-heading text-lg font-medium tracking-[-0.01em]">
                   {role}
                 </strong>
                 <span className="mt-1 block text-xs font-normal text-muted-foreground">

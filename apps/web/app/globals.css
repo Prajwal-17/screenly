@@ -1,10 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-switzer);
-  --font-heading: var(--font-general-sans);
+  --font-sans: var(--font-geist-sans);
+  --font-heading: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -13,78 +13,132 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-active: var(--secondary-active);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-soft: var(--destructive-soft);
-  --color-success: var(--success);
-  --color-success-soft: var(--success-soft);
-  --color-warning: var(--warning);
-  --color-warning-soft: var(--warning-soft);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-focus-offset: var(--focus-offset);
+  --color-disabled: var(--disabled);
+  --color-disabled-foreground: var(--disabled-foreground);
+  --color-selection: var(--selection);
+  --color-selection-foreground: var(--selection-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-surface: var(--success-surface);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
+  --color-destructive: var(--destructive);
+  --color-destructive-text: var(--destructive-text);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-active: var(--destructive-active);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-border: var(--destructive-border);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-surface: var(--info-surface);
+  --color-info-border: var(--info-border);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 :root {
   color-scheme: light;
-  --background: #faf9f6;
-  --foreground: #252621;
+  --background: #fafbf8;
+  --foreground: #24342e;
   --card: #fff;
-  --card-foreground: #252621;
+  --card-foreground: var(--foreground);
   --popover: #fff;
-  --popover-foreground: #252621;
-  --primary: #b84b2b;
+  --popover-foreground: var(--foreground);
+  --border: #dfe7e0;
+  --input: #77867c;
+  --primary: #087f68;
   --primary-foreground: #fff;
-  --secondary: #f2f0ea;
-  --secondary-foreground: #252621;
-  --muted: #f2f0ea;
-  --muted-foreground: #676960;
-  --accent: #f7eae3;
-  --accent-foreground: #a44025;
-  --destructive: #b23535;
-  --destructive-soft: #fff1ef;
-  --success: #386348;
-  --success-soft: #edf4ee;
-  --warning: #805a18;
-  --warning-soft: #faf2df;
-  --border: #e1e1d9;
-  --input: #d6d7cd;
-  --ring: #b84b2b;
-  --radius: 0.375rem;
+  --primary-hover: #096b59;
+  --primary-active: #07604f;
+  --secondary: #eaf0ea;
+  --secondary-foreground: var(--foreground);
+  --secondary-hover: #dee8de;
+  --secondary-active: #d3e0d4;
+  --accent: #e8f4ee;
+  --accent-foreground: #096b59;
+  --accent-hover: #d4ebdf;
+  --accent-active: #c4e2d3;
+  --muted: #f2f5f1;
+  --muted-foreground: #65726b;
+  --link: var(--primary);
+  --link-hover: var(--primary-hover);
+  --ring: var(--primary);
+  --focus-offset: #fff;
+  --disabled: #edf1ed;
+  --disabled-foreground: var(--muted-foreground);
+  --selection: #cdebde;
+  --selection-foreground: var(--foreground);
+  --success: #166534;
+  --success-foreground: var(--success);
+  --success-surface: #ecfdf3;
+  --success-border: #9ed9ae;
+  --warning: #92400e;
+  --warning-foreground: var(--warning);
+  --warning-surface: #fffbeb;
+  --warning-border: #eacb77;
+  --destructive: #b42318;
+  --destructive-text: var(--destructive);
+  --destructive-foreground: #fff;
+  --destructive-hover: #961c13;
+  --destructive-active: #7d170f;
+  --destructive-surface: #fef3f2;
+  --destructive-border: #e8a49e;
+  --info: #1d4ed8;
+  --info-foreground: var(--info);
+  --info-surface: #eff6ff;
+  --info-border: #a7c8f5;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
-    @apply m-0 bg-background font-sans text-sm leading-relaxed text-foreground antialiased;
+    @apply m-0 bg-background font-sans text-base leading-[1.7] text-foreground antialiased;
   }
   h1,
   h2,
   h3 {
-    @apply font-heading font-medium tracking-tight text-balance;
+    @apply font-sans font-medium;
   }
   h1 {
-    @apply text-4xl leading-tight;
+    @apply text-3xl leading-[1.25] tracking-[-0.015em] sm:text-4xl;
   }
   h2 {
-    @apply text-2xl leading-tight;
+    @apply text-[22px] leading-[1.3] tracking-[-0.01em] sm:text-2xl;
   }
   h3 {
-    @apply text-lg leading-snug;
+    @apply text-lg leading-[1.4] tracking-[-0.01em];
   }
   p,
-  blockquote {
+  blockquote,
+  h1,
+  h2,
+  h3 {
     @apply wrap-anywhere;
   }
   button,
@@ -100,7 +154,7 @@
     @apply rounded-sm outline-2 outline-offset-4 outline-ring;
   }
   ::selection {
-    @apply bg-primary/20;
+    @apply bg-selection text-selection-foreground;
   }
 }
 

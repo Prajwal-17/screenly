@@ -14,6 +14,6 @@ Routes include the landing page, email/Google authentication, dashboard, setup, 
 
 See [the root README](../../README.md) for complete setup, screenshots, and checks.
 
-The UI uses a shared light desktop shell and local General Sans/Switzer fonts. Dev, build, and typecheck download missing font files directly from Fontshare; see the root README and DESIGN.md for provenance and offline setup.
+The UI uses the approved Jade light palette, a responsive workspace, and committed local Geist Sans/Mono fonts. No font downloads run during development, type checks, or builds. See the root README and DESIGN.md for provenance, tokens, and component states.
 
 All presentation uses the shadcn primitives in `components/ui` and Tailwind utilities. Theme tokens and base typography live in `app/globals.css`; route-level CSS classes and inline static styling are not used. See `DESIGN.md` at the repository root for the component inventory and composition rules.

@@ -10,7 +10,7 @@ import {
   type InterviewSettings,
 } from "@repo/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Workspace } from "@/components/workspace";
 import { PageTitle, InlineAlert } from "@/components/common";
@@ -75,7 +75,7 @@ export default function Setup() {
         <Card className="gap-0 divide-y py-0">
           <CardContent className="py-6">
             <FieldSet>
-              <FieldLegend className="font-heading text-lg tracking-tight">
+              <FieldLegend className="font-heading text-lg tracking-[-0.01em]">
                 Role
               </FieldLegend>
               <Controller
@@ -96,7 +96,7 @@ export default function Setup() {
           </CardContent>
           <CardContent className="py-6">
             <FieldSet>
-              <FieldLegend className="font-heading text-lg tracking-tight">
+              <FieldLegend className="font-heading text-lg tracking-[-0.01em]">
                 Experience
               </FieldLegend>
               <Controller
@@ -121,7 +121,7 @@ export default function Setup() {
                 form.formState.errors.topics ? "topics-error" : "topics-hint"
               }
             >
-              <FieldLegend className="font-heading text-lg tracking-tight">
+              <FieldLegend className="font-heading text-lg tracking-[-0.01em]">
                 Topics{" "}
                 <span
                   id="topics-hint"
@@ -154,6 +154,11 @@ export default function Setup() {
                             )
                           }
                           aria-invalid={!!form.formState.errors.topics}
+                          aria-describedby={
+                            form.formState.errors.topics
+                              ? "topics-error"
+                              : "topics-hint"
+                          }
                         />
                         {topic}
                       </ChoiceLabel>
@@ -169,7 +174,7 @@ export default function Setup() {
           </CardContent>
           <CardContent className="py-6">
             <FieldSet>
-              <FieldLegend className="font-heading text-lg tracking-tight">
+              <FieldLegend className="font-heading text-lg tracking-[-0.01em]">
                 Duration
               </FieldLegend>
               <Controller
@@ -190,7 +195,7 @@ export default function Setup() {
                       <ToggleGroupItem
                         key={duration}
                         value={String(duration)}
-                        className="h-11 rounded-md border px-4 text-[13px] data-[state=on]:border-primary/60 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+                        className="px-4"
                       >
                         {duration} minutes
                       </ToggleGroupItem>
@@ -215,7 +220,9 @@ export default function Setup() {
                 ].map(([label, value]) => (
                   <div className="flex justify-between gap-3" key={label}>
                     <dt className="text-muted-foreground">{label}</dt>
-                    <dd>{value}</dd>
+                    <dd className="min-w-0 text-right wrap-anywhere">
+                      {value}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -239,12 +246,8 @@ export default function Setup() {
             {mutation.error && (
               <InlineAlert>{mutation.error.message}</InlineAlert>
             )}
-            <Button className="w-full" disabled={mutation.isPending}>
-              {mutation.isPending ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <ArrowRight />
-              )}
+            <Button className="w-full" loading={mutation.isPending}>
+              <ArrowRight aria-hidden="true" />
               Continue to setup check
             </Button>
           </CardContent>

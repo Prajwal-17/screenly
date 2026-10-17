@@ -227,7 +227,7 @@ export default function InterviewPage() {
                           ? "Interviewer · responding"
                           : "Current question"}
                       </Eyebrow>
-                      <p className="font-heading text-[clamp(22px,2vw,29px)] leading-relaxed tracking-tight whitespace-pre-wrap">
+                      <p className="max-w-[65ch] font-sans text-2xl leading-[1.4] font-medium tracking-[-0.01em] whitespace-pre-wrap lg:text-[28px] xl:text-[30px]">
                         {lastQuestion || "Waiting for the first question…"}
                       </p>
                       <div

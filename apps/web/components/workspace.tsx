@@ -13,7 +13,7 @@ export function Brand() {
   return (
     <Link
       href="/"
-      className="inline-flex items-center gap-2.5 rounded-sm font-heading text-[25px] font-semibold tracking-[-0.06em]"
+      className="inline-flex min-h-11 items-center gap-2 rounded-sm font-sans text-2xl font-medium tracking-[-0.015em]"
       aria-label="Screenly home"
     >
       <svg
@@ -29,7 +29,7 @@ export function Brand() {
         />
         <circle cx="14" cy="14" r="3.5" className="fill-primary" />
       </svg>
-      <span>screenly</span>
+      <span>Screenly</span>
     </Link>
   );
 }
@@ -68,7 +68,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       >
         Skip to content
       </a>
-      <aside className="flex border-b bg-secondary/60 px-6 py-5 min-[761px]:fixed min-[761px]:inset-y-0 min-[761px]:left-0 min-[761px]:w-48 min-[761px]:flex-col min-[761px]:border-r min-[761px]:border-b-0 min-[761px]:px-4 min-[761px]:py-8 xl:w-56 max-[760px]:flex-col">
+      <aside className="flex border-b bg-muted px-4 py-4 min-[761px]:fixed min-[761px]:inset-y-0 min-[761px]:left-0 min-[761px]:w-48 min-[761px]:flex-col min-[761px]:overflow-y-auto min-[761px]:border-r min-[761px]:border-b-0 min-[761px]:px-4 min-[761px]:py-8 xl:w-56 max-[760px]:flex-col">
         <div className="min-[761px]:px-3">
           <Brand />
         </div>
@@ -82,9 +82,9 @@ export function Workspace({ children }: { children: React.ReactNode }) {
               asChild
               variant="ghost"
               className={cn(
-                "justify-start gap-3 px-3 text-[13px]",
+                "justify-start gap-3 border-l-[3px] border-l-transparent px-3",
                 path === href &&
-                  "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                  "border-l-primary bg-accent font-semibold text-accent-foreground hover:bg-accent-hover hover:text-accent-foreground active:bg-accent-active",
               )}
             >
               <Link
@@ -102,7 +102,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           <Separator />
           <div className="flex items-center gap-2.5">
             <Avatar className="size-8">
-              <AvatarFallback className="bg-muted text-[11px]">
+              <AvatarFallback className="bg-muted text-xs">
                 {session.user.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -139,14 +139,9 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       <main
         id="workspace-content"
         tabIndex={-1}
-        className="min-w-0 p-6 outline-none min-[761px]:ml-48 min-[761px]:p-8 xl:ml-56 xl:p-12"
+        className="min-w-0 p-4 outline-none sm:p-6 min-[761px]:ml-48 min-[761px]:p-8 xl:ml-56 xl:p-12"
       >
-        <div className="mx-auto max-w-[1300px]">
-          <p className="mb-6 text-xs text-muted-foreground min-[761px]:hidden">
-            Use a wider window for interview practice.
-          </p>
-          {children}
-        </div>
+        <div className="mx-auto max-w-[1300px]">{children}</div>
       </main>
     </div>
   );

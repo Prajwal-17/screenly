@@ -35,9 +35,9 @@ The frontend's status is based on socket/provider events. Query caches are refre
 
 ## Design
 
-Screenly uses a light desktop visual system: warm neutral surfaces, muted orange actions, General Sans headings and Switzer body text, with shadcn-compatible semantic tokens, shadcn/ui Radix primitives, and Tailwind CSS 4 utility layouts throughout. Overview, New interview, and History share a quiet rail with account/sign-out access. Questions and conversation sit alongside each other; typed answers, transcript messages, and interview rows have focused components. Loading, empty, permission, reconnection, feedback-retry, and completed states use concise factual copy. shadcn Input/Textarea/Field, controlled Radix Checkbox/RadioGroup/ToggleGroup, Accordion disclosures, AlertDialog confirmations, a skip link, route focus, and visible focus states preserve keyboard access. Radix manages dialog trapping and focus restoration. Desktop baseline widths are 1280 and 1440 pixels; smaller windows reflow without disabling an active session. See [the design system](../DESIGN.md).
+Screenly uses the approved Jade light design system: neutral surfaces, green actions, and locally bundled Geist Sans for headings, reading text, and controls, with shadcn-compatible semantic tokens, shadcn/ui Radix primitives, and Tailwind CSS 4 utility layouts throughout. Overview, New interview, and History share a quiet rail with account/sign-out access. Questions and conversation sit alongside each other; typed answers, transcript messages, and interview rows have focused components. Loading, empty, permission, reconnection, feedback-retry, and completed states use concise factual copy. shadcn Input/Textarea/Field, controlled Radix Checkbox/RadioGroup/ToggleGroup, Accordion disclosures, AlertDialog confirmations, a skip link, route focus, and visible focus states preserve keyboard access. Radix manages dialog trapping and focus restoration. Desktop baseline widths are 1280 and 1440 pixels; the same controls reflow to 360 CSS pixels without disabling an active session. See [the design system](../DESIGN.md).
 
-The attached refactor guide was available, but its linked `design/screenly-studio` HTML mockup and supporting files were absent from this repository and its published branches. The guide supplies the implemented direction; no pixel-level comparison to that missing mockup is claimed.
+The current implementation follows the supplied design-system brief and the confirmed Jade palette. Existing page structure, routing, authentication, API contracts, server-owned timing, typed drafts, voice cleanup, reconnection, persistence, feedback, and exports are preserved. The redesign does not add mock session behavior or a palette switcher.
 
 ## Validation
 
@@ -47,7 +47,8 @@ The attached refactor guide was available, but its linked `design/screenly-studi
 - Local WebSocket transport test for JSON and binary speech frames.
 - Chromium journey: signup, setup, voice conversation, provider-error recovery, report, reload, transcript download, history, narrow desktop reflow, and deletion.
 - Typed journey: role shortcut prefill, denied microphone fallback, draft retention across disconnect/reconnect, saved-answer acknowledgement, feedback failure/retry, disclosures, completed-session reopening, search, sign-out, and keyboard focus.
-- Desktop review at 1280 and 1440 pixels, plus effective 200% zoom reflow at 640 CSS pixels.
+- Responsive checks at 360, 640, 1280, and 1440 CSS pixels, including long unbroken typed drafts, feedback, and history.
+- Design-system browser coverage: rendered Jade action/control contrast, keyboard focus, 16px mobile text entry, stable loading dimensions, disabled repeat submissions, error recovery with retained values, and reduced motion.
 - Chromium voice journey with simulated microphone and local Deepgram wire-protocol fixture: capture, transcription, playback, mute, reload, and finish.
 - Type checks, ESLint, production build, and formatting.
 
