@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "screenly-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true,
+    },
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "screenly",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "drizzle",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "INTERVIEWS",
+        "class_name": "InterviewRoom",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["InterviewRoom"],
+    },
+  ],
+  "vars": {
+    "NODE_ENV": "production",
+    "ENABLE_DEV_LOGIN": "false",
+    "FRONTEND_URL": "http://localhost:3000",
+    "BETTER_AUTH_URL": "http://localhost:8787",
+  },
+}
