@@ -13,7 +13,6 @@ export class Session {
   private worklet: AudioWorkletNode | null = null;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
-  private retainedRecording: Blob | null = null;
   private download = false;
   private responseId = 0;
   private cancelled = new Set<number>();
@@ -80,7 +79,6 @@ export class Session {
           connected: false,
           status: "disconnected",
           starting: false,
-          submitting: false,
         });
     };
     socket.onerror = () => {
@@ -91,11 +89,6 @@ export class Session {
     };
   }
   private event(event: ServerEvent) {
-    if (event.type === "answer-saved")
-      useInterviewStore.setState({
-        savedAnswerId: event.id,
-        submitting: false,
-      });
     if (event.type === "ready") {
       useInterviewStore.setState({
         interview: event.interview,
@@ -158,7 +151,6 @@ export class Session {
         error: event.message,
         errorScope: event.scope,
         starting: false,
-        submitting: false,
       });
       if (event.scope === "voice") this.stopCapture();
     }
@@ -173,19 +165,15 @@ export class Session {
       throw new Error("Reconnect before continuing.");
     this.socket.send(JSON.stringify(event));
   }
-  async start(
-    download = this.download,
-    typed = useInterviewStore.getState().typed,
-  ) {
+  async start(download = this.download) {
     if (useInterviewStore.getState().starting) return;
     useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
-      if (!typed) await this.player.unlock();
+      await this.player.unlock();
       if (this.disposed) return;
       this.download = download;
       try {
-        if (typed) this.stopCapture(false, true);
-        else await this.capture();
+        await this.capture();
       } catch {
         this.stopCapture();
         useInterviewStore.setState({
@@ -199,8 +187,8 @@ export class Session {
         this.stopCapture();
         return;
       }
-      useInterviewStore.setState({ typed, partial: "" });
-      this.send({ type: "start", typed });
+      useInterviewStore.setState({ partial: "" });
+      this.send({ type: "start" });
     } catch (error) {
       useInterviewStore.setState({
         error: error instanceof Error ? error.message : "Could not start.",
@@ -279,22 +267,17 @@ export class Session {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  private stopCapture(save = false, retain = false) {
+  private stopCapture(save = false) {
     const recorder = this.recorder;
     if (recorder && recorder.state !== "inactive") {
       recorder.onstop = () => {
         if (this.chunks.length) {
           const blob = new Blob(this.chunks, { type: recorder.mimeType });
           if (save) this.downloadRecording(blob);
-          else if (retain) this.retainedRecording = blob;
         }
         this.chunks = [];
       };
       recorder.stop();
-    }
-    if (save && this.retainedRecording) {
-      this.downloadRecording(this.retainedRecording);
-      this.retainedRecording = null;
     }
     this.recorder = null;
     this.worklet?.disconnect();
@@ -308,23 +291,6 @@ export class Session {
     this.stream = null;
     if (!this.disposed)
       useInterviewStore.setState({ micActive: false, level: 0, muted: false });
-  }
-  answer(id: string, text: string) {
-    const state = useInterviewStore.getState();
-    if (state.submitting || state.status !== "listening") return;
-    try {
-      this.send({ type: "answer", id, text });
-      useInterviewStore.setState({
-        submitting: true,
-        error: "",
-        errorScope: null,
-      });
-    } catch {
-      useInterviewStore.setState({
-        error: "Answer not sent. Reconnect and retry; your draft is kept.",
-        errorScope: "session",
-      });
-    }
   }
   async speakLatest() {
     try {

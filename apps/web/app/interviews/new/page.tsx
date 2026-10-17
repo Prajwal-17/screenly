@@ -235,7 +235,7 @@ export default function Setup() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Check your microphone or choose typed answers before starting.
+              Check your microphone and sound before starting.
             </p>
             {capabilities.data && !capabilities.data.llm && (
               <InlineAlert variant="warning">

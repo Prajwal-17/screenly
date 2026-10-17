@@ -77,15 +77,19 @@ The existing shadcn/ui Radix sources in `apps/web/components/ui` are the compone
 | `/auth/sign-in`              | Email/account creation and available Google sign-in | Validation, pending, auth/server errors, existing-session redirect       |
 | `/dashboard`                 | Real metrics, recent interviews, role shortcuts     | Loading/error, empty history, resume, absent score                       |
 | `/interviews/new`            | Role, experience, topics, duration, summary         | Controlled choices, topic validation, unavailable services, create error |
-| `/interviews/[id]` preflight | Microphone/speaker check or typed mode              | Permission denied/retry, voice unavailable, pending, resume              |
-| `/interviews/[id]` active    | Current question, answer controls, conversation     | Listening, processing, speaking, draft saving, reconnect, finish         |
+| `/interviews/[id]` preflight | Microphone/speaker check                            | Permission denied/retry, voice unavailable, pending, resume              |
+| `/interviews/[id]` active    | Current question, answer controls, conversation     | Listening, processing, speaking, microphone retry, reconnect, finish     |
 | `/interviews/[id]/feedback`  | Summary, evidence, scores, next steps               | Generating/failure/retry, insufficient evidence, export, delete          |
 | `/history`                   | Search, reopen, delete real interviews              | Loading/error, empty/no matches, pending/failed deletion                 |
 
-Support 360px and wider using the same controls and flow. The existing rail becomes a wrapping top navigation below 761px; panels stack at their existing breakpoints. Allow primary/recovery actions and long content to wrap. Do not hide overflow at document level to mask layout problems. Review at 1280×720, 1440×900, 640px reflow, and 360px mobile, including keyboard use, dialogs, long transcripts, and reduced motion. Target WCAG 2.2 AA: text contrast at least 4.5:1 (large text 3:1), necessary control/focus contrast 3:1, visible focus, logical order, and accessible names.
+Support 360px and wider using the same controls and flow. The existing rail becomes a wrapping top navigation below 761px; panels stack at their existing breakpoints. Allow primary/recovery actions and long content to wrap. Do not hide overflow at document level to mask layout problems. Review at 1280×720, 1440×900, 640px reflow, and 360px mobile, including keyboard use, dialogs, long spoken transcripts, and reduced motion. Target WCAG 2.2 AA: text contrast at least 4.5:1 (large text 3:1), necessary control/focus contrast 3:1, visible focus, logical order, and accessible names.
+
+## Spoken interview interaction
+
+Candidates answer exclusively by speaking to the agent through their microphone. Do not provide an answer text field, answer-mode selector, keyboard submission action, or text fallback. Microphone permission and transcription must succeed before starting or resuming. Retain independent microphone/speech retry actions, interruption, mute, server timing, optional audio download, and read-only transcripts/feedback.
 
 ## Product boundaries and verification
 
-Presentation does not own provider/session state. Preserve authentication, authorization, API contracts, session ownership/persistence, server timing, voice/typed behavior, microphone/audio cleanup, reconnect, transcript/feedback generation, exports, and deletion. Keep real failures/recovery controls; do not fabricate successful feedback or port simulated mockup behavior into production.
+Presentation does not own provider/session state. Preserve authentication, authorization, API contracts, session ownership/persistence, server timing, microphone answers and spoken replies, microphone/audio cleanup, reconnect, transcript/feedback generation, exports, and deletion. Keep real failures/recovery controls; do not fabricate successful feedback or port simulated mockup behavior into production.
 
 Run `bun run format:check`, `bun run check` (types, zero-warning lint, unit/integration tests, production build), and `bun run test:e2e`. Browser journeys use isolated local providers and simulated microphone input; they verify behavior without claiming live-provider or Google OAuth validation. Set `CAPTURE_SCREENSHOTS=1` to refresh route screenshots in `docs/screenshots`.

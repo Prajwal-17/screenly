@@ -7,7 +7,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { ChoiceGroup } from "@/components/form-choices";
 import { InlineAlert } from "@/components/common";
 import { closeAudioContext } from "@/lib/audio-context";
 import type { InterviewDetail, Capabilities } from "@repo/shared";
@@ -22,9 +21,8 @@ export function Preflight({
   capabilities?: Capabilities;
   disabled: boolean;
   starting: boolean;
-  onStart: (download: boolean, typed: boolean) => void;
+  onStart: (download: boolean) => void;
 }) {
-  const [typed, setTyped] = useState(false);
   const [download, setDownload] = useState(false);
   const [checked, setChecked] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -108,9 +106,7 @@ export function Preflight({
       checkedStream?.getTracks().forEach((track) => track.stop());
       void closeAudioContext(checkedContext);
       if (!mounted.current || version !== checkVersion.current) return;
-      setError(
-        "Allow microphone access in your browser, then retry, or choose typed answers.",
-      );
+      setError("Allow microphone access in your browser, then retry.");
       setTesting(false);
     }
   }
@@ -147,76 +143,57 @@ export function Preflight({
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        <ChoiceGroup
-          label="Answer mode"
-          name="answer-mode"
-          options={["Voice answers", "Typed answers"]}
-          value={typed ? "Typed answers" : "Voice answers"}
-          onValueChange={(value) => {
-            if (value === "Typed answers") {
-              checkVersion.current += 1;
-              cleanup.current();
-              setTesting(false);
-              setError("");
-              setTyped(true);
-            } else setTyped(false);
-          }}
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="outline"
+            disabled={testing}
+            onClick={() => void testMic()}
+          >
+            {testing ? (
+              <Loader2 className="animate-spin" />
+            ) : checked ? (
+              <Check />
+            ) : (
+              <Mic />
+            )}
+            {testing
+              ? "Listening for 4 seconds…"
+              : checked
+                ? "Microphone checked"
+                : "Check microphone"}
+          </Button>
+          <Button variant="outline" onClick={() => void testSound()}>
+            <Volume2 />
+            Test sound
+          </Button>
+        </div>
+        <Progress
+          role="meter"
+          aria-label="Microphone input level"
+          value={level}
+          className="[&_[data-slot=progress-indicator]]:bg-success"
         />
-        {!typed && (
-          <>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                disabled={testing}
-                onClick={() => void testMic()}
-              >
-                {testing ? (
-                  <Loader2 className="animate-spin" />
-                ) : checked ? (
-                  <Check />
-                ) : (
-                  <Mic />
-                )}
-                {testing
-                  ? "Listening for 4 seconds…"
-                  : checked
-                    ? "Microphone checked"
-                    : "Check microphone"}
-              </Button>
-              <Button variant="outline" onClick={() => void testSound()}>
-                <Volume2 />
-                Test sound
-              </Button>
-            </div>
-            <Progress
-              role="meter"
-              aria-label="Microphone input level"
-              value={level}
-              className="[&_[data-slot=progress-indicator]]:bg-success"
-            />
-            <Field orientation="horizontal">
-              <Checkbox
-                id="download-recording"
-                checked={download}
-                onCheckedChange={(checked) => setDownload(checked === true)}
-              />
-              <FieldLabel
-                htmlFor="download-recording"
-                className="text-xs font-normal text-muted-foreground"
-              >
-                Download my microphone recording when I finish
-              </FieldLabel>
-            </Field>
-          </>
-        )}
+        <Field orientation="horizontal">
+          <Checkbox
+            id="download-recording"
+            checked={download}
+            onCheckedChange={(checked) => setDownload(checked === true)}
+          />
+          <FieldLabel
+            htmlFor="download-recording"
+            className="text-xs font-normal text-muted-foreground"
+          >
+            Download my microphone recording when I finish
+          </FieldLabel>
+        </Field>
         {capabilities && !capabilities.llm && (
           <InlineAlert variant="warning">
             The interviewer is unavailable. Try again later.
           </InlineAlert>
         )}
-        {capabilities && !capabilities.voice && !typed && (
+        {capabilities && !capabilities.voice && (
           <InlineAlert variant="warning">
-            Voice is unavailable. Choose typed answers to continue.
+            Voice interviews are unavailable. Try again later.
           </InlineAlert>
         )}
         {error && <InlineAlert>{error}</InlineAlert>}
@@ -232,12 +209,12 @@ export function Preflight({
               starting ||
               testing ||
               !capabilities?.llm ||
-              (!typed && !capabilities?.voice)
+              !capabilities?.voice
             }
             onClick={() => {
               checkVersion.current += 1;
               cleanup.current();
-              onStart(download && !typed, typed);
+              onStart(download);
             }}
           >
             <ArrowRight aria-hidden="true" />

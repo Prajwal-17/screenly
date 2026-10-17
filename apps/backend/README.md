@@ -2,7 +2,7 @@
 
 Bun/Hono serves authentication, persistent interviews, and a real-time voice channel. SQLite migrations run on startup.
 
-Copy `.env.example` to `.env`; set `BETTER_AUTH_SECRET` (32+ characters), `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`. Add `DEEPGRAM_API_KEY` for voice. Google credentials are optional.
+Copy `.env.example` to `.env`; set `BETTER_AUTH_SECRET` (32+ characters), `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`. Set `DEEPGRAM_API_KEY` for the required microphone transcription and spoken replies. Google credentials are optional.
 
 ```sh
 bun run --cwd apps/backend dev
@@ -27,7 +27,7 @@ bun run --cwd apps/backend db:generate
 | POST /api/interviews/:id/feedback | Retry failed feedback for a completed interview |
 | GET /api/interviews/:id/ws        | Authenticated, owned session WebSocket          |
 
-The WebSocket uses cookie authentication and shared JSON event contracts. Browser microphone frames are mono PCM16 at 16 kHz. Speaker frames use a 4-byte big-endian response ID followed by mono PCM16 at 24 kHz. See `packages/shared/src/index.ts`.
+The WebSocket uses cookie authentication and shared JSON event contracts. The `start` event has no answer-mode flag. Candidate answers enter the session only through microphone PCM frames and finalized transcription turns; JSON text-answer events are rejected. Browser microphone frames are mono PCM16 at 16 kHz. Speaker frames use a 4-byte big-endian response ID followed by mono PCM16 at 24 kHz. See `packages/shared/src/index.ts`.
 
 Provider keys remain on the backend. The LLM uses the OpenAI library against the configured Chat Completions endpoint. Deepgram uses /v2/listen and /v2/speak, with configurable Flux models and separate speech connections per reply.
 

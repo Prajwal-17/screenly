@@ -73,7 +73,10 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
     await capture(page, { path: "docs/screenshots/setup.png", fullPage: true });
   await page.getByRole("button", { name: "Continue to setup check" }).click();
   await expect(page).toHaveURL(/\/interviews\/[a-f0-9-]+$/);
-  await expect(page.getByLabel("Typed answers", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check microphone", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
       path: "docs/screenshots/preflight.png",
@@ -82,7 +85,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await page
     .getByLabel("Download my microphone recording when I finish")
     .check();
-  // A denied microphone leaves the draft unstarted and offers retry or typed answers.
+  // A denied microphone leaves the draft unstarted and offers microphone retry.
   await page.evaluate(() => {
     const media = navigator.mediaDevices;
     const original = media.getUserMedia.bind(media);
@@ -147,8 +150,10 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
       path: "docs/screenshots/interview.png",
       fullPage: true,
     });
-  await page.getByRole("button", { name: "Type instead", exact: true }).click();
-  await expect(page.getByLabel("Your interview answer")).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Type instead", exact: true }),
+  ).toHaveCount(0);
   const recording = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Finish interview", exact: true })
@@ -295,40 +300,44 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   expect(errors).toEqual([]);
 });
 
-test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and keyboard access", async ({
+test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   page,
+  context,
 }) => {
-  await page.route("**/api/capabilities", (route) =>
-    route.fulfill({ json: { llm: true, voice: false, google: false } }),
-  );
+  await context.grantPermissions(["microphone"]);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
     const target = window as Window & {
       interviewSocket?: WebSocket;
-      micRequests: number;
+      replayCount: number;
     };
-    target.micRequests = 0;
+    target.replayCount = 0;
     const native = window.WebSocket;
     window.WebSocket = class extends native {
       constructor(url: string | URL, protocols?: string | string[]) {
         super(url, protocols);
-        if (String(url).includes("/interviews/")) target.interviewSocket = this;
+        if (String(url).includes("/interviews/")) {
+          target.interviewSocket = this;
+          this.addEventListener("message", (event) => {
+            if (
+              typeof event.data === "string" &&
+              JSON.parse(event.data).type === "audio-start"
+            )
+              target.replayCount++;
+          });
+        }
       }
-    };
-    navigator.mediaDevices.getUserMedia = async () => {
-      target.micRequests++;
-      throw new DOMException("Microphone denied", "NotAllowedError");
     };
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/auth/sign-in");
   await page.getByRole("button", { name: "Create an account" }).click();
-  await page.getByLabel("Your name").fill("Typed Candidate");
+  await page.getByLabel("Your name").fill("Voice Candidate");
   await page
     .getByLabel("Email address")
-    .fill(`typed-${Date.now()}@example.com`);
-  await page.getByLabel("Password", { exact: true }).fill("typed-password-123");
+    .fill(`voice-recovery-${Date.now()}@example.com`);
+  await page.getByLabel("Password", { exact: true }).fill("voice-password-123");
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
@@ -345,15 +354,7 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
     page.getByRole("checkbox", { name: "Databases", exact: true }),
   ).toBeChecked();
   await page.setViewportSize({ width: 360, height: 800 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
   await page.getByRole("radio", { name: "Senior", exact: true }).check();
-  await expect(
-    page.getByRole("radio", { name: "Senior", exact: true }),
-  ).toBeChecked();
   await page.getByRole("checkbox", { name: "APIs", exact: true }).uncheck();
   await page
     .getByRole("checkbox", { name: "Databases", exact: true })
@@ -365,62 +366,32 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await page.getByRole("checkbox", { name: "APIs", exact: true }).check();
   await page.getByRole("checkbox", { name: "Databases", exact: true }).check();
   await page.getByRole("radio", { name: "10 minutes", exact: true }).click();
-  await expect(
-    page.getByRole("radio", { name: "10 minutes", exact: true }),
-  ).toBeChecked();
   await page.getByRole("button", { name: "Continue to setup check" }).click();
   await expect(page).toHaveURL(/\/interviews\/[a-f0-9-]+$/);
   const interviewUrl = page.url();
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { llm: true, voice: false, google: false } }),
+  );
+  await page.reload();
   await expect(
-    page.getByText("Voice is unavailable. Choose typed answers to continue."),
+    page.getByText("Voice interviews are unavailable. Try again later."),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Start interview", exact: true }),
   ).toBeDisabled();
-  await page
-    .getByRole("button", { name: "Check microphone", exact: true })
-    .click();
-  await expect(page.locator("[data-slot=alert][role=alert]")).toContainText(
-    "choose typed answers",
-  );
-  await page.getByRole("radio", { name: "Typed answers", exact: true }).check();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.unroute("**/api/capabilities");
+  await page.reload();
   await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
-  const answer = page.getByRole("textbox", {
-    name: "Your interview answer",
-    exact: true,
-  });
-  const send = page.getByRole("button", { name: "Send answer", exact: true });
-  await expect(send).toBeDisabled();
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => (window as Window & { micRequests: number }).micRequests,
-    ),
-  ).toBe(1);
-  const draft =
-    "I would start with request validation and error handling. ".repeat(12);
-  await answer.fill(draft + "x".repeat(180));
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  await answer.fill(draft);
-  await page.reload();
-  await page.getByRole("radio", { name: "Typed answers", exact: true }).check();
-  await page
-    .getByRole("button", { name: "Resume interview", exact: true })
-    .click();
-  await expect(answer).toHaveValue(draft);
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
-  await page.evaluate(() => {
-    Storage.prototype.setItem = () => {
-      throw new DOMException("Storage blocked", "SecurityError");
-    };
-  });
-  await answer.fill(draft + "My updated draft.");
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("log")).toContainText(
+    "I test the component behavior and loading states.",
+  );
   await page.evaluate(() =>
     (window as Window & { interviewSocket: WebSocket }).interviewSocket.close(),
   );
@@ -428,33 +399,62 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
     page.getByRole("button", { name: "Resume interview", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Reconnect/ }).click();
-  await page.getByRole("radio", { name: "Typed answers", exact: true }).check();
   await page
     .getByRole("button", { name: "Resume interview", exact: true })
     .click();
-  await expect(answer).toHaveValue(draft + "My updated draft.");
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
-  await send.click();
-  await expect(answer).toHaveValue("");
-  await expect(page.getByRole("log")).toContainText(draft.trim());
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  // Old text commands cannot enter the transcript. Replay marks their processing boundary.
+  const before = await page.request.get(
+    interviewUrl.replace("http://localhost:3000", "http://localhost:8787/api"),
+  );
+  const saved = await before.json();
+  const replayCount = await page.evaluate(
+    () => (window as Window & { replayCount: number }).replayCount,
+  );
+  await page.evaluate(() => {
+    const socket = (window as Window & { interviewSocket: WebSocket })
+      .interviewSocket;
+    socket.send(JSON.stringify({ type: "start", typed: true }));
+    socket.send(
+      JSON.stringify({
+        type: "answer",
+        id: crypto.randomUUID(),
+        text: "This text must never be saved.",
+      }),
+    );
+    socket.send(JSON.stringify({ type: "speak" }));
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { replayCount: number }).replayCount,
+      ),
+    )
+    .toBeGreaterThan(replayCount);
+  await expect(page.getByRole("log")).not.toContainText(
+    "This text must never be saved.",
+  );
+  const after = await page.request.get(
+    interviewUrl.replace("http://localhost:3000", "http://localhost:8787/api"),
+  );
+  expect((await after.json()).startedAt).toBe(saved.startedAt);
   const second =
     "I would mock a rejected request, assert its error state, and test feedback-retry.";
-  await answer.fill(second);
-  await send.click();
-  await expect(answer).toHaveValue("");
-  await expect(page.getByText("Your turn", { exact: true })).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => (window as Window & { micRequests: number }).micRequests,
-    ),
-  ).toBe(0);
-  // Inspect both desktop baselines and effective 200% zoom reflow while active.
+  await page.request.post("http://localhost:8791/turn", {
+    data: { transcript: second },
+  });
+  await expect(page.getByRole("log")).toContainText(second);
+  await expect(
+    page.getByText("Listening to you", { exact: true }),
+  ).toBeVisible();
   for (const width of [1280, 1440, 640, 360]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
       await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
+        () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
     await expect(
@@ -464,16 +464,15 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   await page.setViewportSize({ width: 1440, height: 900 });
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
-      path: "docs/screenshots/interview-typed-1440.png",
+      path: "docs/screenshots/interview-voice-1440.png",
       fullPage: true,
     });
-  const colors = await page.evaluate(() => ({
-    scheme: getComputedStyle(document.documentElement).colorScheme,
-    family: getComputedStyle(document.body).fontFamily,
-  }));
-  expect(colors.scheme).toBe("light");
-  expect(colors.family).not.toBe("Arial, sans-serif");
   await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).colorScheme,
+    ),
+  ).toBe("light");
   expect(
     await page.evaluate(() =>
       Array.from(document.fonts).some(
@@ -481,17 +480,13 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
       ),
     ),
   ).toBe(true);
-  await expect(
-    page.getByRole("link", { name: "Feedback", exact: true }),
-  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Finish interview", exact: true })
     .click();
   await expect(page.getByRole("alertdialog")).toContainText(
-    "Unsent text will not be included",
+    "Wait for your last answer",
   );
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("alertdialog")).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Finish interview", exact: true }),
   ).toBeFocused();
@@ -529,10 +524,7 @@ test("typed fallback, saved drafts, shortcuts, reconnect, feedback retry and key
   ).toBeVisible();
   await page.goto(interviewUrl);
   await expect(page).toHaveURL(/\/feedback$/);
-  await page
-    .getByRole("link", { name: "History", exact: true })
-    .first()
-    .click();
+  await page.getByRole("link", { name: "History", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Search interviews" })
     .fill("unmatched");

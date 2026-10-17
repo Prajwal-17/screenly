@@ -10,7 +10,7 @@ bun run --cwd apps/web dev
 
 The frontend runs on port 3000. `NEXT_PUBLIC_API_URL` selects the backend origin, including WebSocket and auth connections. Provider keys belong in the backend environment.
 
-Routes include the landing page, email/Google authentication, dashboard, setup, live interview, feedback, and history. The legacy `/session` route redirects to setup.
+Interviews use microphone answers and spoken agent replies, with read-only transcripts and feedback. Routes include the landing page, email/Google authentication, dashboard, setup, live interview, feedback, and history. The legacy `/session` route redirects to setup.
 
 See [the root README](../../README.md) for complete setup, screenshots, and checks.
 

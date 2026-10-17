@@ -7,30 +7,29 @@ import {
   clientEventSchema,
 } from "./index";
 describe("shared contracts", () => {
-  test("validates voice and typed starts and bounded, identifiable text answers", () => {
+  test("accepts voice controls and rejects text submissions and mode flags", () => {
     expect(clientEventSchema.safeParse({ type: "start" }).success).toBe(true);
-    expect(
-      clientEventSchema.safeParse({ type: "start", typed: true }).success,
-    ).toBe(true);
+    for (const typed of [true, false]) {
+      expect(
+        clientEventSchema.safeParse({ type: "start", typed }).success,
+      ).toBe(false);
+    }
     expect(
       clientEventSchema.safeParse({ type: "start", voice: false }).success,
     ).toBe(false);
-    const answer = {
-      type: "answer",
-      id: crypto.randomUUID(),
-      text: "An answer",
-    };
-    expect(clientEventSchema.safeParse(answer).success).toBe(true);
     expect(
-      clientEventSchema.safeParse({ ...answer, id: "invalid" }).success,
+      clientEventSchema.safeParse({
+        type: "answer",
+        id: crypto.randomUUID(),
+        text: "An answer",
+      }).success,
     ).toBe(false);
-    expect(clientEventSchema.safeParse({ ...answer, text: "  " }).success).toBe(
-      false,
-    );
+    for (const type of ["interrupt", "speak", "finish"]) {
+      expect(clientEventSchema.safeParse({ type }).success).toBe(true);
+    }
     expect(
-      clientEventSchema.safeParse({ ...answer, text: "x".repeat(12001) })
-        .success,
-    ).toBe(false);
+      clientEventSchema.safeParse({ type: "played", responseId: 1 }).success,
+    ).toBe(true);
   });
   test("audio preserves the reply ID and PCM samples", () => {
     const pcm = new Int16Array([-32768, 0, 32767]);

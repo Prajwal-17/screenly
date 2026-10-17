@@ -25,7 +25,6 @@ import {
   Eyebrow,
 } from "@/components/common";
 import { LiveTranscript } from "@/components/transcript";
-import { AnswerComposer } from "@/components/answer-composer";
 import { Preflight } from "@/components/preflight";
 import { Session } from "@/lib/interview-session";
 import { useInterviewStore } from "@/store/interviewStore";
@@ -85,13 +84,11 @@ export default function InterviewPage() {
   const statusLabels = {
     connecting: "Connecting",
     ready: "Ready",
-    listening: state.typed
-      ? "Your turn"
-      : state.muted
-        ? "Microphone muted"
-        : state.micActive
-          ? "Listening to you"
-          : "Your turn",
+    listening: state.muted
+      ? "Microphone muted"
+      : state.micActive
+        ? "Listening to you"
+        : "Microphone paused",
     thinking: "Processing answer",
     speaking: "Interviewer speaking",
     finishing: "Saving interview",
@@ -100,7 +97,7 @@ export default function InterviewPage() {
   const finishTrigger = (label: string, saved = false) => (
     <ConfirmAction
       title="Finish interview?"
-      description="This ends the interview and generates feedback from saved answers. Unsent text will not be included."
+      description="This ends the interview and generates feedback from saved answers. Wait for your last answer to appear in the conversation before finishing."
       confirmLabel="Finish and view feedback"
       cancelLabel="Keep going"
       pending={finish.isPending}
@@ -198,8 +195,8 @@ export default function InterviewPage() {
                   capabilities={capabilities.data}
                   disabled={!state.connected}
                   starting={state.starting}
-                  onStart={(download, typed) =>
-                    void controller.current?.start(download, typed)
+                  onStart={(download) =>
+                    void controller.current?.start(download)
                   }
                 />
                 {state.status === "disconnected" && !state.error && (
@@ -284,46 +281,25 @@ export default function InterviewPage() {
                       {finishTrigger("Finish interview")}
                     </CardFooter>
                   </Card>
-                  {state.typed ? (
-                    <AnswerComposer
-                      interviewId={id}
-                      onSubmit={(answerId, text) =>
-                        controller.current?.answer(answerId, text)
-                      }
-                    />
-                  ) : (
-                    <Card>
-                      <CardContent>
-                        <div className="flex items-center justify-between gap-4">
-                          <Eyebrow>Microphone</Eyebrow>
-                          <Button
-                            variant="link"
-                            size="sm"
-                            disabled={
-                              !state.connected || state.status !== "listening"
-                            }
-                            onClick={() =>
-                              void controller.current?.start(undefined, true)
-                            }
-                          >
-                            Type instead
-                          </Button>
-                        </div>
-                        {state.micActive ? (
-                          <Progress
-                            className="mt-5 [&_[data-slot=progress-indicator]]:bg-success"
-                            role="meter"
-                            aria-label="Microphone input level"
-                            value={Math.min(100, state.level * 100)}
-                          />
-                        ) : (
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            Retry your microphone or choose typed answers.
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
+                  <Card>
+                    <CardContent>
+                      <div className="flex items-center justify-between gap-4">
+                        <Eyebrow>Microphone</Eyebrow>
+                      </div>
+                      {state.micActive ? (
+                        <Progress
+                          className="mt-5 [&_[data-slot=progress-indicator]]:bg-success"
+                          role="meter"
+                          aria-label="Microphone input level"
+                          value={Math.min(100, state.level * 100)}
+                        />
+                      ) : (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Retry your microphone to continue speaking.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
                 <LiveTranscript
                   messages={state.messages}

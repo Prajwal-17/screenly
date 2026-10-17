@@ -43,7 +43,6 @@ export class InterviewSession {
   private closed = false;
   private finishing = false;
   private voice = false;
-  private typed = false;
   private starting = false;
   private stt: ReturnType<SessionDependencies["stt"]> | null = null;
   private tts: ReturnType<SessionDependencies["tts"]> | null = null;
@@ -85,30 +84,8 @@ export class InterviewSession {
       await this.speakLatest();
       return;
     }
-    if (event.type === "answer") {
-      const interview = this.deps.store.get(this.id);
-      if (interview?.status !== "active") return;
-      const key = `text:${event.id}`;
-      if (this.deps.store.hasMessageSource(this.id, key)) {
-        this.send({ type: "answer-saved", id: event.id });
-        return;
-      }
-      this.interrupt();
-      const message = this.deps.store.addMessage(
-        this.id,
-        "user",
-        event.text,
-        key,
-      );
-      if (message) {
-        this.send({ type: "message", message });
-        this.send({ type: "answer-saved", id: event.id });
-        await this.reply();
-      }
-      return;
-    }
     if (event.type === "start") {
-      await this.start(event.typed ?? false);
+      await this.start();
       return;
     }
   }
@@ -116,18 +93,12 @@ export class InterviewSession {
     if (!this.closed && this.voice && !this.finishing)
       this.stt?.sendAudio(data);
   }
-  private async start(typed: boolean) {
+  private async start() {
     if (this.starting || this.deps.store.get(this.id)?.status === "completed")
       return;
     this.starting = true;
     try {
-      this.typed = typed;
-      if (typed) {
-        this.voice = false;
-        this.stt?.close();
-        this.stt = null;
-      }
-      if (!typed && !this.stt) {
+      if (!this.stt) {
         this.stt = this.deps.stt(
           (event) => this.turn(event),
           (error) => this.voiceError(error),
@@ -160,7 +131,7 @@ export class InterviewSession {
         interview.messages.at(-1)?.status === "interrupted"
       )
         await this.reply();
-      else if (this.deps.speechEnabled && !typed) await this.speakLatest();
+      else if (this.deps.speechEnabled) await this.speakLatest();
       else this.send({ type: "status", status: "listening" });
     } finally {
       this.starting = false;
@@ -242,17 +213,16 @@ export class InterviewSession {
     };
     this.current = current;
     this.send({ type: "status", status: "thinking" });
-    const speech =
-      this.deps.speechEnabled && !this.typed
-        ? this.deps.tts((audio) => {
-            if (
-              !this.closed &&
-              this.current === current &&
-              !current.controller.signal.aborted
-            )
-              this.send(packAudio(current.id, audio));
-          })
-        : null;
+    const speech = this.deps.speechEnabled
+      ? this.deps.tts((audio) => {
+          if (
+            !this.closed &&
+            this.current === current &&
+            !current.controller.signal.aborted
+          )
+            this.send(packAudio(current.id, audio));
+        })
+      : null;
     this.tts = speech;
     let speechFailed = false;
     const speechReady = speech
@@ -310,7 +280,7 @@ export class InterviewSession {
           scope: speechFailed ? "speech" : "llm",
           message: speechFailed
             ? "Speech is unavailable. Check the Deepgram key and model, then retry speech."
-            : "The interviewer could not respond. Retry the interviewer or submit another answer.",
+            : "The interviewer could not respond. Retry the interviewer or speak another answer.",
         });
       }
     } finally {
