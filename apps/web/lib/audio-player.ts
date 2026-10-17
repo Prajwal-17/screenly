@@ -1,73 +1,56 @@
+import { closeAudioContext } from "./audio-context";
 export class AudioPlayer {
   private ctx: AudioContext | null = null;
-  private queue: Promise<void> = Promise.resolve();
-  private nextStartTime = 0;
-
-  private getCtx(): AudioContext {
-    if (!this.ctx) {
-      this.ctx = new AudioContext();
-    }
-    if (this.ctx.state === "suspended") {
-      this.ctx.resume();
-    }
-    return this.ctx;
+  private sources = new Set<AudioBufferSourceNode>();
+  private nextTime = 0;
+  private waiters: (() => void)[] = [];
+  async unlock() {
+    this.ctx ??= new AudioContext();
+    await this.ctx.resume();
   }
-
-  async unlock(): Promise<void> {
-    await this.getCtx().resume();
+  get busy() {
+    return this.sources.size > 0;
   }
-
-  play(buffer: ArrayBuffer): Promise<void> {
-    this.queue = this.queue.then(() => this._play(buffer));
-    return this.queue;
-  }
-
-  private async _play(buffer: ArrayBuffer): Promise<void> {
-    try {
-      const ctx = this.getCtx();
-      const decoded = await ctx.decodeAudioData(buffer.slice(0));
-
-      await new Promise<void>((resolve) => {
-        const source = ctx.createBufferSource();
-        source.buffer = decoded;
-        source.connect(ctx.destination);
-        source.onended = () => resolve();
-        source.start();
-      });
-    } catch (err) {
-      console.error("[AudioPlayer] playback error:", err);
-    }
-  }
-
   playPcm16(buffer: ArrayBuffer, sampleRate = 24000) {
-    try {
-      const ctx = this.getCtx();
-      const byteLength = buffer.byteLength - (buffer.byteLength % 2);
-      const samples = new Int16Array(buffer.slice(0, byteLength));
-      const audioBuffer = ctx.createBuffer(1, samples.length, sampleRate);
-      const channel = audioBuffer.getChannelData(0);
-
-      for (let i = 0; i < samples.length; i += 1) {
-        channel[i] = (samples[i] ?? 0) / 32768;
-      }
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-
-      const startTime = Math.max(ctx.currentTime, this.nextStartTime);
-      source.start(startTime);
-      this.nextStartTime = startTime + audioBuffer.duration;
-    } catch (err) {
-      console.error("[AudioPlayer] PCM playback error:", err);
-    }
+    if (!this.ctx || buffer.byteLength < 2) return;
+    const samples = new Int16Array(buffer);
+    const audio = this.ctx.createBuffer(1, samples.length, sampleRate);
+    const channel = audio.getChannelData(0);
+    for (let i = 0; i < samples.length; i++)
+      channel[i] = (samples[i] ?? 0) / 32768;
+    const source = this.ctx.createBufferSource();
+    source.buffer = audio;
+    source.connect(this.ctx.destination);
+    this.sources.add(source);
+    source.onended = () => {
+      this.sources.delete(source);
+      source.disconnect();
+      if (!this.busy) this.resolveWaiters();
+    };
+    const start = Math.max(this.ctx.currentTime, this.nextTime);
+    source.start(start);
+    this.nextTime = start + audio.duration;
   }
-
-  // stop in-flight audio
+  drain() {
+    if (!this.busy) return Promise.resolve();
+    return new Promise<void>((resolve) => this.waiters.push(resolve));
+  }
+  private resolveWaiters() {
+    this.waiters.splice(0).forEach((resolve) => resolve());
+  }
   stop() {
-    this.ctx?.close();
+    this.sources.forEach((source) => {
+      source.onended = null;
+      source.stop();
+      source.disconnect();
+    });
+    this.sources.clear();
+    this.nextTime = 0;
+    this.resolveWaiters();
+  }
+  close() {
+    this.stop();
+    void closeAudioContext(this.ctx);
     this.ctx = null;
-    this.queue = Promise.resolve();
-    this.nextStartTime = 0;
   }
 }

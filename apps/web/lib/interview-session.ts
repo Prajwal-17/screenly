@@ -1,310 +1,331 @@
-import { useDownloadStore } from "@/store/downloadStore";
-import { MicVAD } from "@ricky0123/vad-web";
+import { closeAudioContext } from "./audio-context";
+import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
+import { initialState, useInterviewStore } from "@/store/interviewStore";
+import { API_URL } from "./api";
 import { AudioPlayer } from "./audio-player";
 
-const TTS_SAMPLE_RATE = 24000;
-
-export type TranscriptMessage = {
-  turnIndex: number;
-  transcript: string;
-  sequenceId: number;
-};
-
 export class Session {
-  sessionId: string = "";
-  socket: WebSocket | null = null;
-
-  vad: MicVAD | null = null;
-
+  private socket: WebSocket | null = null;
+  private disposed = false;
+  private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private worklet: AudioWorkletNode | null = null;
-
-  recorder: MediaRecorder | null = null;
-  stream: MediaStream | null = null;
-
-  chunks: Blob[] | null = null; // for download
-
-  private transcripts = new Map<number, TranscriptMessage>();
-  private transcriptSnapshot: TranscriptMessage[] = [];
-  private transcriptListeners = new Set<() => void>();
-
-  private cleanupQueued = false;
-  private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
-
-  player = new AudioPlayer();
-
-  setSessionId(id: string) {
-    this.sessionId = id;
+  private recorder: MediaRecorder | null = null;
+  private chunks: Blob[] = [];
+  private download = false;
+  private responseId = 0;
+  private cancelled = new Set<number>();
+  private player = new AudioPlayer();
+  constructor(
+    private id: string,
+    private finished: (id: string) => void,
+  ) {
+    useInterviewStore.setState(initialState);
   }
-
-  setRecorder(mediaRecorder: MediaRecorder) {
-    this.recorder = mediaRecorder;
-  }
-
-  setIsRecording(value: boolean) {
-    useDownloadStore.setState({
-      isRecording: value,
-    });
-  }
-
-  private setSocket(ws: WebSocket | null) {
-    this.socket = ws;
-  }
-
-  getTranscripts() {
-    return this.transcriptSnapshot;
-  }
-
-  subscribeTranscripts(listener: () => void) {
-    this.transcriptListeners.add(listener);
-    return () => {
-      this.transcriptListeners.delete(listener);
-    };
-  }
-
-  private updateTranscript(data: unknown) {
-    if (!data || typeof data !== "object") return;
-
-    const message = data as {
-      type?: unknown;
-      turnIndex?: unknown;
-      transcript?: unknown;
-      sequenceId?: unknown;
-    };
-
+  connect() {
     if (
-      message.type !== "turnInfo" ||
-      typeof message.turnIndex !== "number" ||
-      typeof message.transcript !== "string" ||
-      typeof message.sequenceId !== "number"
-    ) {
+      this.disposed ||
+      this.socket?.readyState === WebSocket.OPEN ||
+      this.socket?.readyState === WebSocket.CONNECTING
+    )
+      return;
+    this.responseId = 0;
+    this.cancelled.clear();
+    useInterviewStore.setState({
+      status: "connecting",
+      error: "",
+      streaming: "",
+      partial: "",
+    });
+    const url = new URL(`${API_URL}/api/interviews/${this.id}/ws`);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(url);
+    this.socket = socket;
+    socket.binaryType = "arraybuffer";
+    socket.onopen = () => {
+      if (!this.disposed)
+        useInterviewStore.setState({ connected: true, status: "ready" });
+    };
+    socket.onmessage = (event) => {
+      if (this.disposed || this.socket !== socket) return;
+      if (event.data instanceof ArrayBuffer) {
+        const frame = unpackAudio(event.data);
+        if (
+          frame &&
+          frame.responseId === this.responseId &&
+          !this.cancelled.has(frame.responseId)
+        ) {
+          this.player.playPcm16(frame.audio);
+          useInterviewStore.setState({ status: "speaking" });
+        }
+        return;
+      }
+      try {
+        this.event(JSON.parse(event.data) as ServerEvent);
+      } catch {
+        useInterviewStore.setState({
+          error: "An unexpected message arrived. Reconnect to continue.",
+        });
+      }
+    };
+    socket.onclose = () => {
+      if (this.socket !== socket) return;
+      this.socket = null;
+      this.stopCapture();
+      this.player.stop();
+      if (!this.disposed)
+        useInterviewStore.setState({
+          connected: false,
+          status: "disconnected",
+          starting: false,
+        });
+    };
+    socket.onerror = () => {
+      if (!this.disposed)
+        useInterviewStore.setState({
+          error: "Could not connect to your interview. Try reconnecting.",
+        });
+    };
+  }
+  private event(event: ServerEvent) {
+    if (event.type === "ready") {
+      useInterviewStore.setState({
+        interview: event.interview,
+        messages: event.interview.messages,
+      });
+      if (event.interview.status === "completed") this.finished(this.id);
+    }
+    if (
+      event.type === "status" &&
+      !(event.status === "listening" && this.player.busy)
+    )
+      useInterviewStore.setState({ status: event.status });
+    if (event.type === "partial")
+      useInterviewStore.setState({ partial: event.text });
+    if (event.type === "message")
+      useInterviewStore.setState((s) => ({
+        messages: s.messages.some((m) => m.id === event.message.id)
+          ? s.messages.map((m) =>
+              m.id === event.message.id ? event.message : m,
+            )
+          : [...s.messages, event.message],
+        ...(event.message.role === "assistant" ? { streaming: "" } : {}),
+        ...(event.message.role === "user" && s.errorScope === "llm"
+          ? { error: "", errorScope: null }
+          : {}),
+      }));
+    if (event.type === "delta") {
+      if (this.cancelled.has(event.responseId)) return;
+      if (event.responseId !== this.responseId) {
+        this.responseId = event.responseId;
+        useInterviewStore.setState({ streaming: "" });
+      }
+      useInterviewStore.setState((s) => ({
+        streaming: s.streaming + event.text,
+      }));
+    }
+    if (event.type === "audio-start") {
+      this.responseId = event.responseId;
+      if (useInterviewStore.getState().errorScope === "speech")
+        useInterviewStore.setState({ error: "", errorScope: null });
+    }
+    if (event.type === "audio-end")
+      void this.player.drain().then(() => {
+        if (!this.disposed && event.responseId === this.responseId) {
+          useInterviewStore.setState({ status: "listening" });
+          try {
+            this.send({ type: "played", responseId: event.responseId });
+          } catch {
+            /* Reconnection restores saved messages. */
+          }
+        }
+      });
+    if (event.type === "interrupted") {
+      this.cancelled.add(event.responseId);
+      this.player.stop();
+      useInterviewStore.setState({ streaming: "" });
+    }
+    if (event.type === "error") {
+      useInterviewStore.setState({
+        error: event.message,
+        errorScope: event.scope,
+        starting: false,
+      });
+      if (event.scope === "voice") this.stopCapture();
+    }
+    if (event.type === "finished") {
+      this.stopCapture(true);
+      this.player.stop();
+      this.finished(event.id);
+    }
+  }
+  private send(event: ClientEvent) {
+    if (this.socket?.readyState !== WebSocket.OPEN)
+      throw new Error("Reconnect before continuing.");
+    this.socket.send(JSON.stringify(event));
+  }
+  async start(download = this.download) {
+    if (useInterviewStore.getState().starting) return;
+    useInterviewStore.setState({ starting: true, error: "", errorScope: null });
+    try {
+      await this.player.unlock();
+      if (this.disposed) return;
+      this.download = download;
+      try {
+        await this.capture();
+      } catch {
+        this.stopCapture();
+        useInterviewStore.setState({
+          error:
+            "Microphone access is unavailable. Allow microphone access in your browser, then retry.",
+          errorScope: "voice",
+        });
+        return;
+      }
+      if (this.disposed) {
+        this.stopCapture();
+        return;
+      }
+      useInterviewStore.setState({ partial: "" });
+      this.send({ type: "start" });
+    } catch (error) {
+      useInterviewStore.setState({
+        error: error instanceof Error ? error.message : "Could not start.",
+        starting: false,
+      });
+    } finally {
+      if (!this.disposed) useInterviewStore.setState({ starting: false });
+    }
+  }
+  private async capture() {
+    if (this.stream) return;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    if (this.disposed) {
+      stream.getTracks().forEach((t) => t.stop());
       return;
     }
-
-    const previous = this.transcripts.get(message.turnIndex);
-    if (previous && message.sequenceId <= previous.sequenceId) return;
-
-    this.transcripts.set(message.turnIndex, {
-      turnIndex: message.turnIndex,
-      transcript: message.transcript,
-      sequenceId: message.sequenceId,
-    });
-    this.transcriptSnapshot = Array.from(this.transcripts.values()).sort(
-      (a, b) => a.turnIndex - b.turnIndex,
-    );
-    this.transcriptListeners.forEach((listener) => listener());
-  }
-
-  async startRecording() {
-    if (this.recorder || this.vad) return;
-
-    this.cleanupQueued = false;
-    void this.player.unlock();
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.stream = stream;
     this.ctx = new AudioContext({ sampleRate: 16000 });
+    await this.ctx.resume();
+    if (this.ctx.sampleRate !== 16000)
+      throw new Error("This browser does not support 16 kHz capture.");
     await this.ctx.audioWorklet.addModule("/audio/pcm-processor.js");
     this.source = this.ctx.createMediaStreamSource(stream);
     this.worklet = new AudioWorkletNode(this.ctx, "pcm-processor");
-    this.source.connect(this.worklet); // Send mic audio from source node into the worklet node.
-
-    this.worklet.port.onmessage = (e) => {
-      const msg = e.data;
-
-      if (msg.type === "pcm-chunk") {
-        const pcm16 = msg.samples;
-        if (this.socket?.readyState === WebSocket.OPEN) {
-          this.socket.send(pcm16.buffer);
-        }
-      } else {
-        console.log("worklet message:", msg);
+    this.source.connect(this.worklet);
+    const silent = this.ctx.createGain();
+    silent.gain.value = 0;
+    this.worklet.connect(silent);
+    silent.connect(this.ctx.destination);
+    this.worklet.port.onmessage = (
+      e: MessageEvent<{ type: string; samples: Int16Array; level: number }>,
+    ) => {
+      if (this.disposed) return;
+      const muted = useInterviewStore.getState().muted;
+      useInterviewStore.setState({ level: muted ? 0 : e.data.level });
+      // Keep the stream clock running while muted without sending microphone content.
+      if (
+        this.socket?.readyState === WebSocket.OPEN &&
+        useInterviewStore.getState().interview?.status === "active"
+      ) {
+        this.socket.send(
+          muted
+            ? new ArrayBuffer(e.data.samples.byteLength)
+            : e.data.samples.buffer,
+        );
       }
     };
-
     this.chunks = [];
-
-    const recorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm",
-    });
-
-    this.setRecorder(recorder);
-
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        this.chunks?.push(event.data);
-      }
-    };
-
-    recorder.start();
-    this.setIsRecording(true);
-
-    this.vad = await MicVAD.new({
-      baseAssetPath: "/vad/",
-      onnxWASMBasePath: "/vad/",
-      onSpeechStart: () => {
-        if (this.speechEndTimer) {
-          clearTimeout(this.speechEndTimer);
-          this.speechEndTimer = null;
-        }
-        // TODO - interrupt user
-        console.log("User has started speaking");
-      },
-      onSpeechEnd: () => {
-        // clear any previous timer
-        if (this.speechEndTimer) {
-          clearTimeout(this.speechEndTimer);
-        }
-        this.speechEndTimer = setTimeout(() => {
-          // Signal to the backend that the current utterance is complete.
-          this.socket?.send(JSON.stringify({ type: "utterance-end" }));
-          this.speechEndTimer = null;
-        }, 1000);
-      },
-    });
-
-    this.vad.start();
-  }
-
-  stopRecording() {
-    // Clear any pending speech-end timer
-    if (this.speechEndTimer) {
-      clearTimeout(this.speechEndTimer);
-      this.speechEndTimer = null;
+    if (this.download && typeof MediaRecorder !== "undefined") {
+      const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(
+        (type) => MediaRecorder.isTypeSupported(type),
+      );
+      this.recorder = new MediaRecorder(
+        stream,
+        mime ? { mimeType: mime } : undefined,
+      );
+      this.recorder.ondataavailable = (e) => {
+        if (e.data.size) this.chunks.push(e.data);
+      };
+      this.recorder.start(1000);
     }
-
-    this.vad?.destroy();
-    this.vad = null;
-    this.player.stop();
-
-    const downloadAudio = useDownloadStore.getState().downloadAudio;
-
+    useInterviewStore.setState({ micActive: true, muted: false });
+  }
+  private downloadRecording(blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `screenly-recording-${this.id}.${blob.type.includes("mp4") ? "m4a" : "webm"}`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  private stopCapture(save = false) {
     const recorder = this.recorder;
-    if (recorder?.state === "recording") {
+    if (recorder && recorder.state !== "inactive") {
       recorder.onstop = () => {
-        this.finalizeStop(downloadAudio);
+        if (this.chunks.length) {
+          const blob = new Blob(this.chunks, { type: recorder.mimeType });
+          if (save) this.downloadRecording(blob);
+        }
+        this.chunks = [];
       };
       recorder.stop();
-    } else {
-      this.finalizeStop(downloadAudio);
     }
-  }
-
-  private finalizeStop(downloadAudio: boolean) {
-    if (this.cleanupQueued) return;
-    this.cleanupQueued = true;
-
-    if (downloadAudio && this.chunks && this.chunks.length > 0) {
-      this.downloadAudio();
-    }
-    this.chunks = null;
-
-    if (this.worklet) {
-      this.worklet.disconnect();
-      this.worklet.port.onmessage = null;
-      this.worklet = null;
-    }
+    this.recorder = null;
+    this.worklet?.disconnect();
+    if (this.worklet) this.worklet.port.onmessage = null;
+    this.worklet = null;
     this.source?.disconnect();
     this.source = null;
-    if (this.ctx) {
-      void this.ctx.close();
-      this.ctx = null;
-    }
-
-    this.recorder = null;
-    if (this.stream) {
-      this.stream.getTracks().forEach((t) => t.stop());
-      this.stream = null;
-    }
-    this.setIsRecording(false);
+    void closeAudioContext(this.ctx);
+    this.ctx = null;
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    if (!this.disposed)
+      useInterviewStore.setState({ micActive: false, level: 0, muted: false });
   }
-
-  async downloadAudio() {
-    if (!this.chunks) return;
-    const blob = new Blob(this.chunks, {
-      type: "audio/webm",
+  async speakLatest() {
+    try {
+      await this.player.unlock();
+      this.send({ type: "speak" });
+    } catch {
+      useInterviewStore.setState({
+        error: "Could not play speech. Reconnect and retry.",
+        errorScope: "speech",
+      });
+    }
+  }
+  interrupt() {
+    this.player.stop();
+    try {
+      this.send({ type: "interrupt" });
+    } catch {
+      /* Connection state is displayed separately. */
+    }
+  }
+  mute() {
+    const muted = !useInterviewStore.getState().muted;
+    this.stream?.getAudioTracks().forEach((t) => {
+      t.enabled = !muted;
     });
-
-    const downloadUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    document.body.appendChild(a);
-    a.style.display = "none";
-    a.href = downloadUrl;
-    a.download = `sample-${new Date().toLocaleTimeString()}.webm`;
-    a.click();
-    URL.revokeObjectURL(downloadUrl);
-    this.chunks = [];
+    useInterviewStore.setState({ muted });
   }
-
-  connect(webSocketURL: string) {
-    if (
-      this.socket &&
-      (this.socket.readyState === WebSocket.OPEN ||
-        this.socket.readyState === WebSocket.CONNECTING)
-    ) {
-      return;
-    }
-
-    const ws = new WebSocket(webSocketURL);
-    this.setSocket(ws);
-
-    ws.onopen = () => {};
-
-    ws.binaryType = "arraybuffer"; // receive binary frames as ArrayBuffer, not Blob
-
-    ws.onmessage = async (event: MessageEvent) => {
-      if (event.data instanceof ArrayBuffer) {
-        // backend sent a raw binary frame → play directly
-        this.player.playPcm16(event.data, TTS_SAMPLE_RATE);
-      } else if (event.data instanceof Blob) {
-        // fallback: decode Blob → ArrayBuffer first
-        const buffer = await event.data.arrayBuffer();
-        this.player.playPcm16(buffer, TTS_SAMPLE_RATE);
-      } else if (typeof event.data === "string") {
-        try {
-          this.updateTranscript(JSON.parse(event.data));
-        } catch {
-          // Ignore non-JSON control messages.
-        }
-      }
-    };
-
-    ws.onerror = () => {};
-
-    ws.onclose = () => {};
+  finish() {
+    this.send({ type: "finish" });
   }
-
-  disconnect() {
-    if (this.speechEndTimer) {
-      clearTimeout(this.speechEndTimer);
-      this.speechEndTimer = null;
-    }
-
-    this.vad?.destroy();
-    this.vad = null;
-    if (this.recorder?.state === "recording") this.recorder.stop();
-    this.recorder = null;
-    if (this.worklet) {
-      this.worklet.disconnect();
-      this.worklet.port.onmessage = null;
-      this.worklet = null;
-    }
-    this.source?.disconnect();
-    this.source = null;
-    if (this.ctx) {
-      void this.ctx.close();
-      this.ctx = null;
-    }
-    if (this.stream) {
-      this.stream.getTracks().forEach((t) => t.stop());
-      this.stream = null;
-    }
+  close() {
+    this.disposed = true;
+    this.stopCapture();
+    this.player.close();
     this.socket?.close();
     this.socket = null;
   }
-
-  reset() {}
 }
-
-export const session = new Session();

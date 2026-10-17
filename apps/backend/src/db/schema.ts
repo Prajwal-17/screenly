@@ -1,4 +1,10 @@
 import { relations, sql } from "drizzle-orm";
+import type {
+  Feedback,
+  FeedbackStatus,
+  InterviewSettings,
+  InterviewStatus,
+} from "@repo/shared";
 import {
   index,
   integer,
@@ -107,8 +113,48 @@ export const interviewSession = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    settings: text("settings", { mode: "json" })
+      .$type<InterviewSettings>()
+      .notNull()
+      .default({
+        role: "Full-stack",
+        level: "Mid-level",
+        topics: ["JavaScript"],
+        duration: 20,
+      }),
+    status: text("status").$type<InterviewStatus>().notNull().default("draft"),
+    startedAt: integer("started_at"),
+    endedAt: integer("ended_at"),
+    feedbackStatus: text("feedback_status")
+      .$type<FeedbackStatus>()
+      .notNull()
+      .default("pending"),
+    feedback: text("feedback", { mode: "json" }).$type<Feedback>(),
+    feedbackModel: text("feedback_model"),
   },
   (table) => [index("interview_session_user_id_idx").on(table.userId)],
+);
+
+export const interviewMessage = sqliteTable(
+  "interview_message",
+  {
+    id: text("id").primaryKey(),
+    interviewId: text("interview_id")
+      .notNull()
+      .references(() => interviewSession.id, { onDelete: "cascade" }),
+    role: text("role").$type<"user" | "assistant">().notNull(),
+    content: text("content").notNull(),
+    status: text("status")
+      .$type<"complete" | "interrupted">()
+      .notNull()
+      .default("complete"),
+    sourceKey: text("source_key").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("message_source_unique").on(table.interviewId, table.sourceKey),
+    index("message_interview_idx").on(table.interviewId),
+  ],
 );
 
 export const userRelations = relations(user, ({ many }) => ({

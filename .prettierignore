@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.turbo/
+bun.lock
+test-results/
+playwright-report/
+docs/screenshots/
+*.tsbuildinfo
+
+# Generated migration metadata
+apps/backend/drizzle/

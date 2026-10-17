@@ -1,37 +1,112 @@
-# AI Interviewer
+# Screenly · Technical interview practice
 
-A Bun workspace containing a Next.js frontend and a local Hono backend.
+A technical interview practice app built for learning and portfolio use. Choose a role, experience level, topics, and duration; practice by speaking to the agent; then review your saved transcript and feedback scored out of 10.
+
+![Screenly landing page](docs/screenshots/landing.png)
+
+## What works
+
+- Responsive light workspace with neutral surfaces, Jade actions, local Geist typography, and keyboard access.
+- Animated voice orb tied to real session states and microphone input, with pause/reduced-motion support and readable agent/candidate conversation bubbles.
+- Google OAuth (optional) and email/password authentication.
+- Frontend, backend, and full-stack interviews at three experience levels.
+- Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
+- Adaptive follow-ups using session settings and conversation history.
+- Microphone/speaker checks, mute, interruption, replay, and optional microphone recording download.
+- Saved conversations, structured feedback, searchable history, deletion, and transcript export.
+- Session ownership checks, duplicate-answer protection, bounded provider waits, and recovery after disconnection.
 
 ## Requirements
 
-- Bun 1.3.5 or newer
+Bun 1.3.5+ (verified with 1.4.3), Node.js 20.9+, and an OpenAI-compatible Chat Completions provider. Deepgram is required for microphone transcription and spoken replies. All interview answers are spoken through the microphone.
 
-## Setup
+## Local setup
 
 ```sh
 bun install
 cp apps/backend/.env.example apps/backend/.env
-bun run dev
+cp apps/web/.env.example apps/web/.env.local
 ```
 
-The frontend runs at `http://localhost:3000` and the backend runs at
-`http://localhost:8787` by default.
+Fill in `BETTER_AUTH_SECRET` with a random string of at least 32 characters. You can generate one with `bun -e 'console.log(crypto.randomUUID() + crypto.randomUUID())'`.
 
-## Workspace commands
+Configure these **backend** values:
+
+```env
+LLM_API_KEY=your-provider-key
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=your-chosen-chat-model
+DEEPGRAM_API_KEY=your-deepgram-key
+```
+
+The voice defaults follow Deepgram’s current conversational model family:
+
+- **Transcription:** `flux-general-en`, recommended for English real-time agents with built-in turn detection.
+- **Speech:** `flux-kit-en`, Deepgram’s default agent voice and a featured all-rounder (British English).
+- **Capture:** 16 kHz mono PCM16 in the recommended 80 ms chunks.
+
+Both model names remain configurable using `DEEPGRAM_STT_MODEL` and `DEEPGRAM_TTS_MODEL`. Existing `.env` overrides take precedence; change `DEEPGRAM_TTS_MODEL=flux-kit-en` there to select Kit. Alexis remains a supported featured voice in the same current Flux family.
+
+Sources checked October 14, 2026: [Flux STT quickstart](https://developers.deepgram.com/docs/flux/quickstart), [Flux TTS overview](https://developers.deepgram.com/docs/flux-tts/overview), [Flux voice catalog](https://developers.deepgram.com/docs/flux-tts/voices), and [Deepgram changelog](https://developers.deepgram.com/changelog).
+
+The LLM endpoint and model are configurable; DeepSeek is only the example endpoint. Select a model that supports Chat Completions streaming and JSON output when instructed. No provider key is sent to the browser.
 
 ```sh
 bun run dev
-bun run build
-bun run lint
+```
+
+Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone and sound before starting.
+
+If the LLM or voice service is not configured, setup and history remain available, but starting an interview is disabled. Allow microphone access in your browser and retry if permission is denied. A transcription connection must succeed before the timer starts. If microphone transcription fails during the interview, retry the microphone; speech playback has its own **Retry speech** action. Use **Hear question** to replay the latest question. Answers are accepted only through microphone audio and transcription; there is no answer text field or text-submission event. Finalized messages remain saved for transcript review, feedback, and export.
+
+For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Email/password works without Google credentials.
+
+When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT_PUBLIC_API_URL` together. The browser derives its WebSocket URL from the API origin. The frontend API URL is a build-time Next.js setting. Microphone access works on localhost or HTTPS.
+
+## Fonts and responsive layout
+
+Geist Sans and Geist Mono variable fonts are committed in `apps/web/app/fonts` under the SIL Open Font License 1.1 and served with `next/font/local`. Development, type checks, and builds need no font downloads. [License and provenance](apps/web/app/fonts/SOURCE.txt) are retained beside the font files. Geist Sans covers headings, reading text, and controls; Geist Mono is reserved for code.
+
+The approved **Jade** light palette uses quiet neutral surfaces and green actions, with separate semantic status colors. shadcn/ui primitives and Tailwind CSS 4 utilities apply the shared tokens across the existing routes. The same interview flow reflows from 360px through desktop widths. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
+
+## Commands
+
+```sh
+bun run dev
 bun run check-types
+bun run lint
+bun run test
+bun run build
+bun run check
 bun run format
+bun run format:check
 ```
 
-Run a command for one app with Bun's `--cwd` option:
+Run browser tests against isolated local provider fixtures:
 
 ```sh
-bun run --cwd apps/backend dev
-bun run --cwd apps/web dev
+bunx playwright install chromium
+bun run build
+bun run test:e2e
 ```
 
-See `apps/backend/README.md` for the local API and WebSocket behavior.
+The suite starts its own frontend, backend, LLM fixture, and voice fixture. It uses `.e2e.sqlite`, test-only credentials, and simulated microphone input. Ports 3000, 8787, 8790, and 8791 must be free. To use an installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+## Architecture
+
+- `apps/web`: Next.js, React, Tailwind CSS 4, shadcn/ui (Radix), React Hook Form, TanStack Query, Zustand.
+- `apps/backend`: Bun, Hono, Better Auth, Drizzle, SQLite, OpenAI library.
+- `packages/shared`: Zod request/report schemas, domain types, and the audio frame contract.
+- `e2e`: controlled provider fixtures and Playwright journeys.
+- [Implementation notes](docs/implementation.md): voice lifecycle, storage, protocol, and verification.
+- [Screenshots](docs/screenshots): landing, authentication, overview, setup, preflight, voice interview, feedback, and history.
+
+The backend owns interview timing, conversation history, and provider requests. The browser owns microphone capture and ordered playback. Deepgram turn detection establishes answer boundaries; no browser VAD model assets are required.
+
+The installed Deepgram SDK's speech WebSocket implementation attempts to JSON-parse binary frames. The app uses a small typed Bun WebSocket transport for both Deepgram channels, retaining SDK transcript types. This separates binary PCM audio from JSON control events and supports the runtime's configured HTTP proxy.
+
+## Review notes
+
+The automated journeys use controlled providers, so they verify app behavior without provider charges. A live Deepgram check in the implementation environment returned HTTP 401; live transcription and voice quality still need verification with a working key. Live LLM verification awaits your chosen endpoint/model.
+
+Active sessions can resume until their original wall-clock duration expires. Feedback is generated once after completion; failed generation can be retried. A completed session is never restarted. The optional audio download contains microphone input, while transcript export includes both speakers.
