@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Interview } from "@repo/shared";
+import { cn } from "@/lib/utils";
 import { formatDate, interviewLink } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +39,19 @@ import {
 export function PageIntro({
   description,
   action,
+  className,
 }: {
   description?: string;
   action?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="mb-7 flex flex-wrap items-center justify-between gap-4 sm:mb-8">
+    <div
+      className={cn(
+        "mb-7 flex flex-wrap items-center justify-between gap-4 sm:mb-8",
+        className,
+      )}
+    >
       {description && (
         <p className="max-w-[65ch] text-sm text-muted-foreground">
           {description}

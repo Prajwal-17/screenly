@@ -176,6 +176,7 @@ export default function InterviewPage() {
         interview && (
           <>
             <PageIntro
+              className="mb-0 min-h-12 gap-y-2 border-b py-2 sm:mb-0"
               description={`${interview.level} · ${interview.topics.join(" · ")}`}
               action={
                 <div className="flex flex-wrap items-center gap-3">
@@ -299,12 +300,12 @@ export default function InterviewPage() {
             ) : (
               <div
                 className={cn(
-                  "grid min-h-[calc(100dvh-176px)] items-start gap-8 border-t pt-6",
+                  "grid min-h-[calc(100dvh-148px)] items-start gap-8 pt-4 sm:min-h-[calc(100dvh-128px)]",
                   transcriptOpen &&
                     "lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]",
                 )}
               >
-                <div className="flex min-h-[calc(100dvh-208px)] min-w-0 flex-col items-center">
+                <div className="flex min-h-[calc(100dvh-164px)] min-w-0 flex-col items-center sm:min-h-[calc(100dvh-144px)]">
                   <div className="flex w-full flex-1 flex-col items-center justify-center py-2">
                     <VoiceVisual
                       status={state.status}
