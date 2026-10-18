@@ -44,7 +44,11 @@ yarn-error.log*
 test-results/
 playwright-report/
 
-# Local agent skills and design metadata
-.agents/skills/
-skills-lock.json
+# Track CLI-managed project skills; keep other local skills private.
+.agents/skills/*
+!.agents/skills/emil-design-eng/
+!.agents/skills/grill-me/
+!.agents/skills/impeccable/
+
+# Local design metadata
 .impeccable/
