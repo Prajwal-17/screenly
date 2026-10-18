@@ -57,8 +57,8 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await expect(search).toBeVisible();
   const query = page.getByRole("combobox", { name: "Search workspace pages" });
   await expect(query).toBeFocused();
-  await query.fill("library");
   await capture("sidebar-search");
+  await query.fill("library");
   await query.press("Enter");
   await expect(page).toHaveURL(/\/library$/);
   await expect(
@@ -146,6 +146,7 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
     .click();
   await expect(search).toBeVisible();
   await expect(query).toBeFocused();
+  await capture("sidebar-search-mobile");
   await query.fill("settings");
   await query.press("Enter");
   await expect(page).toHaveURL(/\/settings$/);

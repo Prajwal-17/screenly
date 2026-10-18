@@ -16,7 +16,6 @@ import {
   Settings2,
   Bell,
   UserRound,
-  Sparkles,
   X,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -285,25 +284,6 @@ export function WorkspaceSidebar({
       </nav>
 
       <div className="shrink-0 px-2.5">
-        {!collapsed && (
-          <div className="mb-3 hidden rounded-lg border bg-card/60 p-3.5 md:block">
-            <div className="flex items-center gap-2 text-xs font-medium">
-              <Sparkles className="size-3.5 text-primary" strokeWidth={1.7} />
-              Make your next answer count.
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-              A focused session. A clearer story.
-            </p>
-            <Link
-              href="/interviews/new"
-              onClick={navigate}
-              className="mt-3 flex min-h-8 items-center [@media(pointer:coarse)]:min-h-11 justify-between rounded-md border bg-card px-2.5 text-[11px] font-medium transition-colors hover:bg-secondary"
-            >
-              Start a session
-              <ArrowUpRight className="size-3.5 text-muted-foreground" />
-            </Link>
-          </div>
-        )}
         <div className="space-y-0.5 border-t py-2">
           {workspaceUtilities.map(({ href, label, icon: Icon }) => (
             <Hint key={href} label={label} enabled={collapsed}>

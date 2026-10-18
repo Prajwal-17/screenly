@@ -81,3 +81,11 @@ Validation: 21 unit/integration tests and six browser journeys pass, together wi
 Validation: types, zero-warning lint, formatting, 21 unit/integration tests, the production build, and all seven browser journeys pass. Browser coverage includes persisted collapse, search focus and keyboard navigation, menu focus return, rail tooltips, reduced motion, automatic interview collapse, manual expansion during a session, preference restoration after exit, mobile navigation, and sign-out.
 
 Independent review: `disposition: fix` for a Practice plans heading eyebrow; resolved by moving the role into metadata below the heading. Final scored verdict: `disposition: ship`. The reviewer found no material sidebar issue. Five current sidebar captures and the bounded desktop/mobile visual confirmation are saved in `docs/screenshots/`.
+
+## Minimal search refinement
+
+- [x] Replace the search title block, description rows, icon tiles, and instruction footer with one compact input and flat destination list. Preserve accessible naming, keyboard controls, focus restoration, and touch targets.
+- [x] Remove the sidebar session callout at the user's request; retain New interview as the session entry point.
+- [x] Document the updated search/sidebar contract.
+
+Validation: types, zero-warning lint, formatting, production build, and the existing sidebar browser journey pass. Fresh desktop/mobile captures verify the compact search and removed callout. Independent review: `disposition: ship`, with no material fixes.

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, CornerDownLeft, Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { workspaceDestinations } from "@/lib/workspace-navigation";
 import { useUIStore } from "@/store/uiStore";
@@ -55,8 +55,9 @@ export function WorkspaceSearch() {
         }
       }}
       title="Search workspace"
-      description="Jump to a page or find your next practice session."
-      className="max-w-[560px]"
+      description="Use arrow keys to navigate and Enter to open a page."
+      showHeader={false}
+      className="max-w-[520px] overflow-hidden rounded-lg"
       focusRef={input}
       onOpenAutoFocus={() => {
         returnFocus.current = document.activeElement as HTMLElement;
@@ -72,8 +73,11 @@ export function WorkspaceSearch() {
             ?.focus();
       }}
     >
-      <div className="flex items-center gap-3 border-y px-5">
-        <Search className="size-[18px] shrink-0 text-muted-foreground" />
+      <div className="flex items-center gap-3 border-b pl-4 pr-1">
+        <Search
+          className="size-[18px] shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <input
           ref={input}
           role="combobox"
@@ -84,7 +88,7 @@ export function WorkspaceSearch() {
             results[active] ? `workspace-result-${active}` : undefined
           }
           autoComplete="off"
-          placeholder="Where would you like to go?"
+          placeholder="Search pages…"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -106,16 +110,33 @@ export function WorkspaceSearch() {
               go(results[active].href);
             }
           }}
-          className="h-14 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
+        <button
+          type="button"
+          aria-label="Close search workspace"
+          onClick={() => {
+            setSearchOpen(false);
+            setQuery("");
+            setActive(0);
+          }}
+          className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span
+            className="rounded border px-1.5 py-0.5 text-[10px] leading-4"
+            aria-hidden="true"
+          >
+            Esc
+          </span>
+        </button>
       </div>
       <div
         id="workspace-search-results"
         role="listbox"
         aria-label="Workspace pages"
-        className="max-h-[min(48dvh,400px)] overflow-y-auto p-2"
+        className="max-h-[min(50dvh,360px)] overflow-y-auto p-1.5"
       >
-        {results.map(({ href, label, description, icon: Icon }, index) => (
+        {results.map(({ href, label, icon: Icon }, index) => (
           <button
             type="button"
             key={href}
@@ -127,40 +148,32 @@ export function WorkspaceSearch() {
             onMouseMove={() => setActive(index)}
             onMouseDown={(event) => event.preventDefault()}
             className={cn(
-              "flex min-h-14 w-full items-center gap-3 rounded-md px-3 text-left outline-none transition-colors",
+              "flex min-h-11 w-full items-center gap-3 rounded-md px-2.5 text-left outline-none transition-colors md:min-h-10 [@media(pointer:coarse)]:min-h-11",
               active === index && "bg-secondary",
             )}
           >
-            <span className="grid size-8 shrink-0 place-items-center rounded-md border bg-card text-muted-foreground">
-              <Icon className="size-4" strokeWidth={1.7} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-medium">{label}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                {description}
-              </span>
-            </span>
-            {active === index ? (
-              <CornerDownLeft className="size-3.5 text-muted-foreground" />
-            ) : (
-              <ArrowUpRight className="size-3.5 text-muted-foreground/50" />
+            <Icon
+              className="size-4 shrink-0 text-muted-foreground"
+              strokeWidth={1.7}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1 truncate text-[13px]">{label}</span>
+            {active === index && (
+              <ArrowRight
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
             )}
           </button>
         ))}
         {results.length === 0 && (
           <p
             role="status"
-            className="px-3 py-10 text-center text-sm text-muted-foreground"
+            className="px-2.5 py-5 text-center text-[13px] text-muted-foreground"
           >
-            No pages match “{query}”.
+            No results.
           </p>
         )}
-      </div>
-      <div className="flex items-center justify-between border-t px-5 py-2.5 text-[10px] text-muted-foreground">
-        <span>
-          ↑ ↓ Navigate <span className="ml-3">↵ Open</span>
-        </span>
-        <span>Esc to close</span>
       </div>
     </Dialog>
   );

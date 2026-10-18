@@ -38,3 +38,7 @@ The route h1 now appears only in the workspace top bar, without the voice-first 
 ## Sidebar refinement override
 
 The user supplied Vercel sidebar references and explicitly requested a denser premium navigation system, manual collapse, an automatic compact rail during interviews, Motion, and additional preview destinations. The current shell is 256px expanded / 72px collapsed with grouped rows, workspace/account menus, Ctrl/Cmd K search, rail tooltips, pinned utilities, persisted manual preference, and temporary interview focus. Mobile uses a compact full-navigation drawer. This supersedes the original three-route 240px sidebar contract while preserving the approved light palette and existing interview behavior.
+
+## Search simplification override
+
+The user requested a minimal command-search overlay matching the compact input/list hierarchy of the supplied reference. Keep only the input, Esc control, plain icons, destination names, and selected-row arrow visible; retain keyboard and screen-reader support. Remove the redundant heading, explanatory copy, icon tiles, and keyboard footer. The sidebar session callout was explicitly removed.

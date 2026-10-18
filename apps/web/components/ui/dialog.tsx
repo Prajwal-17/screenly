@@ -12,6 +12,7 @@ export function Dialog({
   description,
   children,
   className,
+  showHeader = true,
   focusRef,
   onOpenAutoFocus,
   onCloseAutoFocus,
@@ -22,6 +23,7 @@ export function Dialog({
   description: string;
   children: React.ReactNode;
   className?: string;
+  showHeader?: boolean;
   focusRef?: React.RefObject<HTMLElement | null>;
   onOpenAutoFocus?: (event: Event) => void;
   onCloseAutoFocus?: (event: Event) => void;
@@ -44,7 +46,12 @@ export function Dialog({
             className,
           )}
         >
-          <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-4">
+          <div
+            className={cn(
+              "flex items-start justify-between gap-4 px-5 pt-5 pb-4",
+              !showHeader && "sr-only",
+            )}
+          >
             <div>
               <Primitive.Title className="text-base font-semibold">
                 {title}
@@ -53,16 +60,18 @@ export function Dialog({
                 {description}
               </Primitive.Description>
             </div>
-            <Primitive.Close asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="-mt-2 -mr-2"
-                aria-label={`Close ${title.toLowerCase()}`}
-              >
-                <X className="size-4" />
-              </Button>
-            </Primitive.Close>
+            {showHeader && (
+              <Primitive.Close asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="-mt-2 -mr-2"
+                  aria-label={`Close ${title.toLowerCase()}`}
+                >
+                  <X className="size-4" />
+                </Button>
+              </Primitive.Close>
+            )}
           </div>
           {children}
         </Primitive.Content>
