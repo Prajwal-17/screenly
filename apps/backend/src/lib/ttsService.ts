@@ -13,6 +13,7 @@ export class TTSService {
     const url = new URL("/v2/speak", env.DEEPGRAM_WS_URL);
     url.search = new URLSearchParams({
       model: env.DEEPGRAM_TTS_MODEL,
+      expressivity: String(env.DEEPGRAM_TTS_EXPRESSIVITY),
       encoding: "linear16",
       sample_rate: "24000",
     }).toString();

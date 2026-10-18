@@ -1,27 +1,29 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Mic, Volume2, Check, ArrowRight, Loader2 } from "lucide-react";
+import { Mic, Volume2, Check, ArrowRight, Loader2, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { Progress } from "@/components/ui/progress";
 import { InlineAlert } from "@/components/common";
 import { closeAudioContext } from "@/lib/audio-context";
+import { clock, elapsed } from "@/lib/api";
 import type { InterviewDetail, Capabilities } from "@repo/shared";
 export function Preflight({
   interview,
   capabilities,
   disabled,
   starting,
+  notice,
+  secondaryAction,
   onStart,
 }: {
   interview: InterviewDetail;
   capabilities?: Capabilities;
   disabled: boolean;
   starting: boolean;
-  onStart: (download: boolean) => void;
+  notice?: React.ReactNode;
+  secondaryAction?: React.ReactNode;
+  onStart: () => void;
 }) {
-  const [download, setDownload] = useState(false);
   const [checked, setChecked] = useState(false);
   const [testing, setTesting] = useState(false);
   const [level, setLevel] = useState(0);
@@ -109,6 +111,7 @@ export function Preflight({
     }
   }
   async function testSound() {
+    setError("");
     let ctx: AudioContext | null = null;
     try {
       ctx = new AudioContext();
@@ -130,161 +133,153 @@ export function Preflight({
   }
   return (
     <section
-      className="mx-auto max-w-[720px] py-4 sm:py-8"
+      className="mx-auto grid w-full max-w-[760px] gap-8 py-10 sm:py-16 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:py-24"
       aria-labelledby="preflight-title"
     >
-      <div className="mb-8">
-        <Mic
-          className="mb-5 size-7 text-primary"
-          strokeWidth={1.5}
-          aria-hidden="true"
-        />
+      <div>
         <h2
           id="preflight-title"
-          className="text-[26px] leading-tight font-semibold tracking-[-0.03em]"
+          className="text-2xl leading-tight font-semibold tracking-[-0.025em]"
         >
           {interview.status === "active"
-            ? "Ready to pick up where you left off?"
-            : "A quick check before we begin."}
+            ? "Welcome back."
+            : "Before you begin."}
         </h2>
-        <p className="mt-3 max-w-[55ch] text-sm leading-relaxed text-muted-foreground">
-          {interview.status === "active"
-            ? "Your conversation is saved. Check your audio, then continue with the time remaining."
-            : "Find a quiet spot, check your sound, and make yourself comfortable. The clock starts when your interview begins."}
+        <p className="mt-4 text-sm text-ink-secondary">
+          {interview.level}{" "}
+          <span className="px-1 text-muted-foreground" aria-hidden="true">
+            ·
+          </span>{" "}
+          {interview.duration} min
         </p>
+        <p className="mt-1.5 max-w-[40ch] text-sm leading-relaxed text-muted-foreground">
+          {interview.topics.join(" · ")}
+        </p>
+        {interview.status === "active" && (
+          <p className="mt-4 max-w-[36ch] text-xs leading-relaxed text-muted-foreground">
+            Your conversation is saved. Continue with the time remaining.
+          </p>
+        )}
       </div>
-      <div className="divide-y border-y">
-        <div className="py-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <Mic
-                className="mt-1 size-[18px] text-muted-foreground"
+      <div className="min-w-0">
+        <div className="divide-y border-y">
+          <div className="py-2">
+            <div className="flex min-h-12 items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-3 text-[13px] font-medium">
+                {checked ? (
+                  <Check
+                    className="size-[18px] shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Mic
+                    className="size-[18px] shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                )}
+                Microphone
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 px-3 text-xs"
+                disabled={testing}
+                aria-label={
+                  testing
+                    ? "Listening for 4 seconds…"
+                    : checked
+                      ? "Check microphone again"
+                      : "Check microphone"
+                }
+                onClick={() => void testMic()}
+              >
+                {testing && (
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                )}
+                {testing ? "Checking…" : checked ? "Check again" : "Check"}
+              </Button>
+            </div>
+            <span role="status" className="sr-only">
+              {testing
+                ? "Checking microphone access."
+                : checked
+                  ? "Microphone access confirmed."
+                  : ""}
+            </span>
+            {testing && (
+              <div className="flex items-center gap-3 pb-3 pl-[30px]">
+                <Progress
+                  role="meter"
+                  aria-label="Microphone input level"
+                  value={level}
+                  className="h-1 flex-1"
+                />
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  Speak naturally
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex min-h-16 items-center justify-between gap-3 py-2">
+            <span className="flex items-center gap-3 text-[13px] font-medium">
+              <Volume2
+                className="size-[18px] shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
-              <div>
-                <h3 className="text-sm font-medium">Microphone</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {testing
-                    ? "Speak a few words to check your input."
-                    : checked
-                      ? "Microphone check complete. You’re ready to speak."
-                      : "Make sure your voice comes through clearly."}
-                </p>
-              </div>
-            </div>
+              Speakers
+            </span>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              disabled={testing}
-              onClick={() => void testMic()}
+              className="shrink-0 px-3 text-xs"
+              onClick={() => void testSound()}
             >
-              {testing ? (
-                <Loader2 className="animate-spin" />
-              ) : checked ? (
-                <Check />
-              ) : (
-                <Mic />
-              )}
-              {testing
-                ? "Listening for 4 seconds…"
-                : checked
-                  ? "Microphone checked"
-                  : "Check microphone"}
+              Test sound
             </Button>
           </div>
-          <div className="mt-5 flex items-center gap-3 sm:pl-8">
-            <Progress
-              role="meter"
-              aria-label="Microphone input level"
-              value={level}
-              className="h-1.5 max-w-60"
-            />
-            <span className="text-[11px] text-muted-foreground">
-              Input level
-            </span>
-          </div>
         </div>
-        <div className="flex flex-wrap items-start justify-between gap-4 py-6">
-          <div className="flex items-start gap-3">
-            <Volume2
-              className="mt-1 size-[18px] text-muted-foreground"
-              aria-hidden="true"
-            />
-            <div>
-              <h3 className="text-sm font-medium">Speakers</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Play a short tone to check your audio output.
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void testSound()}>
-            <Volume2 />
-            Test sound
+        <div className="mt-5 space-y-3">
+          {notice}
+          {capabilities && !capabilities.llm && (
+            <InlineAlert variant="warning">
+              The interviewer is unavailable. Try again later.
+            </InlineAlert>
+          )}
+          {capabilities && !capabilities.voice && (
+            <InlineAlert variant="warning">
+              Voice interviews are unavailable. Try again later.
+            </InlineAlert>
+          )}
+          {error && <InlineAlert>{error}</InlineAlert>}
+          <Button
+            className="w-full justify-between"
+            loading={starting}
+            disabled={
+              disabled ||
+              starting ||
+              testing ||
+              !capabilities?.llm ||
+              !capabilities?.voice
+            }
+            onClick={() => {
+              checkVersion.current += 1;
+              cleanup.current();
+              onStart();
+            }}
+          >
+            {interview.status === "active"
+              ? "Resume interview"
+              : "Start interview"}
+            <ArrowRight aria-hidden="true" />
           </Button>
-        </div>
-      </div>
-      <div className="py-6">
-        <Field orientation="horizontal">
-          <Checkbox
-            id="download-recording"
-            checked={download}
-            onCheckedChange={(value) => setDownload(value === true)}
-          />
-          <div>
-            <FieldLabel
-              htmlFor="download-recording"
-              className="text-[13px] font-normal text-ink-secondary"
-            >
-              Download my microphone recording when I finish
-            </FieldLabel>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Optional. Your read-only conversation is saved automatically.
-            </p>
-          </div>
-        </Field>
-      </div>
-      <div className="space-y-3">
-        {capabilities && !capabilities.llm && (
-          <InlineAlert variant="warning">
-            The interviewer is unavailable. Try again later.
-          </InlineAlert>
-        )}
-        {capabilities && !capabilities.voice && (
-          <InlineAlert variant="warning">
-            Voice interviews are unavailable. Try again later.
-          </InlineAlert>
-        )}
-        {error && <InlineAlert>{error}</InlineAlert>}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-4 border-t pt-6">
-        <div>
-          <p className="text-[13px] font-medium">
-            {interview.duration} minutes
+          <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <Clock3 className="size-3 shrink-0" aria-hidden="true" />
+            {interview.status === "active"
+              ? `${clock(Math.max(0, interview.duration * 60 - elapsed(interview)))} remaining`
+              : "Your timer starts when you begin."}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {interview.topics.join(" · ")}
-          </p>
+          {secondaryAction && <div className="pt-2">{secondaryAction}</div>}
         </div>
-        <Button
-          loading={starting}
-          disabled={
-            disabled ||
-            starting ||
-            testing ||
-            !capabilities?.llm ||
-            !capabilities?.voice
-          }
-          onClick={() => {
-            checkVersion.current += 1;
-            cleanup.current();
-            onStart(download);
-          }}
-        >
-          {interview.status === "active"
-            ? "Resume interview"
-            : "Start interview"}
-          <ArrowRight aria-hidden="true" />
-        </Button>
       </div>
     </section>
   );

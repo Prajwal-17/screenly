@@ -11,9 +11,6 @@ export class Session {
   private ctx: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private worklet: AudioWorkletNode | null = null;
-  private recorder: MediaRecorder | null = null;
-  private chunks: Blob[] = [];
-  private download = false;
   private responseId = 0;
   private replayRequested = false;
   private cancelled = new Set<number>();
@@ -203,7 +200,7 @@ export class Session {
       if (event.scope === "voice") this.stopCapture();
     }
     if (event.type === "finished") {
-      this.stopCapture(true);
+      this.stopCapture();
       this.player.stop();
       this.finished(event.id);
     }
@@ -213,13 +210,12 @@ export class Session {
       throw new Error("Reconnect before continuing.");
     this.socket.send(JSON.stringify(event));
   }
-  async start(download = this.download) {
+  async start() {
     if (useInterviewStore.getState().starting) return;
     useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
       await this.player.unlock();
       if (this.disposed) return;
-      this.download = download;
       try {
         await this.capture();
       } catch {
@@ -291,43 +287,9 @@ export class Session {
         );
       }
     };
-    this.chunks = [];
-    if (this.download && typeof MediaRecorder !== "undefined") {
-      const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(
-        (type) => MediaRecorder.isTypeSupported(type),
-      );
-      this.recorder = new MediaRecorder(
-        stream,
-        mime ? { mimeType: mime } : undefined,
-      );
-      this.recorder.ondataavailable = (e) => {
-        if (e.data.size) this.chunks.push(e.data);
-      };
-      this.recorder.start(1000);
-    }
     useInterviewStore.setState({ micActive: true, muted: false });
   }
-  private downloadRecording(blob: Blob) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `screenly-recording-${this.id}.${blob.type.includes("mp4") ? "m4a" : "webm"}`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-  private stopCapture(save = false) {
-    const recorder = this.recorder;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.onstop = () => {
-        if (this.chunks.length) {
-          const blob = new Blob(this.chunks, { type: recorder.mimeType });
-          if (save) this.downloadRecording(blob);
-        }
-        this.chunks = [];
-      };
-      recorder.stop();
-    }
-    this.recorder = null;
+  private stopCapture() {
     this.worklet?.disconnect();
     if (this.worklet) this.worklet.port.onmessage = null;
     this.worklet = null;

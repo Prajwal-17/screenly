@@ -13,3 +13,7 @@ Sidebar captures: `sidebar-expanded.png`, `sidebar-collapsed.png`, `sidebar-sear
 `sidebar-search.png` and `sidebar-search-mobile.png` show the compact command-search refinement with plain destination rows and no title block or footer. The updated expanded sidebar capture omits the removed session callout. These use the controlled sidebar browser journey described above.
 
 The refreshed shell captures use the 56px workspace header and 64px rail. `sidebar-collapsed-settings.png` additionally shows Settings selected in the actual local development preview, with the account avatar unobstructed by development controls. The remaining refreshed captures use the controlled browser journeys above.
+
+`preflight.png` and `preflight-mobile.png` show the minimal session-summary/audio-controls layout. `preflight-checking.png` shows the real input meter during the four-second check; `preflight-resume.png` shows the saved-session action and remaining original budget. `preflight-recovery.png` shows a denied microphone with its retry action in the audio-control column. These use the controlled microphone/provider browser journey above.
+
+The refreshed `interview-voice-1440.png`, `interview-voice-mobile.png`, and transcript captures show Transcript in the interview content toolbar, below the app bar, beside the larger elapsed timer. The mobile toolbar stacks its session details above the timer and transcript action.

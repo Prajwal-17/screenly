@@ -99,3 +99,22 @@ Validation: types, zero-warning lint, formatting, production build, and the exis
 Validation: types, zero-warning lint, production build, changed frontend-file formatting, and all seven browser journeys pass. Live measurement confirms a 56px header, settled 64px rail, and 44px controls sharing the same center during the Motion fold. A batched visual review covers expanded, collapsed, mobile, Settings, and interview-focus states; the local development badge is hidden and the account avatar is unobstructed. Independent review: `disposition: ship`, with no material fixes. The actual development Settings capture is natively 1280×800; other desktop evidence is 1440×900 and mobile is 360×800.
 
 The repository-wide formatting check flags the unrelated existing edit in `apps/backend/src/config.ts`; that file and the other backend/turbo changes remain outside this UI commit.
+
+## Minimal preflight refactor
+
+- [x] Replace the long preflight column with an open session summary and compact audio-control column; stack in reading order on mobile.
+- [x] Remove repeated session facts, idle meter, draft status/zero-timer row, empty transcript action, and explanatory device paragraphs.
+- [x] Preserve microphone test/cleanup, speaker tone, connection/service gating, saved-session resume, and the existing removal of recording download.
+- [x] Verify device checks, errors, start/reconnect, responsive layouts, and the finish review.
+
+Validation: types, zero-warning lint, changed-file formatting, production build, and all seven browser journeys pass. Microphone denial is checked against the saved API record (`startedAt: null`), with successful retry afterward. Device checks include repeat microphone testing, speaker playback, stream/context cleanup, reconnect, and saved-session resume. Final desktop/mobile, checking, resume, and recovery captures show the 760px open composition and compact controls. The bounded visual confirmation is complete. Independent finish verdict: `disposition: ship`, with no material fixes.
+
+This refactor preserves the accompanying preflight, interview, test, and design-documentation changes.
+
+## In-page transcript and timer
+
+- [x] Move Transcript from the app bar into the interview content toolbar; retain saved-session transcript access near its controls.
+- [x] Enlarge elapsed time to 30px on mobile / 36px on desktop, with smaller total duration, tabular figures, and quiet screen-reader behavior.
+- [x] Let the stage fill the remaining viewport after the responsive toolbar. Preserve inline read-back, close/focus restoration, captions, and voice behavior.
+
+Validation: types, zero-warning lint, changed-file formatting, production build, and both targeted voice/transcript browser journeys pass. Desktop/mobile captures confirm the larger timer, in-page Transcript control, visible voice controls, and responsive inline read-back.

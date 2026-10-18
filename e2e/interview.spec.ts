@@ -10,7 +10,10 @@ async function capture(
   await page.screenshot({ ...options, animations: "disabled" });
 }
 async function openTranscript(page: Page) {
-  await page.getByRole("button", { name: /^Transcript/ }).click();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: /^Transcript/ })
+    .click();
   await expect(
     page.getByRole("region", { name: "Conversation", exact: true }),
   ).toBeVisible();
@@ -145,9 +148,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
     });
     await page.setViewportSize({ width: 1280, height: 720 });
   }
-  await page
-    .getByLabel("Download my microphone recording when I finish")
-    .check();
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
   // A denied microphone leaves the draft unstarted and offers microphone retry.
   await page.evaluate(() => {
     const media = navigator.mediaDevices;
@@ -166,7 +167,15 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await expect(
     page.getByRole("button", { name: "Start interview", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("00:00 / 20:00", { exact: true })).toBeVisible();
+  if (process.env.CAPTURE_SCREENSHOTS)
+    await capture(page, {
+      path: "docs/screenshots/preflight-recovery.png",
+      fullPage: true,
+    });
+  const unstarted = await page.request.get(
+    page.url().replace(webURL, `${backendURL}/api`),
+  );
+  expect((await unstarted.json()).startedAt).toBeNull();
   await page
     .getByRole("button", { name: "Retry microphone", exact: true })
     .click();
@@ -235,16 +244,17 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await expect(
     page.getByRole("button", { name: "Type instead", exact: true }),
   ).toHaveCount(0);
-  const recording = page.waitForEvent("download");
+  const downloads: string[] = [];
+  page.on("download", (download) =>
+    downloads.push(download.suggestedFilename()),
+  );
   await page
     .getByRole("button", { name: "Finish interview", exact: true })
     .click();
   await page.getByRole("button", { name: "Finish and view feedback" }).click();
-  expect((await recording).suggestedFilename()).toMatch(
-    /screenly-recording.*\.(webm|m4a)$/,
-  );
   await expect(page).toHaveURL(/\/feedback$/);
   await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible();
+  expect(downloads).toEqual([]);
   await expect(page.getByText("7.8", { exact: true })).toBeVisible();
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
@@ -479,16 +489,22 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   await page
     .getByRole("button", { name: "Check microphone", exact: true })
     .click();
+  if (process.env.CAPTURE_SCREENSHOTS)
+    await capture(page, {
+      path: "docs/screenshots/preflight-checking.png",
+      fullPage: true,
+    });
   await expect(
-    page.getByRole("button", { name: "Microphone checked", exact: true }),
+    page.getByRole("button", { name: "Check microphone again", exact: true }),
   ).toBeVisible({ timeout: 10000 });
   // Checking again, starting, and unmounting must not close a closed context.
   await page
-    .getByRole("button", { name: "Microphone checked", exact: true })
+    .getByRole("button", { name: "Check microphone again", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Microphone checked", exact: true }),
+    page.getByRole("button", { name: "Check microphone again", exact: true }),
   ).toBeVisible({ timeout: 10000 });
+  await page.getByRole("button", { name: "Test sound", exact: true }).click();
   await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
@@ -538,6 +554,11 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   await expect(
     page.getByRole("button", { name: "Mute", exact: true }),
   ).toHaveCount(0);
+  if (process.env.CAPTURE_SCREENSHOTS)
+    await capture(page, {
+      path: "docs/screenshots/preflight-resume.png",
+      fullPage: true,
+    });
   await page.getByRole("button", { name: "Finish saved interview" }).click();
   await page.getByRole("button", { name: "Finish and view feedback" }).click();
   await expect(page).toHaveURL(/\/feedback$/);

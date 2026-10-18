@@ -20,13 +20,14 @@ export const env = z
     DEEPGRAM_API_KEY: optional,
     DEEPGRAM_WS_URL: z.url().default("wss://api.deepgram.com"),
     DEEPGRAM_STT_MODEL: z.string().default("flux-general-en"),
-    DEEPGRAM_TTS_MODEL: z.string().default("flux-kit-en"),
+    DEEPGRAM_TTS_MODEL: z.string().default("flux-elise-en"),
+    DEEPGRAM_TTS_EXPRESSIVITY: z.coerce.number().int().min(-2).max(2).default(0),
     DEEPGRAM_TTS_SPEED: z.coerce
       .number()
       .min(0.5)
       .max(1.5)
       .multipleOf(0.05)
-      .default(1.2),
+      .default(1.1),
     LLM_API_KEY: optional,
     LLM_BASE_URL: z.url().default("https://api.deepseek.com/v1"),
     LLM_MODEL: optional,

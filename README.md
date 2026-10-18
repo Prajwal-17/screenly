@@ -12,7 +12,7 @@ A technical interview practice app built for learning and portfolio use. Choose 
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
 - Adaptive follow-ups using session settings and conversation history.
-- Microphone/speaker checks, mute, interruption, replay, and optional microphone recording download.
+- Microphone/speaker checks, mute, interruption, and replay.
 - Saved conversations, structured feedback, searchable history, deletion, and transcript export.
 - Session ownership checks, duplicate-answer protection, bounded provider waits, and recovery after disconnection.
 

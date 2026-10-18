@@ -16,7 +16,7 @@ React in Next.js App Router, TypeScript, Zustand, Tailwind CSS 4, customized sha
 
 ## Capabilities and constraints
 
-Preserve email/password and optional Google authentication, real API data, ownership, microphone preflight, spoken responses, interruption, mute, reconnect, server timing, recording download, feedback/retry, transcript export, history, and deletion. Answers are voice-only. No fabricated sessions, metrics, or feedback in production. The static landing example is explicitly labeled.
+Preserve email/password and optional Google authentication, real API data, ownership, microphone preflight, spoken responses, interruption, mute, reconnect, server timing, feedback/retry, transcript export, history, and deletion. Answers are voice-only. No fabricated sessions, metrics, or feedback in production. The static landing example is explicitly labeled.
 
 ## Brand commitments
 
