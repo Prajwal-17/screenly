@@ -12,6 +12,7 @@ import { LLMService } from "./llmService";
 import { STTService } from "./sttService";
 import { DeepgramConnectionError } from "./deepgramSocket";
 import { TTSService } from "./ttsService";
+import { speechPhrase } from "./speechPhrase";
 
 export type SessionDependencies = {
   store: typeof interviews;
@@ -213,16 +214,8 @@ export class InterviewSession {
     };
     this.current = current;
     this.send({ type: "status", status: "thinking" });
-    const speech = this.deps.speechEnabled
-      ? this.deps.tts((audio) => {
-          if (
-            !this.closed &&
-            this.current === current &&
-            !current.controller.signal.aborted
-          )
-            this.send(packAudio(current.id, audio));
-        })
-      : null;
+    const output = this.deps.speechEnabled ? this.speechOutput(current) : null;
+    const speech = output?.service ?? null;
     this.tts = speech;
     let speechFailed = false;
     const speechReady = speech
@@ -240,6 +233,15 @@ export class InterviewSession {
         if (this.current === current) this.speechError(error);
         return false;
       });
+    const say = async (text: string) => {
+      if (!output || speechFailed || !(await speechReady)) return;
+      try {
+        await output.say(text);
+      } catch (error) {
+        speechFailed = true;
+        if (!current.controller.signal.aborted) this.speechError(error);
+      }
+    };
     let buffer = "";
     try {
       for await (const text of this.deps.reply(
@@ -250,12 +252,10 @@ export class InterviewSession {
         current.text += text;
         buffer += text;
         this.send({ type: "delta", responseId: current.id, text });
-        if (speech && (/[.!?]\s*$/.test(buffer) || buffer.length >= 180)) {
-          if (await speechReady) {
-            this.send({ type: "status", status: "speaking" });
-            speech.sendText(buffer);
-          }
-          buffer = "";
+        let phrase: string | null;
+        while (output && (phrase = speechPhrase(buffer))) {
+          await say(phrase);
+          buffer = buffer.slice(phrase.length);
         }
       }
       if (current.controller.signal.aborted || this.closed) return;
@@ -263,14 +263,13 @@ export class InterviewSession {
         throw new Error("The interviewer returned an empty response.");
       this.persist(current, "complete");
       if (speech && (await speechReady)) {
-        try {
-          if (buffer) speech.sendText(buffer);
-          await speech.flush();
-          if (current.savedId && !current.controller.signal.aborted)
-            this.playback = { id: current.id, messageId: current.savedId };
-        } catch (error) {
-          if (!current.controller.signal.aborted) this.speechError(error);
-        }
+        if (buffer.trim()) await say(buffer);
+        if (
+          current.savedId &&
+          !speechFailed &&
+          !current.controller.signal.aborted
+        )
+          this.playback = { id: current.id, messageId: current.savedId };
       }
     } catch {
       if (!current.controller.signal.aborted && !this.closed) {
@@ -294,6 +293,40 @@ export class InterviewSession {
         }
       }
     }
+  }
+  private speechOutput(current: NonNullable<InterviewSession["current"]>) {
+    const frames: Uint8Array[] = [];
+    const active = () =>
+      !this.closed &&
+      this.current === current &&
+      !current.controller.signal.aborted;
+    const service = this.deps.tts((audio) => {
+      if (active()) frames.push(audio.slice());
+    });
+    return {
+      service,
+      say: async (text: string) => {
+        if (!active()) return;
+        frames.length = 0;
+        service.sendText(text);
+        await service.flush();
+        if (!active()) return;
+        // Buffer only this short phrase so its caption can precede its PCM with
+        // an accurate duration. The next phrase synthesizes during playback.
+        const duration =
+          frames.reduce((bytes, frame) => bytes + frame.byteLength, 0) / 48000;
+        if (duration > 0) {
+          this.send({
+            type: "speech-segment",
+            responseId: current.id,
+            text,
+            duration,
+          });
+          this.send({ type: "status", status: "speaking" });
+          for (const frame of frames) this.send(packAudio(current.id, frame));
+        }
+      },
+    };
   }
   private speechError(error?: unknown) {
     if (!this.closed)
@@ -325,22 +358,20 @@ export class InterviewSession {
       savedId: null as string | null,
     };
     this.current = current;
-    const speech = this.deps.tts((audio) => {
-      if (
-        !this.closed &&
-        this.current === current &&
-        !current.controller.signal.aborted
-      )
-        this.send(packAudio(current.id, audio));
-    });
+    const output = this.speechOutput(current);
+    const speech = output.service;
     this.tts = speech;
     try {
       await speech.connect();
       if (this.current !== current || this.closed) return;
       this.send({ type: "audio-start", responseId: current.id });
-      this.send({ type: "status", status: "speaking" });
-      speech.sendText(message.content);
-      await speech.flush();
+      let remaining = message.content;
+      let phrase: string | null;
+      while ((phrase = speechPhrase(remaining, true))) {
+        await output.say(phrase);
+        remaining = remaining.slice(phrase.length);
+        if (current.controller.signal.aborted || this.closed) return;
+      }
       if (!current.controller.signal.aborted)
         this.playback = { id: current.id, messageId: null };
     } catch (error) {

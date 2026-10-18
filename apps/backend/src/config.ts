@@ -10,7 +10,7 @@ export const env = z
   .object({
     PORT: z.coerce.number().int().min(1).max(65535).default(8787),
     DATABASE_PATH: z.string().default("./storage/local.sqlite"),
-    FRONTEND_URL: z.url().default("http://localhost:3000"),
+    FRONTEND_URL: z.url().default("http://localhost:3100"),
     BETTER_AUTH_URL: z.url().default("http://localhost:8787"),
     BETTER_AUTH_SECRET: z
       .string()

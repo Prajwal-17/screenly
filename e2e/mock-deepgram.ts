@@ -4,8 +4,11 @@ type State = {
   answered: boolean;
   turnIndex: number;
   timer: ReturnType<typeof setTimeout> | null;
+  audioDuration: number;
 };
 const listeners = new Set<Bun.ServerWebSocket<State>>();
+let wordMs = 45;
+let automaticAnswer = true;
 function emitTurn(socket: Bun.ServerWebSocket<State>, transcript: string) {
   const turnIndex = socket.data.turnIndex++;
   socket.send(
@@ -31,6 +34,15 @@ const server = Bun.serve<State>({
   port: voicePort,
   async fetch(request, server) {
     const url = new URL(request.url);
+    if (url.pathname === "/speech-settings" && request.method === "POST") {
+      const settings = (await request.json()) as {
+        wordMs: number;
+        automaticAnswer: boolean;
+      };
+      wordMs = settings.wordMs;
+      automaticAnswer = settings.automaticAnswer;
+      return new Response("ok");
+    }
     if (url.pathname === "/partial" && request.method === "POST") {
       const { transcript } = (await request.json()) as { transcript: string };
       for (const socket of listeners)
@@ -56,6 +68,7 @@ const server = Bun.serve<State>({
         answered: false,
         turnIndex: 0,
         timer: null,
+        audioDuration: 0,
       },
     })
       ? undefined
@@ -68,7 +81,7 @@ const server = Bun.serve<State>({
     },
     message(socket, data) {
       if (socket.data.listen) {
-        if (socket.data.answered) return;
+        if (socket.data.answered || !automaticAnswer) return;
         socket.data.answered = true;
         socket.data.timer = setTimeout(() => {
           emitTurn(socket, "I test the component behavior and loading states.");
@@ -78,7 +91,10 @@ const server = Bun.serve<State>({
       if (typeof data !== "string") return;
       const event = JSON.parse(data);
       if (event.type === "Speak") {
-        const samples = new Int16Array(2400);
+        const duration =
+          Math.max(1, String(event.text).trim().split(/\s+/).length) * wordMs;
+        socket.data.audioDuration += duration;
+        const samples = new Int16Array(Math.round(duration * 24));
         for (let i = 0; i < samples.length; i++)
           samples[i] = Math.sin((i / 24000) * 440 * Math.PI * 2) * 1000;
         socket.send(new Uint8Array(samples.buffer));
@@ -91,7 +107,7 @@ const server = Bun.serve<State>({
               JSON.stringify({
                 type: "SpeechMetadata",
                 speech_id: "fixture-speech",
-                audio_duration_ms: 100,
+                audio_duration_ms: socket.data.audioDuration,
               }),
             ),
           50,

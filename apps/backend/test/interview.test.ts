@@ -261,12 +261,60 @@ describe("interview persistence and orchestration", () => {
     );
     await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(1);
+    expect(f.events.find((event) => event.type === "speech-segment")).toEqual({
+      type: "speech-segment",
+      responseId: 1,
+      text: "Tell me about React.",
+      duration: 4 / 48000,
+    });
     await f.session.handle({ type: "played", responseId: 1 });
     await f.session.handle({ type: "speak" });
     expect(f.audioFrames.length).toBe(2);
     await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(3);
     expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
+    f.session.close();
+  });
+  test("speech streams bounded phrases before generation finishes and never sends cancelled phrase audio", async () => {
+    let release!: () => void;
+    let generated!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const began = new Promise<void>((resolve) => {
+      generated = resolve;
+    });
+    const spoken: string[] = [];
+    const f = fixture(
+      async function* () {
+        yield "Explain React rendering. ";
+        generated();
+        await gate;
+        yield "Then discuss the trade-offs.";
+      },
+      {
+        speechEnabled: true,
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: (text) => {
+            spoken.push(text);
+            audio(new Uint8Array(48000));
+          },
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
+    const pending = f.session.handle({ type: "start" });
+    await began;
+    expect(f.audioFrames).toHaveLength(1);
+    expect(spoken).toEqual(["Explain React rendering."]);
+    expect(f.events.some((event) => event.type === "audio-end")).toBe(false);
+    f.session.interrupt();
+    release();
+    await pending;
+    expect(f.audioFrames).toHaveLength(1);
+    expect(spoken).toEqual(["Explain React rendering."]);
     f.session.close();
   });
   test("failed transcription leaves the draft unstarted and can be retried", async () => {

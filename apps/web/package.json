@@ -5,9 +5,9 @@
   "private": true,
   "scripts": {
     "format": "prettier --write .",
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3100",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port ${PORT:-3100}",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"
   },

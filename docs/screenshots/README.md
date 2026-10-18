@@ -5,3 +5,5 @@ These images are browser screenshots of the rebuilt Screenly application, genera
 Desktop routes cover landing, authentication, overview, setup, preflight, live interview, feedback, and history. Additional captures cover the active interview at 1440 and 1536px, history at 640px, and setup, navigation, live voice, and feedback at 360px. No screenshot or generated raster is used as a runtime frontend asset.
 
 Refinement captures include `preflight-mobile.png` and `interview-transcript-1440.png` / `interview-transcript-360.png`, showing the open preflight surface and optional inline read-back at desktop/mobile sizes.
+
+`caption-streaming-desktop.png` and `caption-streaming-mobile.png` capture the first spoken word while the rest of the generated question remains hidden below the orb. The playback test deliberately suspends its AudioContext for these captures and verifies that caption progress freezes with the device. These captures use the same controlled providers and simulated input described above.

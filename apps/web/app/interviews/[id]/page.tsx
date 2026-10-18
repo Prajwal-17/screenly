@@ -343,8 +343,7 @@ export default function InterviewPage() {
                             isStreaming={
                               candidateSpeaking
                                 ? !!state.partial
-                                : !!state.streaming ||
-                                  state.status === "speaking"
+                                : state.status === "speaking"
                             }
                             className="text-center sm:text-base"
                           />

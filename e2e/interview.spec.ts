@@ -295,6 +295,150 @@ test("protected workspace redirects to sign-in", async ({ page }) => {
   await expect(page).toHaveURL(/\/auth\/sign-in$/);
 });
 
+test("spoken captions follow playback, pause with the device, and restart on replay", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["microphone"]);
+  await page.addInitScript(() => {
+    const target = window as Window & {
+      captionAudioContexts: AudioContext[];
+      captionSocket?: WebSocket;
+      captionAudioEnds: number;
+    };
+    target.captionAudioContexts = [];
+    target.captionAudioEnds = 0;
+    const NativeSocket = window.WebSocket;
+    window.WebSocket = class extends NativeSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols);
+        if (String(url).includes("/interviews/")) {
+          target.captionSocket = this;
+          this.addEventListener("message", (event) => {
+            if (
+              typeof event.data === "string" &&
+              JSON.parse(event.data).type === "audio-end"
+            )
+              target.captionAudioEnds++;
+          });
+        }
+      }
+    };
+    const Native = window.AudioContext;
+    window.AudioContext = class extends Native {
+      constructor(options?: AudioContextOptions) {
+        super(options);
+        target.captionAudioContexts.push(this);
+      }
+    };
+  });
+  await page.request.post(`${voiceURL}/speech-settings`, {
+    data: { wordMs: 180, automaticAnswer: false },
+  });
+  try {
+    await page.goto("/auth/sign-in");
+    await page.getByRole("button", { name: "Create an account" }).click();
+    await page.getByLabel("Your name").fill("Caption Candidate");
+    await page
+      .getByLabel("Email address")
+      .fill(`captions-${Date.now()}@example.com`);
+    await page
+      .getByLabel("Password", { exact: true })
+      .fill("caption-password-123");
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page
+      .getByRole("link", { name: "New interview", exact: true })
+      .last()
+      .click();
+    await page.getByRole("button", { name: "Continue to setup check" }).click();
+    const id = page.url().split("/").at(-1)!;
+    await page
+      .getByRole("button", { name: "Start interview", exact: true })
+      .click();
+    const caption = page.locator(
+      '[data-slot="live-caption"] [data-slot="streaming-text"]',
+    );
+    const fullQuestion =
+      "Welcome. Let’s begin with React. How would you test a component that fetches data?";
+    await expect(caption).toContainText("Welcome.");
+    await expect(caption).not.toContainText("fetches data?");
+    const paused = await page.evaluate(async () => {
+      const contexts = (
+        window as Window & { captionAudioContexts: AudioContext[] }
+      ).captionAudioContexts;
+      await contexts[0]!.suspend();
+      return document.querySelector('[data-slot="streaming-text"]')
+        ?.textContent;
+    });
+    await page.waitForTimeout(600); // Verify silence cannot advance the caption.
+    expect(await caption.textContent()).toBe(paused);
+    if (process.env.CAPTURE_SCREENSHOTS) {
+      await capture(page, {
+        path: "docs/screenshots/caption-streaming-desktop.png",
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 360, height: 800 });
+      await capture(page, {
+        path: "docs/screenshots/caption-streaming-mobile.png",
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 1280, height: 720 });
+    }
+    await page.evaluate(() =>
+      (
+        window as Window & { captionAudioContexts: AudioContext[] }
+      ).captionAudioContexts[0]!.resume(),
+    );
+    await expect(caption).toHaveText(fullQuestion);
+    await expect(
+      page.getByText("Listening to you", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Hear question", exact: true })
+      .click();
+    await expect(caption).toContainText("Welcome.");
+    await expect(caption).not.toContainText("fetches data?");
+    await page.getByRole("button", { name: "Interrupt", exact: true }).click();
+    await expect(caption).toHaveCount(0);
+    await page.waitForTimeout(300); // Already queued audio must not resurrect words.
+    await expect(caption).toHaveCount(0);
+    const ended = await page.evaluate(
+      () => (window as Window & { captionAudioEnds: number }).captionAudioEnds,
+    );
+    await page
+      .getByRole("button", { name: "Hear question", exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as Window & { captionAudioEnds: number }).captionAudioEnds,
+        ),
+      )
+      .toBeGreaterThan(ended);
+    await expect(caption).not.toContainText("fetches data?");
+    // Synthesis is complete, but its drain promise is still waiting for playback.
+    // Closing the socket must retain recovery instead of being overwritten by it.
+    await page.evaluate(() =>
+      (window as Window & { captionSocket: WebSocket }).captionSocket.close(),
+    );
+    await expect(
+      page.getByRole("button", { name: "Resume interview", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Listening to you", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Reconnect/ })).toBeVisible();
+    await navigateHistory(page);
+    await page.request.delete(`${backendURL}/api/interviews/${id}`);
+  } finally {
+    await page.request.post(`${voiceURL}/speech-settings`, {
+      data: { wordMs: 45, automaticAnswer: true },
+    });
+  }
+});
+
 test("voice capture, transcription, playback, mute, and cleanup", async ({
   page,
   context,

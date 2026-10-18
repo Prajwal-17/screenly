@@ -55,3 +55,14 @@ Independent verdict: the selected-text contrast fix was scored resolved at scree
 The previous preview voice fixture emitted a 100ms test tone; it did not synthesize speech. Browser fixtures remain isolated for automated checks. No provider credentials are committed.
 
 Refinement validation: all five browser journeys pass, including non-silent PCM, saved AI captions, candidate partial captions, inline transcript toggling/focus restoration, recovery, and mobile reflow. The independent finish reviewer returned `ship` with no material fixes.
+
+## Speech-paced captions and local port
+
+- [x] Replace LLM-speed assistant captions with reveals driven by the browser's played audio samples. Generated and saved questions remain available in the transcript.
+- [x] Stream short speech phrases with measured PCM durations; group tiny greetings with the following phrase. Estimate word timing within each phrase because Flux does not supply word timestamps.
+- [x] Freeze caption progress with suspended/stalled playback; discard queued words on interruption; restart reveals for replay.
+- [x] Guard playback completion against closed sockets and cancelled responses so a pending drain cannot overwrite disconnection recovery.
+- [x] Preserve real candidate partial transcription, reduced-motion behavior, and the existing desktop/mobile composition.
+- [x] Free port 3000 and use 3100 for Screenly. Update start/dev defaults, default frontend origin, examples, test ports, and local preview API configuration.
+
+Validation: 24 unit/integration checks and six browser journeys pass, including a dedicated test that suspends the audio device, verifies frozen captions, resumes to completion, replays from the beginning, and interrupts queued words. Desktop/mobile captures show the first spoken word without exposing the generated question. A real-provider browser run delivered 140 PCM buffers / 10.88 seconds of non-silent speech (RMS 0.1371) and 25 progressive caption updates. Word-timing estimates are documented; physical speaker audibility is not claimed.
