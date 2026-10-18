@@ -6,4 +6,4 @@ Desktop routes cover landing, authentication, overview, setup, preflight, live i
 
 Refinement captures include `preflight-mobile.png` and `interview-transcript-1440.png` / `interview-transcript-360.png`, showing the open preflight surface and optional inline read-back at desktop/mobile sizes.
 
-`caption-streaming-desktop.png` and `caption-streaming-mobile.png` capture the first spoken word while the rest of the generated question remains hidden below the orb. The playback test deliberately suspends its AudioContext for these captures and verifies that caption progress freezes with the device. These captures use the same controlled providers and simulated input described above.
+`caption-highlight-desktop.png` and `caption-highlight-mobile.png` show the full generated question with a visual speaking highlight. These captures use the same controlled providers and simulated input described above. The highlight is a presentation effect and never controls or segments audio.

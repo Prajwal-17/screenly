@@ -261,12 +261,6 @@ describe("interview persistence and orchestration", () => {
     );
     await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(1);
-    expect(f.events.find((event) => event.type === "speech-segment")).toEqual({
-      type: "speech-segment",
-      responseId: 1,
-      text: "Tell me about React.",
-      duration: 4 / 48000,
-    });
     await f.session.handle({ type: "played", responseId: 1 });
     await f.session.handle({ type: "speak" });
     expect(f.audioFrames.length).toBe(2);
@@ -275,46 +269,68 @@ describe("interview persistence and orchestration", () => {
     expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
     f.session.close();
   });
-  test("speech streams bounded phrases before generation finishes and never sends cancelled phrase audio", async () => {
+  test("Deepgram frames pass through immediately and unchanged, with one flush per response", async () => {
     let release!: () => void;
     let generated!: () => void;
+    let flushes = 0;
+    let lateAudio!: (audio: Uint8Array) => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     const began = new Promise<void>((resolve) => {
       generated = resolve;
     });
+    const tokens = [
+      "Welcome. Explain React rendering. ",
+      "Then discuss its trade-offs.",
+    ];
     const spoken: string[] = [];
+    const frames = [
+      new Uint8Array([1, 0, 255, 127, 0, 128]),
+      new Uint8Array([7, 0, 8, 0]),
+    ];
     const f = fixture(
       async function* () {
-        yield "Explain React rendering. ";
+        yield tokens[0]!;
         generated();
         await gate;
-        yield "Then discuss the trade-offs.";
+        yield tokens[1]!;
       },
       {
         speechEnabled: true,
-        tts: (audio) => ({
-          connect: async () => {},
-          sendText: (text) => {
-            spoken.push(text);
-            audio(new Uint8Array(48000));
-          },
-          flush: async () => {},
-          close: () => {},
-        }),
+        tts: (audio) => {
+          lateAudio = audio;
+          return {
+            connect: async () => {},
+            sendText: (text) => {
+              spoken.push(text);
+              audio(frames[spoken.length - 1]!);
+            },
+            flush: async () => {
+              flushes++;
+            },
+            close: () => {},
+          };
+        },
       },
     );
     const pending = f.session.handle({ type: "start" });
     await began;
     expect(f.audioFrames).toHaveLength(1);
-    expect(spoken).toEqual(["Explain React rendering."]);
-    expect(f.events.some((event) => event.type === "audio-end")).toBe(false);
-    f.session.interrupt();
+    expect(Array.from(f.audioFrames[0]!.slice(4))).toEqual(
+      Array.from(frames[0]!),
+    );
+    expect(flushes).toBe(0); // Audio reaches the browser before generation or flushing finishes.
     release();
     await pending;
-    expect(f.audioFrames).toHaveLength(1);
-    expect(spoken).toEqual(["Explain React rendering."]);
+    expect(spoken).toEqual(tokens);
+    expect(flushes).toBe(1);
+    expect(f.audioFrames.map((frame) => Array.from(frame.slice(4)))).toEqual(
+      frames.map((frame) => Array.from(frame)),
+    );
+    f.session.interrupt();
+    lateAudio(new Uint8Array([9, 0]));
+    expect(f.audioFrames).toHaveLength(2);
     f.session.close();
   });
   test("failed transcription leaves the draft unstarted and can be retried", async () => {

@@ -138,10 +138,10 @@ export default function InterviewPage() {
   const caption = state.caption;
   const candidateSpeaking = caption?.role === "user";
   const captionWords = caption?.text.match(/\S+\s*/g) ?? [];
-  const captionOffset = Math.max(0, captionWords.length - 38);
-  const captionTokens = captionWords
-    .slice(captionOffset)
-    .map((text, index) => ({ text, id: `${captionOffset + index}:${text}` }));
+  const captionTokens = captionWords.map((text, index) => ({
+    text,
+    id: String(index),
+  }));
   return (
     <Workspace
       voice

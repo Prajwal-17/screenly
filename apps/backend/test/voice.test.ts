@@ -56,6 +56,7 @@ test("Deepgram transport separates JSON control events from binary PCM audio", a
 test("speech waits for final audio metadata instead of closing at Flushed", async () => {
   const { TTSService } = await import("../src/lib/ttsService");
   const { env } = await import("../src/config");
+  let configuredSpeed: number | undefined;
   const server = Bun.serve<{ timer: ReturnType<typeof setTimeout> | null }>({
     port: 0,
     fetch(request, server) {
@@ -68,8 +69,10 @@ test("speech waits for final audio metadata instead of closing at Flushed", asyn
         socket.send(JSON.stringify({ type: "Connected" }));
       },
       message(socket, message) {
-        if (typeof message !== "string" || JSON.parse(message).type !== "Flush")
-          return;
+        if (typeof message !== "string") return;
+        const event = JSON.parse(message);
+        if (event.type === "Configure") configuredSpeed = event.speed;
+        if (event.type !== "Flush") return;
         socket.send(JSON.stringify({ type: "Flushed" }));
         socket.data.timer = setTimeout(() => {
           socket.send(new Uint8Array([1, 0, 2, 0]));
@@ -92,6 +95,7 @@ test("speech waits for final audio metadata instead of closing at Flushed", asyn
     await speech.connect();
     speech.sendText("A question worth hearing.");
     await speech.flush();
+    expect(configuredSpeed).toBe(1.2);
     expect(frames).toEqual([[1, 0, 2, 0]]);
   } finally {
     speech.close();

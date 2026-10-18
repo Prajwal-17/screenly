@@ -18,6 +18,12 @@ export class TTSService {
     }).toString();
     this.socket = new DeepgramSocket(url, env.DEEPGRAM_API_KEY ?? "", {
       json: (message) => {
+        if (message.type === "ConfigureFailure") {
+          this.failure = new Error(
+            "The voice provider rejected the speech speed.",
+          );
+          this.rejectFlush?.(this.failure);
+        }
         // Flushed only acknowledges the text buffer; audio can still be arriving.
         if (message.type === "SpeechMetadata") this.resolveFlush?.();
       },
@@ -31,6 +37,7 @@ export class TTSService {
     });
     await this.socket.connect();
     if (this.closed) this.socket.close();
+    else this.socket.send({ type: "Configure", speed: env.DEEPGRAM_TTS_SPEED });
   }
   sendText(text: string) {
     if (!this.closed) this.socket?.send({ type: "Speak", text });

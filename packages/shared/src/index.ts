@@ -1,5 +1,4 @@
 import { z } from "zod";
-export { SpeechCaptions } from "./speech-captions";
 
 export const roles = ["Frontend", "Backend", "Full-stack"] as const;
 export const levels = ["Junior", "Mid-level", "Senior"] as const;
@@ -112,12 +111,6 @@ export type ServerEvent =
   | { type: "message"; message: InterviewMessage }
   | { type: "delta"; responseId: number; text: string }
   | { type: "audio-start"; responseId: number }
-  | {
-      type: "speech-segment";
-      responseId: number;
-      text: string;
-      duration: number;
-    }
   | { type: "audio-end"; responseId: number }
   | { type: "interrupted"; responseId: number }
   | { type: "finished"; id: string }

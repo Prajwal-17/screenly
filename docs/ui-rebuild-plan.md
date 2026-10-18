@@ -56,13 +56,15 @@ The previous preview voice fixture emitted a 100ms test tone; it did not synthes
 
 Refinement validation: all five browser journeys pass, including non-silent PCM, saved AI captions, candidate partial captions, inline transcript toggling/focus restoration, recovery, and mobile reflow. The independent finish reviewer returned `ship` with no material fixes.
 
-## Speech-paced captions and local port
+## Continuous speech and full-text highlight
 
-- [x] Replace LLM-speed assistant captions with reveals driven by the browser's played audio samples. Generated and saved questions remain available in the transcript.
-- [x] Stream short speech phrases with measured PCM durations; group tiny greetings with the following phrase. Estimate word timing within each phrase because Flux does not supply word timestamps.
-- [x] Freeze caption progress with suspended/stalled playback; discard queued words on interruption; restart reveals for replay.
-- [x] Guard playback completion against closed sockets and cancelled responses so a pending drain cannot overwrite disconnection recovery.
-- [x] Preserve real candidate partial transcription, reduced-motion behavior, and the existing desktop/mobile composition.
-- [x] Free port 3000 and use 3100 for Screenly. Update start/dev defaults, default frontend origin, examples, test ports, and local preview API configuration.
+- [x] Remove the phrase splitting/buffering introduced for caption pacing.
+- [x] Stream LLM tokens into one Deepgram turn and forward every audio frame immediately, unchanged. Flush once after the complete response, including replay.
+- [x] Display the full generated question below the orb. Use a visual highlight while speaking; retain readable text after interruption.
+- [x] Remove phrase-duration events, word timing estimates, and the 38-word limit.
+- [x] Preserve safe interruption, playback acknowledgement, microphone cleanup, and disconnection recovery.
+- [x] Keep Screenly on port 3000 and the backend on 8787, with the requested provider-side 1.2 speech rate.
 
-Validation: 24 unit/integration checks and six browser journeys pass, including a dedicated test that suspends the audio device, verifies frozen captions, resumes to completion, replays from the beginning, and interrupts queued words. Desktop/mobile captures show the first spoken word without exposing the generated question. A real-provider browser run delivered 140 PCM buffers / 10.88 seconds of non-silent speech (RMS 0.1371) and 25 progressive caption updates. Word-timing estimates are documented; physical speaker audibility is not claimed.
+Verification includes byte-for-byte PCM forwarding before generation finishes, one synthesis flush per response, full-text visibility, speaking highlight state, replay, interruption, and disconnect recovery. No visual caption effect changes audio playback.
+
+Validation: 21 unit/integration tests and six browser journeys pass, together with types, zero-warning lint, formatting, and the production build. A real Deepgram passthrough check forwarded all 142 frames / 541,440 bytes (11.28 seconds) immediately and byte-for-byte unchanged, with one final flush. First audio arrived after 1.365 seconds.

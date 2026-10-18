@@ -55,7 +55,7 @@ The LLM endpoint and model are configurable; DeepSeek is only the example endpoi
 bun run dev
 ```
 
-Open [localhost:3100](http://localhost:3100). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone and sound before starting.
+Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone and sound before starting.
 
 If the LLM or voice service is not configured, setup and history remain available, but starting an interview is disabled. Allow microphone access in your browser and retry if permission is denied. A transcription connection must succeed before the timer starts. If microphone transcription fails during the interview, retry the microphone; speech playback has its own **Retry speech** action. Use **Hear question** to replay the latest question. Answers are accepted only through microphone audio and transcription; there is no answer text field or text-submission event. Finalized messages remain saved for transcript review, feedback, and export.
 
@@ -90,7 +90,7 @@ bun run build
 bun run test:e2e
 ```
 
-The suite starts its own frontend, backend, LLM fixture, and voice fixture. It uses `.e2e.sqlite`, test-only credentials, and simulated microphone input. Ports 3100, 8787, 8790, and 8791 must be free (or set `SCREENLY_E2E_PORT_OFFSET` to isolate them). To use an installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+The suite starts its own frontend, backend, LLM fixture, and voice fixture. It uses `.e2e.sqlite`, test-only credentials, and simulated microphone input. Ports 3000, 8787, 8790, and 8791 must be free (or set `SCREENLY_E2E_PORT_OFFSET` to isolate them). To use an installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
 For parallel worktrees, set `SCREENLY_E2E_PORT_OFFSET` to shift all four ports and isolate the test database. Compile the frontend with the matching API origin first, for example:
 

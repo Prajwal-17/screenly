@@ -295,7 +295,7 @@ test("protected workspace redirects to sign-in", async ({ page }) => {
   await expect(page).toHaveURL(/\/auth\/sign-in$/);
 });
 
-test("spoken captions follow playback, pause with the device, and restart on replay", async ({
+test("full question stays readable while speaking highlights follow playback state", async ({
   page,
   context,
 }) => {
@@ -361,8 +361,8 @@ test("spoken captions follow playback, pause with the device, and restart on rep
     );
     const fullQuestion =
       "Welcome. Let’s begin with React. How would you test a component that fetches data?";
-    await expect(caption).toContainText("Welcome.");
-    await expect(caption).not.toContainText("fetches data?");
+    await expect(caption).toHaveText(fullQuestion);
+    await expect(caption).toHaveAttribute("data-speaking", "true");
     const paused = await page.evaluate(async () => {
       const contexts = (
         window as Window & { captionAudioContexts: AudioContext[] }
@@ -371,16 +371,16 @@ test("spoken captions follow playback, pause with the device, and restart on rep
       return document.querySelector('[data-slot="streaming-text"]')
         ?.textContent;
     });
-    await page.waitForTimeout(600); // Verify silence cannot advance the caption.
+    await page.waitForTimeout(600); // Pausing audio must not hide or truncate the question.
     expect(await caption.textContent()).toBe(paused);
     if (process.env.CAPTURE_SCREENSHOTS) {
       await capture(page, {
-        path: "docs/screenshots/caption-streaming-desktop.png",
+        path: "docs/screenshots/caption-highlight-desktop.png",
         fullPage: true,
       });
       await page.setViewportSize({ width: 360, height: 800 });
       await capture(page, {
-        path: "docs/screenshots/caption-streaming-mobile.png",
+        path: "docs/screenshots/caption-highlight-mobile.png",
         fullPage: true,
       });
       await page.setViewportSize({ width: 1280, height: 720 });
@@ -397,12 +397,11 @@ test("spoken captions follow playback, pause with the device, and restart on rep
     await page
       .getByRole("button", { name: "Hear question", exact: true })
       .click();
-    await expect(caption).toContainText("Welcome.");
-    await expect(caption).not.toContainText("fetches data?");
+    await expect(caption).toHaveText(fullQuestion);
+    await expect(caption).toHaveAttribute("data-speaking", "true");
     await page.getByRole("button", { name: "Interrupt", exact: true }).click();
-    await expect(caption).toHaveCount(0);
-    await page.waitForTimeout(300); // Already queued audio must not resurrect words.
-    await expect(caption).toHaveCount(0);
+    await expect(caption).toHaveText(fullQuestion);
+    await expect(caption).toHaveAttribute("data-speaking", "false");
     const ended = await page.evaluate(
       () => (window as Window & { captionAudioEnds: number }).captionAudioEnds,
     );
@@ -417,7 +416,7 @@ test("spoken captions follow playback, pause with the device, and restart on rep
         ),
       )
       .toBeGreaterThan(ended);
-    await expect(caption).not.toContainText("fetches data?");
+    await expect(caption).toHaveText(fullQuestion);
     // Synthesis is complete, but its drain promise is still waiting for playback.
     // Closing the socket must retain recovery instead of being overwritten by it.
     await page.evaluate(() =>

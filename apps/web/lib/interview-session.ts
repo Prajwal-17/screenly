@@ -2,7 +2,7 @@ import { closeAudioContext } from "./audio-context";
 import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
 import { initialState, useInterviewStore } from "@/store/interviewStore";
 import { API_URL } from "./api";
-import { AudioPlayer, type SpeechSegment } from "./audio-player";
+import { AudioPlayer } from "./audio-player";
 
 export class Session {
   private socket: WebSocket | null = null;
@@ -15,14 +15,9 @@ export class Session {
   private chunks: Blob[] = [];
   private download = false;
   private responseId = 0;
-  private pendingSpeech: SpeechSegment | undefined;
+  private replayRequested = false;
   private cancelled = new Set<number>();
-  private player = new AudioPlayer((text) => {
-    if (this.disposed || this.cancelled.has(this.responseId)) return;
-    useInterviewStore.setState({
-      caption: { role: "assistant", text, turn: String(this.responseId) },
-    });
-  });
+  private player = new AudioPlayer();
   constructor(
     private id: string,
     private finished: (id: string) => void,
@@ -37,8 +32,6 @@ export class Session {
     )
       return;
     this.responseId = 0;
-    this.pendingSpeech = undefined;
-    this.player.stop();
     this.cancelled.clear();
     useInterviewStore.setState({
       status: "connecting",
@@ -65,8 +58,7 @@ export class Session {
           frame.responseId === this.responseId &&
           !this.cancelled.has(frame.responseId)
         ) {
-          this.player.playPcm16(frame.audio, this.pendingSpeech);
-          this.pendingSpeech = undefined;
+          this.player.playPcm16(frame.audio);
           useInterviewStore.setState({ status: "speaking" });
         }
         return;
@@ -135,20 +127,15 @@ export class Session {
             )
           : [...s.messages, event.message],
         ...(event.message.role === "assistant" ? { streaming: "" } : {}),
-        // Generated/saved assistant text belongs in the transcript. Only actual
-        // audio playback may reveal it below the orb.
-        ...(event.message.role === "user"
-          ? {
-              caption: {
-                role: "user" as const,
-                text: event.message.content,
-                turn:
-                  s.caption?.role === "user"
-                    ? s.caption.turn
-                    : event.message.id,
-              },
-            }
-          : {}),
+        // Saving a turn must not erase the words while its audio is still playing.
+        caption: {
+          role: event.message.role,
+          text: event.message.content,
+          turn:
+            s.caption?.role === event.message.role
+              ? s.caption.turn
+              : event.message.id,
+        },
         ...(event.message.role === "user" && s.errorScope === "llm"
           ? { error: "", errorScope: null }
           : {}),
@@ -161,23 +148,31 @@ export class Session {
       }
       useInterviewStore.setState((s) => ({
         streaming: s.streaming + event.text,
+        caption: {
+          role: "assistant",
+          text: s.streaming + event.text,
+          turn: String(event.responseId),
+        },
       }));
     }
     if (event.type === "audio-start") {
-      if (this.cancelled.has(event.responseId)) return;
-      this.player.stop();
-      this.pendingSpeech = undefined;
       this.responseId = event.responseId;
-      useInterviewStore.setState({ caption: null });
+      const saved = useInterviewStore.getState();
+      const last = saved.messages
+        .filter((message) => message.role === "assistant")
+        .at(-1);
+      if (this.replayRequested && last)
+        useInterviewStore.setState({
+          caption: {
+            role: "assistant",
+            text: last.content,
+            turn: String(event.responseId),
+          },
+        });
+      this.replayRequested = false;
       if (useInterviewStore.getState().errorScope === "speech")
         useInterviewStore.setState({ error: "", errorScope: null });
     }
-    if (
-      event.type === "speech-segment" &&
-      event.responseId === this.responseId &&
-      !this.cancelled.has(event.responseId)
-    )
-      this.pendingSpeech = { text: event.text, duration: event.duration };
     if (event.type === "audio-end")
       void this.player.drain().then(() => {
         if (
@@ -196,12 +191,8 @@ export class Session {
       });
     if (event.type === "interrupted") {
       this.cancelled.add(event.responseId);
-      this.pendingSpeech = undefined;
       this.player.stop();
-      useInterviewStore.setState((s) => ({
-        streaming: "",
-        caption: s.caption?.role === "assistant" ? null : s.caption,
-      }));
+      useInterviewStore.setState({ streaming: "" });
     }
     if (event.type === "error") {
       useInterviewStore.setState({
@@ -352,6 +343,7 @@ export class Session {
   async speakLatest() {
     try {
       await this.player.unlock();
+      this.replayRequested = true;
       this.send({ type: "speak" });
     } catch {
       useInterviewStore.setState({
@@ -362,11 +354,8 @@ export class Session {
   }
   interrupt() {
     this.cancelled.add(this.responseId);
-    this.pendingSpeech = undefined;
     this.player.stop();
-    useInterviewStore.setState((s) => ({
-      caption: s.caption?.role === "assistant" ? null : s.caption,
-    }));
+    useInterviewStore.setState({ status: "listening" });
     try {
       this.send({ type: "interrupt" });
     } catch {
