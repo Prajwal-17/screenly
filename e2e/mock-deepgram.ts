@@ -1,3 +1,4 @@
+import { voicePort } from "./environment";
 type State = {
   listen: boolean;
   answered: boolean;
@@ -27,7 +28,7 @@ function emitTurn(socket: Bun.ServerWebSocket<State>, transcript: string) {
   );
 }
 const server = Bun.serve<State>({
-  port: 8791,
+  port: voicePort,
   async fetch(request, server) {
     const url = new URL(request.url);
     if (url.pathname === "/turn" && request.method === "POST") {

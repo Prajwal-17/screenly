@@ -1,6 +1,6 @@
 # Screenly frontend
 
-Next.js App Router, Tailwind CSS 4, shadcn/ui (Radix), React Hook Form, TanStack Query, and Zustand.
+React in Next.js App Router, Tailwind CSS 4, customized shadcn/ui (Radix), Motion, React Hook Form, TanStack Query, and Zustand.
 
 Copy `.env.example` to `.env.local`, start the backend, and run:
 
@@ -14,6 +14,6 @@ Interviews use microphone answers and spoken agent replies, with read-only trans
 
 See [the root README](../../README.md) for complete setup, screenshots, and checks.
 
-The UI uses the approved Jade light palette, a responsive workspace, and committed local Geist Sans/Mono fonts. No font downloads run during development, type checks, or builds. See the root README and DESIGN.md for provenance, tokens, and component states.
+The UI uses the approved warm-paper / fern light palette, a fixed desktop sidebar and mobile drawer, and committed local Geist Sans/Mono fonts. No font downloads run during development, type checks, or builds. See the root README and DESIGN.md for provenance, tokens, and component states.
 
-All presentation uses the shadcn primitives in `components/ui` and Tailwind utilities. Theme tokens and base typography live in `app/globals.css`; route-level CSS classes and inline static styling are not used. See `DESIGN.md` at the repository root for the component inventory and composition rules.
+All presentation uses the shadcn primitives in `components/ui` and Tailwind utilities. Theme tokens and base typography live in `app/globals.css`; the voice orb’s state-driven animation is scoped to `components/voice-visual.module.css`. See `DESIGN.md` at the repository root for the component inventory and composition rules.

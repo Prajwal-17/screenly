@@ -6,8 +6,8 @@ A technical interview practice app built for learning and portfolio use. Choose 
 
 ## What works
 
-- Responsive light workspace with neutral surfaces, Jade actions, local Geist typography, and keyboard access.
-- Animated voice orb tied to real session states and microphone input, with pause/reduced-motion support and readable agent/candidate conversation bubbles.
+- Warm-paper light workspace with fern actions, a fixed desktop sidebar, mobile navigation drawer, local Geist typography, and keyboard access.
+- Centered voice stage tied to real session states and microphone input, concise live captions, optional transcript drawer, and a mute/interrupt/finish dock.
 - Google OAuth (optional) and email/password authentication.
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
@@ -67,7 +67,7 @@ When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT
 
 Geist Sans and Geist Mono variable fonts are committed in `apps/web/app/fonts` under the SIL Open Font License 1.1 and served with `next/font/local`. Development, type checks, and builds need no font downloads. [License and provenance](apps/web/app/fonts/SOURCE.txt) are retained beside the font files. Geist Sans covers headings, reading text, and controls; Geist Mono is reserved for code.
 
-The approved **Jade** light palette uses quiet neutral surfaces and green actions, with separate semantic status colors. shadcn/ui primitives and Tailwind CSS 4 utilities apply the shared tokens across the existing routes. The same interview flow reflows from 360px through desktop widths. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
+The approved **warm-paper / fern** light palette uses charcoal text, quiet white surfaces, and semantic status colors. Customized shadcn/ui primitives and Tailwind CSS 4 utilities apply shared tokens across every route. A fixed 240px sidebar becomes a keyboard-accessible drawer below 768px. The voice-first interview centers the speaker, keeps captions brief, and opens its read-only transcript on demand. The same flow reflows from 360px through desktop widths. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
 
 ## Commands
 
@@ -91,6 +91,15 @@ bun run test:e2e
 ```
 
 The suite starts its own frontend, backend, LLM fixture, and voice fixture. It uses `.e2e.sqlite`, test-only credentials, and simulated microphone input. Ports 3000, 8787, 8790, and 8791 must be free. To use an installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+For parallel worktrees, set `SCREENLY_E2E_PORT_OFFSET` to shift all four ports and isolate the test database. Compile the frontend with the matching API origin first, for example:
+
+```sh
+NEXT_PUBLIC_API_URL=http://localhost:8887 bun run build
+SCREENLY_E2E_PORT_OFFSET=100 bun run test:e2e
+```
+
+Use `CAPTURE_SCREENSHOTS=1` to refresh the route and mobile screenshots. These captures use the local provider fixtures, not live provider responses.
 
 ## Architecture
 

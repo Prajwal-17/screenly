@@ -1,42 +1,24 @@
 import { expect, test } from "@playwright/test";
 
-function contrast(foreground: string, background: string) {
-  const luminance = (color: string) => {
-    const [r, g, b] = color
-      .match(/[\d.]+/g)!
-      .slice(0, 3)
-      .map(Number)
-      .map((v) => {
-        const channel = v / 255;
-        return channel <= 0.04045
-          ? channel / 12.92
-          : ((channel + 0.055) / 1.055) ** 2.4;
-      });
-    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
-  };
-  const values = [luminance(foreground), luminance(background)].sort(
-    (a, b) => b - a,
-  );
-  return (values[0]! + 0.05) / (values[1]! + 0.05);
-}
+import { contrast } from "./contrast";
 
-test("Jade actions, mobile reading, keyboard focus, loading recovery, and reduced motion", async ({
+test("Fern actions, mobile reading, keyboard focus, loading recovery, and reduced motion", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
   await expect(page.locator("body")).toHaveCSS("font-size", "16px");
-  await expect(page.locator("h1")).toHaveCSS("font-weight", "500");
+  await expect(page.locator("h1")).toHaveCSS("font-weight", "600");
   const primary = page.getByRole("link", { name: "Start practicing" });
-  await expect(primary).toHaveCSS("background-color", "rgb(8, 127, 104)");
+  await expect(primary).toHaveCSS("background-color", "rgb(31, 107, 69)");
   const colors = await primary.evaluate((node) => {
     const style = getComputedStyle(node);
     return { text: style.color, background: style.backgroundColor };
   });
   expect(contrast(colors.text, colors.background)).toBeGreaterThanOrEqual(4.5);
   await primary.hover();
-  await expect(primary).toHaveCSS("background-color", "rgb(9, 107, 89)");
+  await expect(primary).toHaveCSS("background-color", "rgb(42, 127, 82)");
   for (const width of [360, 640, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
@@ -62,8 +44,8 @@ test("Jade actions, mobile reading, keyboard focus, loading recovery, and reduce
       background: style.backgroundColor,
     };
   });
-  expect(focus.shadow).toContain("rgb(8, 127, 104)");
-  expect(focus.color).toBe("#087f68");
+  expect(focus.shadow).toContain("rgb(31, 107, 69)");
+  expect(focus.color).toBe("#1f6b45");
   expect(contrast(focus.boundary, focus.background)).toBeGreaterThanOrEqual(3);
   const submit = page.getByRole("button", { name: "Sign in", exact: true });
   expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(44);

@@ -1,7 +1,8 @@
+import { llmPort } from "./environment";
 // Local provider fixture for browser tests. The application has no mock-provider mode.
 const failedReports = new Set<string>();
 const server = Bun.serve({
-  port: 8790,
+  port: llmPort,
   async fetch(request) {
     if (new URL(request.url).pathname === "/") return new Response("ok");
     if (new URL(request.url).pathname !== "/v1/chat/completions")

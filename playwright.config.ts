@@ -1,11 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
+import {
+  webPort,
+  backendPort,
+  webURL,
+  backendURL,
+  llmURL,
+  voiceURL,
+  portOffset,
+} from "./e2e/environment";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "*.spec.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 45000,
-  use: { baseURL: "http://localhost:3000", trace: "retain-on-failure" },
+  use: { baseURL: webURL, trace: "retain-on-failure" },
   projects: [
     {
       name: "chromium",
@@ -24,37 +33,37 @@ export default defineConfig({
   webServer: [
     {
       command: "bun e2e/mock-deepgram.ts",
-      url: "http://localhost:8791",
+      url: voiceURL,
       reuseExistingServer: false,
     },
     {
       command: "bun e2e/mock-llm.ts",
-      url: "http://localhost:8790",
+      url: llmURL,
       reuseExistingServer: false,
     },
     {
       command: "bun run --cwd apps/backend start",
-      url: "http://localhost:8787",
+      url: backendURL,
       reuseExistingServer: false,
       env: {
-        PORT: "8787",
-        DATABASE_PATH: "../../.e2e.sqlite",
+        PORT: String(backendPort),
+        DATABASE_PATH: `../../.e2e${portOffset ? `-${portOffset}` : ""}.sqlite`,
         BETTER_AUTH_SECRET: "e2e-only-secret-with-at-least-32-characters",
-        FRONTEND_URL: "http://localhost:3000",
-        BETTER_AUTH_URL: "http://localhost:8787",
+        FRONTEND_URL: webURL,
+        BETTER_AUTH_URL: backendURL,
         LLM_API_KEY: "test-provider-key",
-        LLM_BASE_URL: "http://localhost:8790/v1",
+        LLM_BASE_URL: `${llmURL}/v1`,
         LLM_MODEL: "test-interviewer",
         DEEPGRAM_API_KEY: "test-voice-key",
-        DEEPGRAM_WS_URL: "ws://localhost:8791",
+        DEEPGRAM_WS_URL: voiceURL.replace("http:", "ws:"),
         GOOGLE_CLIENT_ID: "",
         GOOGLE_CLIENT_SECRET: "",
       },
     },
     {
       command: "bun run --cwd apps/web start",
-      env: { PORT: "3000" },
-      url: "http://localhost:3000",
+      env: { PORT: String(webPort) },
+      url: webURL,
       reuseExistingServer: false,
     },
   ],
