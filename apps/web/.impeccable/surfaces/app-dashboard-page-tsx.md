@@ -34,3 +34,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## User refinement override
 
 The route h1 now appears only in the workspace top bar, without the voice-first tagline. Logo and current-navigation dots are removed. Preflight uses open audio-check rows rather than a card. Transcript is an inline disclosure (side-by-side page content from 1024px, stacked on smaller screens), never a right overlay drawer. Current spoken words use the Beautiful UI Streaming Text adaptation and remain visible through audio playback. These explicit user corrections supersede the earlier drawer/large page-title composition in the direction contract.
+
+## Sidebar refinement override
+
+The user supplied Vercel sidebar references and explicitly requested a denser premium navigation system, manual collapse, an automatic compact rail during interviews, Motion, and additional preview destinations. The current shell is 256px expanded / 72px collapsed with grouped rows, workspace/account menus, Ctrl/Cmd K search, rail tooltips, pinned utilities, persisted manual preference, and temporary interview focus. Mobile uses a compact full-navigation drawer. This supersedes the original three-route 240px sidebar contract while preserving the approved light palette and existing interview behavior.

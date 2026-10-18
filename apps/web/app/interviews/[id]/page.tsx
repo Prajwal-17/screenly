@@ -141,6 +141,7 @@ export default function InterviewPage() {
   return (
     <Workspace
       voice
+      interviewActive={interview?.status === "active"}
       title={interview ? `${interview.role} interview` : "Interview"}
       actions={
         <Button

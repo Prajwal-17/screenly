@@ -5,19 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   AudioLines,
-  LayoutDashboard,
-  History,
-  Plus,
-  LogOut,
   Loader2,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet } from "@/components/ui/sheet";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
+import { motion, useReducedMotion } from "motion/react";
+import type { CSSProperties } from "react";
+import { WorkspaceSidebar } from "@/components/workspace-sidebar";
+import { WorkspaceSearch } from "@/components/workspace-search";
+import { workspaceDestinations } from "@/lib/workspace-navigation";
 
 export function Brand() {
   return (
@@ -34,132 +36,46 @@ export function Brand() {
   );
 }
 
-const navigation = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/interviews/new", label: "New interview", icon: Plus },
-  { href: "/history", label: "History", icon: History },
-];
-
-function Sidebar({
-  name,
-  email,
-  onNavigate,
-}: {
-  name: string;
-  email: string;
-  onNavigate?: () => void;
-}) {
-  const path = usePathname();
-  const router = useRouter();
-  const [signingOut, setSigningOut] = useState(false);
-  const [error, setError] = useState("");
-  return (
-    <>
-      <div className="flex h-16 shrink-0 items-center border-b px-5">
-        <Brand />
-      </div>
-      <div className="px-3 pt-6">
-        <nav className="space-y-1" aria-label="Main navigation">
-          {navigation.map(({ href, label, icon: Icon }) => {
-            const active = path === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onNavigate}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 text-[13px] font-medium transition-colors hover:bg-secondary",
-                  active
-                    ? "border-border bg-card text-foreground shadow-[0_1px_2px_rgb(20_19_18/0.03)]"
-                    : "text-muted-foreground",
-                )}
-              >
-                <Icon
-                  className={cn("size-[17px]", active && "text-primary")}
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-      <div className="mt-auto p-3">
-        {error && (
-          <p role="alert" className="mb-3 px-2 text-xs text-destructive">
-            {error}
-          </p>
-        )}
-        <div className="flex items-center gap-2.5 border-t px-2 pt-4 pb-1">
-          <Avatar className="size-9 shrink-0 rounded-lg">
-            <AvatarFallback className="rounded-lg border bg-card text-xs font-medium">
-              {name.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium" title={name}>
-              {name}
-            </p>
-            <p
-              className="mt-0.5 truncate text-[11px] text-muted-foreground"
-              title={email}
-            >
-              {email}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Sign out"
-            loading={signingOut}
-            onClick={async () => {
-              setSigningOut(true);
-              setError("");
-              try {
-                const result = await authClient.signOut();
-                if (result.error) throw new Error();
-                onNavigate?.();
-                router.push("/");
-              } catch {
-                setError("Could not sign out. Try again.");
-              } finally {
-                setSigningOut(false);
-              }
-            }}
-          >
-            <LogOut className="size-4" />
-          </Button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 export function Workspace({
   children,
   title,
   actions,
   voice = false,
+  interviewActive = false,
 }: {
   children: React.ReactNode;
   title?: string;
   actions?: React.ReactNode;
   voice?: boolean;
+  interviewActive?: boolean;
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
   const path = usePathname();
-  const { navigationOpen, setNavigationOpen } = useUIStore();
+  const {
+    navigationOpen,
+    setNavigationOpen,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    signingOut,
+  } = useUIStore();
+  const [focusExpanded, setFocusExpanded] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const focusMode = voice && interviewActive;
+  const collapsed = focusMode ? !focusExpanded : sidebarCollapsed;
+  const toggleSidebar = () => {
+    if (focusMode) setFocusExpanded((value) => !value);
+    else setSidebarCollapsed(!sidebarCollapsed);
+  };
   useEffect(() => {
-    if (!isPending && !session) router.replace("/auth/sign-in");
-  }, [isPending, session, router]);
+    if (!isPending && !session && !signingOut) router.replace("/auth/sign-in");
+  }, [isPending, session, signingOut, router]);
   useEffect(() => {
     if (session) document.getElementById("workspace-content")?.focus();
   }, [path, session]);
   const context =
     title ??
+    workspaceDestinations.find((item) => item.href === path)?.label ??
     (path === "/dashboard"
       ? "Overview"
       : path === "/history"
@@ -180,7 +96,18 @@ export function Workspace({
       </div>
     );
   return (
-    <div className="min-h-dvh">
+    <motion.div
+      className="min-h-dvh"
+      initial={false}
+      style={
+        { "--sidebar-width": collapsed ? "72px" : "256px" } as CSSProperties
+      }
+      animate={{ "--sidebar-width": collapsed ? "72px" : "256px" }}
+      transition={{
+        duration: reducedMotion ? 0 : 0.24,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+    >
       <a
         href="#workspace-content"
         className="fixed top-3 left-3 z-[60] -translate-y-24 rounded-md border bg-card px-4 py-2 text-sm focus:translate-y-0"
@@ -188,15 +115,38 @@ export function Workspace({
         Skip to content
       </a>
       <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-sidebar md:flex"
+        id="workspace-sidebar"
+        className="fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col overflow-hidden border-r bg-sidebar md:flex"
         aria-label="Screenly workspace"
+        data-state={collapsed ? "collapsed" : "expanded"}
+        data-focus-mode={focusMode}
       >
-        <Sidebar name={session.user.name} email={session.user.email} />
+        <WorkspaceSidebar
+          name={session.user.name}
+          email={session.user.email}
+          collapsed={collapsed}
+        />
       </aside>
-      <div className="min-w-0 md:ml-60">
+      <div className="min-w-0 md:ml-[var(--sidebar-width)]">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-xs">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="-ml-2 mr-1 hidden md:inline-flex"
+              onClick={toggleSidebar}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!collapsed}
+              aria-controls="workspace-sidebar"
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-[18px]" strokeWidth={1.7} />
+              ) : (
+                <PanelLeftClose className="size-[18px]" strokeWidth={1.7} />
+              )}
+            </Button>
             <Sheet
+              showHeader={false}
               open={navigationOpen}
               onOpenChange={setNavigationOpen}
               side="left"
@@ -214,7 +164,7 @@ export function Workspace({
                 </Button>
               }
             >
-              <Sidebar
+              <WorkspaceSidebar
                 name={session.user.name}
                 email={session.user.email}
                 onNavigate={() => setNavigationOpen(false)}
@@ -250,6 +200,7 @@ export function Workspace({
           </div>
         </main>
       </div>
-    </div>
+      <WorkspaceSearch />
+    </motion.div>
   );
 }

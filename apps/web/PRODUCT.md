@@ -20,7 +20,7 @@ Preserve email/password and optional Google authentication, real API data, owner
 
 ## Brand commitments
 
-Screenly; a temporary Lucide AudioLines icon. The user approved a full frontend replacement based on the supplied Ferndesk study and voice-first handoff. Light theme, warm paper, charcoal, fern actions, a fixed structured desktop sidebar, and mobile navigation drawer. Every screen follows one consistent system.
+Screenly; a temporary Lucide AudioLines icon. The user approved a full frontend replacement based on the supplied Ferndesk study and voice-first handoff. Light theme, warm paper, charcoal, fern actions, a fixed structured desktop sidebar with a collapsible icon rail, and mobile navigation drawer. Every screen follows one consistent system.
 
 ## Evidence on hand
 
@@ -29,3 +29,7 @@ The implementation in `lib`, `store`, shared schemas, backend, `docs/implementat
 ## Accessibility
 
 Visible keyboard focus, labeled controls, Radix focus management, reduced motion, 44px touch targets, readable contrast, and reflow at 360px and wider. Meaningful voice state is announced; partial spoken words are not repeatedly announced.
+
+## Navigation previews
+
+The user authorized additional preview pages to evaluate the navigation. Question library and Practice plans use clearly labeled sample content; Progress and Saved answers show honest preview states. They do not fabricate personal session data or results. Settings and Help expose real local preferences and documented behavior.

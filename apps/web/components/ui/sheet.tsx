@@ -14,6 +14,7 @@ export function Sheet({
   trigger,
   side = "right",
   className,
+  showHeader = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -23,6 +24,7 @@ export function Sheet({
   trigger?: React.ReactNode;
   side?: "left" | "right";
   className?: string;
+  showHeader?: boolean;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -38,7 +40,13 @@ export function Sheet({
             className,
           )}
         >
-          <div className="flex min-h-20 shrink-0 items-center justify-between gap-4 border-b px-5">
+          <div
+            className={
+              showHeader
+                ? "flex min-h-20 shrink-0 items-center justify-between gap-4 border-b px-5"
+                : "sr-only"
+            }
+          >
             <div>
               <Dialog.Title className="text-base font-semibold">
                 {title}
@@ -47,15 +55,17 @@ export function Sheet({
                 {description}
               </Dialog.Description>
             </div>
-            <Dialog.Close asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Close ${title.toLowerCase()}`}
-              >
-                <X />
-              </Button>
-            </Dialog.Close>
+            {showHeader && (
+              <Dialog.Close asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Close ${title.toLowerCase()}`}
+                >
+                  <X />
+                </Button>
+              </Dialog.Close>
+            )}
           </div>
           {children}
         </Dialog.Content>

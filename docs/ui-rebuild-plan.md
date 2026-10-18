@@ -68,3 +68,16 @@ Refinement validation: all five browser journeys pass, including non-silent PCM,
 Verification includes byte-for-byte PCM forwarding before generation finishes, one synthesis flush per response, full-text visibility, speaking highlight state, replay, interruption, and disconnect recovery. No visual caption effect changes audio playback.
 
 Validation: 21 unit/integration tests and six browser journeys pass, together with types, zero-warning lint, formatting, and the production build. A real Deepgram passthrough check forwarded all 142 frames / 541,440 bytes (11.28 seconds) immediately and byte-for-byte unchanged, with one final flush. First audio arrived after 1.365 seconds.
+
+## Reference-led sidebar refinement
+
+- [x] Match the supplied sidebar hierarchy: workspace switcher, search, grouped navigation, fixed utilities and account footer.
+- [x] Add a 256px panel / 72px rail with a synchronized 240ms Motion fold and anchored icons.
+- [x] Persist manual collapse and temporarily collapse the panel during active interviews, restoring the normal preference afterward.
+- [x] Add tooltips, Ctrl/Cmd K search, keyboard navigation, account/notification menus, and a compact mobile drawer.
+- [x] Add clearly labeled library, practice-plan, progress, and saved-answer previews, plus functional Settings and Help pages.
+- [x] Verify search focus, menu behavior, persistence, live interview focus, mobile navigation and sign-out recovery.
+
+Validation: types, zero-warning lint, formatting, 21 unit/integration tests, the production build, and all seven browser journeys pass. Browser coverage includes persisted collapse, search focus and keyboard navigation, menu focus return, rail tooltips, reduced motion, automatic interview collapse, manual expansion during a session, preference restoration after exit, mobile navigation, and sign-out.
+
+Independent review: `disposition: fix` for a Practice plans heading eyebrow; resolved by moving the role into metadata below the heading. Final scored verdict: `disposition: ship`. The reviewer found no material sidebar issue. Five current sidebar captures and the bounded desktop/mobile visual confirmation are saved in `docs/screenshots/`.

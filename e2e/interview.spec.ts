@@ -907,13 +907,14 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   ).toBe(true);
   if (
     !(await page
-      .getByRole("button", { name: "Sign out", exact: true })
+      .getByRole("button", { name: "Account menu", exact: true })
       .isVisible())
   )
     await page
       .getByRole("button", { name: "Open navigation", exact: true })
       .click();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");
   await page.goto("/history");
   await expect(page).toHaveURL(/\/auth\/sign-in$/);

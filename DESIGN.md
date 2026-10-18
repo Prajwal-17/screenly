@@ -255,14 +255,14 @@ components:
     typography: "{typography.navigation}"
     rounded: "{rounded.md}"
     padding: 0 12px
-    height: 44px
+    height: 40px
   navigation-item-current:
     backgroundColor: "{colors.card}"
     textColor: "{colors.foreground}"
     typography: "{typography.navigation}"
     rounded: "{rounded.md}"
     padding: 0 12px
-    height: 44px
+    height: 40px
   choice:
     backgroundColor: "{colors.card}"
     textColor: "{colors.foreground}"
@@ -382,9 +382,9 @@ Both variable fonts are loaded locally through `next/font/local` from `apps/web/
 
 ## Layout
 
-At the medium breakpoint (768px), the workspace has a fixed, full-height sidebar (240px wide) and a matching main-content offset. The brand row and sticky workspace bar are both (64px high). Navigation rows are at least (44px high), and the account section stays anchored at the bottom of the sidebar. The content bar carries the single route-title h1 and contextual actions. Supporting descriptions and actions may appear in the content without another route heading. Do not add the removed voice-first tagline or decorative logo/navigation dots.
+At the medium breakpoint (768px), the fixed sidebar is (256px) wide and collapses to a (72px) icon rail. The main content follows the same animated width variable over (240ms), using `cubic-bezier(0.22,1,0.36,1)`; reduced motion switches instantly. Icons stay anchored to the leading edge during the fold. Manual collapse is stored on this device. A live interview temporarily defaults to the rail, allows manual expansion during the session, and restores the usual preference when leaving. The brand row and top bar remain (64px) high. The top-bar panel control stays available in both desktop states.
 
-Below (768px), the sidebar gives way to a labeled menu button and a left Radix sheet of `min(280px, 85vw)`. Selecting a route closes the drawer; Radix manages focus, Escape, and return to the trigger. The layout and long content reflow at (360px) and wider. At the small breakpoint (640px), compact button sizes and some secondary labels become visible.
+Navigation rows are (40px) on fine-pointer desktop and at least (44px) on small screens or coarse pointers. The top workspace menu and search are fixed; the grouped navigation scrolls independently; utilities and the account footer stay pinned. Below (768px), a left Radix sheet uses a compact workspace header with its own close button, hides the desktop practice callout, and retains the same full navigation. Selecting a route closes the drawer. Escape and focus restoration work for the drawer, menus, and search. The route h1 remains only in the top bar. Do not add the removed tagline or decorative logo/active-navigation dots.
 
 Regular workspace content is centered within (1160px), with horizontal padding progressing through (16px), (24px), (32px), and (40px) as space grows. Voice content uses a wider (1280px) ceiling and (16px / 32px) padding. Most panel padding is (20px / 24px), repeated item gaps are (8px–16px), and section separation is commonly (28px–32px). These are compositions built from the extracted spacing steps, rather than a universal equal-gap grid.
 
@@ -438,11 +438,13 @@ Text fields are white, (44px) high, with medium corners, a stronger input stroke
 
 ### Navigation
 
-The sidebar uses a structured brand row, three aligned icon-and-label routes, and a bottom account area. The current route is a white bordered row with charcoal text, fern icon, and a subtle shadow. Other routes use muted ink and a neutral hover fill. Active state is also expressed with `aria-current`. The mobile version is the same navigation inside a left sheet. A visible-on-focus skip link and route-change focus on the content region support keyboard navigation.
+The sidebar follows the supplied Vercel reference's firm hierarchy within Screenly's warm-paper palette: workspace switcher, bordered search, Workspace / Practice / Insights groups, fine dividers, a compact desktop practice prompt, utility links, and a pinned account menu with notifications. Current routes use a white bordered row, charcoal text, fern icon, and a restrained Motion selection transition. The compact rail retains labeled links and keyboard/hover tooltips.
+
+**Search workspace** opens a Radix dialog from the search control or Ctrl/Cmd K. Filtered destinations support arrow keys, Enter, Escape, input focus, and focus restoration. The account menu contains the real user name/email, settings links, and sign-out. The workspace menu identifies the current personal workspace; team creation is explicitly in preview. The preview destinations are Question library, Practice plans, Progress, and Saved answers. They contain sample prompts or honest preview states, without fabricated personal statistics. Settings includes the real local sidebar preference, and Help documents actual interactions.
 
 ### Sheets and confirmations
 
-Sheets are square-edged, full-height white surfaces, with a bordered title row, a labeled (44px) close control, and a charcoal scrim. Navigation opens on the left at its narrower width. The live transcript is an inline disclosure, not a sheet or modal. Sheet motion lasts (200ms). Radix provides dialog semantics and focus management. Confirmation dialogs fit within viewport margins, scroll when necessary, and present a clear cancel/confirm pair; deletion uses the destructive action variant.
+Sheets are square-edged, full-height surfaces with a labeled (44px) close control and a charcoal scrim. The mobile navigation uses its workspace header instead of a second title block. Navigation opens on the left at its narrower width. The live transcript is an inline disclosure, not a sheet or modal. Sheet motion lasts (200ms). Radix provides dialog semantics and focus management. Confirmation dialogs fit within viewport margins, scroll when necessary, and present a clear cancel/confirm pair; deletion uses the destructive action variant.
 
 ### Voice stage, captions, and control dock
 

@@ -7,3 +7,5 @@ Desktop routes cover landing, authentication, overview, setup, preflight, live i
 Refinement captures include `preflight-mobile.png` and `interview-transcript-1440.png` / `interview-transcript-360.png`, showing the open preflight surface and optional inline read-back at desktop/mobile sizes.
 
 `caption-highlight-desktop.png` and `caption-highlight-mobile.png` show the full generated question with a visual speaking highlight. These captures use the same controlled providers and simulated input described above. The highlight is a presentation effect and never controls or segments audio.
+
+Sidebar captures: `sidebar-expanded.png`, `sidebar-collapsed.png`, `sidebar-search.png`, `sidebar-mobile.png`, and `sidebar-interview-focus.png`. These show the supplied-reference navigation refinement, remembered icon rail, command search, compact mobile drawer, and temporary interview focus using the controlled browser-test account.

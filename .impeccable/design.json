@@ -756,7 +756,7 @@
       {
         "name": "voice-breathe",
         "value": "5s ease-in-out infinite",
-        "purpose": "Subtle 0.98\u20131.02 orb breathing during active modes."
+        "purpose": "Subtle 0.98–1.02 orb breathing during active modes."
       },
       {
         "name": "voice-surface-drift",
@@ -863,9 +863,9 @@
       "name": "Workspace Navigation",
       "kind": "nav",
       "refersTo": "navigation-item-current",
-      "description": "Aligned 44px navigation rows; the current route uses a white surface and fern icon, with no decorative dot.",
+      "description": "Grouped 40px desktop navigation in a 256px panel, with a 72px icon rail and 44px mobile/coarse-pointer targets. The current route uses a white surface and fern icon; no decorative dot.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Main navigation\"><a class=\"ds-nav-item\" href=\"/dashboard\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z\"/></svg><span>Overview</span></a><a class=\"ds-nav-item\" href=\"/interviews/new\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg><span>New interview</span></a><a class=\"ds-nav-item\" href=\"/history\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 8v4l3 2M3 12a9 9 0 1 0 9-9 9 9 0 0 0-9 9\"/></svg><span>History</span></a></nav>",
-      "css": ".ds-nav{display:grid;gap:4px;width:240px;max-width:100%;padding:12px;background:var(--sidebar, #f4f4f3);font-family:var(--font-geist-sans, Arial, sans-serif);}.ds-nav-item{display:flex;min-height:44px;align-items:center;gap:12px;border:1px solid transparent;border-radius:var(--radius-md,.5rem);padding:0 12px;color:var(--muted-foreground, #6b6862);font-size:13px;font-weight:500;text-decoration:none;transition:background-color 150ms;}.ds-nav-item svg{width:17px;height:17px;flex-shrink:0;}.ds-nav-item:hover,.ds-nav-item:active{background:var(--secondary, #eceae5);}.ds-nav-item[aria-current=page]{border-color:var(--border, #e3e0da);background:var(--card, #fff);color:var(--foreground, #1c1b19);box-shadow:0 1px 2px rgb(20 19 18 / .03);}.ds-nav-item[aria-current=page] svg{color:var(--primary, #1f6b45);}.ds-nav-item:focus-visible{outline:2px solid var(--ring, #1f6b45);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}"
+      "css": ".ds-nav{display:grid;gap:2px;width:256px;max-width:100%;padding:12px;background:var(--sidebar, #f4f4f3);font-family:var(--font-geist-sans, Arial, sans-serif);}.ds-nav-item{display:flex;min-height:40px;align-items:center;gap:12px;border:1px solid transparent;border-radius:var(--radius-md,.5rem);padding:0 12px;color:var(--muted-foreground, #6b6862);font-size:13px;font-weight:500;text-decoration:none;transition:background-color 150ms;}.ds-nav-item svg{width:17px;height:17px;flex-shrink:0;}.ds-nav-item:hover,.ds-nav-item:active{background:var(--secondary, #eceae5);}.ds-nav-item[aria-current=page]{border-color:var(--border, #e3e0da);background:var(--card, #fff);color:var(--foreground, #1c1b19);box-shadow:0 1px 2px rgb(20 19 18 / .03);}.ds-nav-item[aria-current=page] svg{color:var(--primary, #1f6b45);}.ds-nav-item:focus-visible{outline:2px solid var(--ring, #1f6b45);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}@media(max-width:767px),(pointer:coarse){.ds-nav-item{min-height:44px;}}"
     },
     {
       "name": "Success Badge",
