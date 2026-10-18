@@ -95,7 +95,7 @@ test("speech waits for final audio metadata instead of closing at Flushed", asyn
     await speech.connect();
     speech.sendText("A question worth hearing.");
     await speech.flush();
-    expect(configuredSpeed).toBe(1.2);
+    expect(configuredSpeed).toBe(env.DEEPGRAM_TTS_SPEED);
     expect(frames).toEqual([[1, 0, 2, 0]]);
   } finally {
     speech.close();
