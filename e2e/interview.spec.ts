@@ -40,6 +40,16 @@ async function trackSpeakerPlayback(page: Page) {
       formaPcmStarts: number;
       formaPcmEnergy: number;
     };
+    const NativeSocket = window.WebSocket;
+    window.WebSocket = class extends NativeSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols);
+        if (String(url).includes("/interviews/"))
+          (
+            window as Window & { formaInterviewSocket?: WebSocket }
+          ).formaInterviewSocket = this;
+      }
+    };
     target.formaPcmStarts = 0;
     target.formaPcmEnergy = 0;
     const create = AudioContext.prototype.createBufferSource;
@@ -54,6 +64,18 @@ async function trackSpeakerPlayback(page: Page) {
       };
       return source;
     };
+  });
+}
+// Replay remains a protocol recovery path; it is no longer a visible UI action.
+async function replayQuestion(page: Page) {
+  await page.evaluate(() => {
+    const target = window as Window & {
+      formaInterviewSocket?: WebSocket;
+      captionSocket?: WebSocket;
+    };
+    (target.formaInterviewSocket ?? target.captionSocket)!.send(
+      JSON.stringify({ type: "speak" }),
+    );
   });
 }
 async function playbackCount(page: Page) {
@@ -173,9 +195,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
     page.locator('[data-slot="live-caption"] [data-slot="streaming-text"]'),
   ).toContainText("You mentioned testing behavior");
   const firstPlayback = await playbackCount(page);
-  await page
-    .getByRole("button", { name: "Hear question", exact: true })
-    .click();
+  await replayQuestion(page);
   await expect.poll(() => playbackCount(page)).toBeGreaterThan(firstPlayback);
   await expect(
     page.getByText("Listening to you", { exact: true }),
@@ -394,9 +414,7 @@ test("full question stays readable while speaking highlights follow playback sta
     await expect(
       page.getByText("Listening to you", { exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Hear question", exact: true })
-      .click();
+    await replayQuestion(page);
     await expect(caption).toHaveText(fullQuestion);
     await expect(caption).toHaveAttribute("data-speaking", "true");
     await page.getByRole("button", { name: "Interrupt", exact: true }).click();
@@ -405,9 +423,7 @@ test("full question stays readable while speaking highlights follow playback sta
     const ended = await page.evaluate(
       () => (window as Window & { captionAudioEnds: number }).captionAudioEnds,
     );
-    await page
-      .getByRole("button", { name: "Hear question", exact: true })
-      .click();
+    await replayQuestion(page);
     await expect
       .poll(() =>
         page.evaluate(
@@ -493,20 +509,6 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
       (node) => node.getAnimations({ subtree: true }).length,
     ),
   ).toBeGreaterThan(0);
-  await page
-    .getByRole("button", { name: "Pause animation", exact: true })
-    .click();
-  expect(
-    await visual.evaluate(
-      (node) => node.getAnimations({ subtree: true }).length,
-    ),
-  ).toBe(0);
-  await expect(
-    page.getByText("Listening to you", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Resume animation", exact: true })
-    .click();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect
     .poll(() =>

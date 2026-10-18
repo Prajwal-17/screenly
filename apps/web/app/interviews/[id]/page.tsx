@@ -8,7 +8,6 @@ import {
   Square,
   RefreshCw,
   VolumeX,
-  Volume2,
   FileText,
   Clock3,
   AudioLines,
@@ -99,9 +98,6 @@ export default function InterviewPage() {
   const started = ["listening", "thinking", "speaking", "finishing"].includes(
     state.status,
   );
-  const lastQuestion =
-    state.streaming ||
-    state.messages.filter((m) => m.role === "assistant").at(-1)?.content;
   const finishTrigger = (label: string, saved = false) => (
     <ConfirmAction
       title="Finish interview?"
@@ -362,22 +358,6 @@ export default function InterviewPage() {
                         </p>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-1 text-xs"
-                      disabled={
-                        !lastQuestion ||
-                        !state.connected ||
-                        !capabilities.data?.voice ||
-                        state.status === "thinking" ||
-                        state.status === "finishing"
-                      }
-                      onClick={() => void controller.current?.speakLatest()}
-                    >
-                      <Volume2 className="size-3.5" />
-                      Hear question
-                    </Button>
                   </div>
                   <motion.div
                     initial={{ y: 10 }}
@@ -417,9 +397,6 @@ export default function InterviewPage() {
                     />
                     {finishTrigger("Finish interview")}
                   </motion.div>
-                  <p className="mt-3 mb-1 text-center text-[11px] text-muted-foreground">
-                    Your conversation is saved as you go.
-                  </p>
                 </div>
                 {transcriptOpen && (
                   <div

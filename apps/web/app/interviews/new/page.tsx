@@ -281,9 +281,6 @@ export default function Setup() {
               Continue to setup check
               <ArrowRight aria-hidden="true" />
             </Button>
-            <p className="text-center text-[11px] text-muted-foreground">
-              Your interview clock hasn’t started yet.
-            </p>
           </div>
         </aside>
       </form>

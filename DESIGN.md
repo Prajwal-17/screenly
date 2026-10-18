@@ -382,9 +382,9 @@ Both variable fonts are loaded locally through `next/font/local` from `apps/web/
 
 ## Layout
 
-At the medium breakpoint (768px), the workspace has a fixed, full-height sidebar (240px wide) and a matching main-content offset. The brand row and sticky workspace bar are both (64px high). Navigation rows are at least (44px high), and the account section stays anchored at the bottom of the sidebar. The content bar carries the single route-title h1, breadcrumb context, and contextual actions. Supporting descriptions and actions may appear in the content without another route heading. Do not add the removed voice-first tagline or decorative logo/navigation dots.
+At the medium breakpoint (768px), the workspace has a fixed, full-height sidebar (240px wide) and a matching main-content offset. The brand row and sticky workspace bar are both (64px high). Navigation rows are at least (44px high), and the account section stays anchored at the bottom of the sidebar. The content bar carries the single route-title h1 and contextual actions. Supporting descriptions and actions may appear in the content without another route heading. Do not add the removed voice-first tagline or decorative logo/navigation dots.
 
-Below (768px), the sidebar gives way to a labeled menu button and a left Radix sheet of `min(280px, 85vw)`. Selecting a route closes the drawer; Radix manages focus, Escape, and return to the trigger. The layout and long content reflow at (360px) and wider. At the small breakpoint (640px), breadcrumb details, compact button sizes, and some secondary labels become visible.
+Below (768px), the sidebar gives way to a labeled menu button and a left Radix sheet of `min(280px, 85vw)`. Selecting a route closes the drawer; Radix manages focus, Escape, and return to the trigger. The layout and long content reflow at (360px) and wider. At the small breakpoint (640px), compact button sizes and some secondary labels become visible.
 
 Regular workspace content is centered within (1160px), with horizontal padding progressing through (16px), (24px), (32px), and (40px) as space grows. Voice content uses a wider (1280px) ceiling and (16px / 32px) padding. Most panel padding is (20px / 24px), repeated item gaps are (8px–16px), and section separation is commonly (28px–32px). These are compositions built from the extracted spacing steps, rather than a universal equal-gap grid.
 
@@ -438,7 +438,7 @@ Text fields are white, (44px) high, with medium corners, a stronger input stroke
 
 ### Navigation
 
-The sidebar uses a structured brand row, compact workspace context, three aligned icon-and-label routes, and a bottom account area. The current route is a white bordered row with charcoal text, fern icon, and a subtle shadow. Other routes use muted ink and a neutral hover fill. Active state is also expressed with `aria-current`. The mobile version is the same navigation inside a left sheet. A visible-on-focus skip link and route-change focus on the content region support keyboard navigation.
+The sidebar uses a structured brand row, three aligned icon-and-label routes, and a bottom account area. The current route is a white bordered row with charcoal text, fern icon, and a subtle shadow. Other routes use muted ink and a neutral hover fill. Active state is also expressed with `aria-current`. The mobile version is the same navigation inside a left sheet. A visible-on-focus skip link and route-change focus on the content region support keyboard navigation.
 
 ### Sheets and confirmations
 
@@ -452,9 +452,9 @@ The full current question is readable below the orb as LLM text arrives and rema
 
 While audio plays, a gentle fern highlight moves through the visible words. This is a visual speaking indicator, not word alignment. It never delays, splits, flushes, resamples, or schedules the provider's speech. Reduced motion uses a steady highlight. Replay displays the full saved question immediately; interruption stops the highlight and retains readable text. Caption updates use `aria-live="off"`. Deepgram audio is forwarded as each frame arrives, with one synthesis flush for the complete response.
 
-The white dock groups **Mute / Unmute**, **Interrupt**, and **Finish interview**, with a divider before finish. Mute reflects its pressed state; interrupt is available while speaking or thinking. Finish opens a confirmation before ending the interview and generating feedback. The narrow layout shortens the finish label while retaining its accessible name. The saved-as-you-go message remains directly below the dock.
+The white dock groups **Mute / Unmute**, **Interrupt**, and **Finish interview**, with a divider before finish. Mute reflects its pressed state; interrupt is available while speaking or thinking. Finish opens a confirmation before ending the interview and generating feedback. The narrow layout shortens the finish label while retaining its accessible name.
 
-The orb uses a (5s) breathing cycle, (16s) surface drift, and (7s) ribbon motion; speaking and thinking shorten surface drift to (7s) and (5s). Input scale responds over (160ms ease-out). A pause control stops the decorative animation. The dock enters from (10px) below over (300ms), with `cubic-bezier(0.16, 1, 0.3, 1)`. MotionConfig respects the user's reduced-motion preference; CSS suppresses ongoing visual animation and input scaling, reduces transitions globally, and removes the redundant pause control under reduced motion.
+The orb uses a (5s) breathing cycle, (16s) surface drift, and (7s) ribbon motion; speaking and thinking shorten surface drift to (7s) and (5s). Input scale responds over (160ms ease-out). The dock enters from (10px) below over (300ms), with `cubic-bezier(0.16, 1, 0.3, 1)`. MotionConfig respects the user's reduced-motion preference; CSS suppresses ongoing visual animation and input scaling, reduces transitions globally.
 
 ### Transcript
 

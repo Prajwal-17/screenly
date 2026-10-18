@@ -1,9 +1,7 @@
 "use client";
-import { useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import {
   AudioLines,
-  CirclePause,
-  CirclePlay,
   Loader2,
   Mic,
   MicOff,
@@ -11,7 +9,6 @@ import {
   Save,
 } from "lucide-react";
 import type { LiveStatus } from "@repo/shared";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import styles from "./voice-visual.module.css";
 
@@ -28,7 +25,6 @@ export function VoiceVisual({
   level: number;
   error: boolean;
 }) {
-  const [paused, setPaused] = useState(false);
   const mode =
     status === "finishing"
       ? "finishing"
@@ -103,15 +99,11 @@ export function VoiceVisual({
       className="relative flex w-full max-w-md flex-col items-center text-center"
       data-slot="voice-experience"
     >
-      <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <AudioLines className="size-3.5" aria-hidden="true" />
-        Screenly interviewer
-      </div>
       <div
         className={styles.visual}
         data-slot="voice-visual"
         data-state={mode}
-        data-animated={!paused && active}
+        data-animated={active}
         aria-hidden="true"
         style={{ "--voice-level": input } as CSSProperties}
       >
@@ -146,20 +138,6 @@ export function VoiceVisual({
             />
           </>
         )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="absolute top-0 right-0 motion-reduce:hidden"
-          aria-label={paused ? "Resume animation" : "Pause animation"}
-          title={paused ? "Resume animation" : "Pause animation"}
-          onClick={() => setPaused(!paused)}
-        >
-          {paused ? (
-            <CirclePlay className="size-3.5" />
-          ) : (
-            <CirclePause className="size-3.5" />
-          )}
-        </Button>
       </div>
     </div>
   );

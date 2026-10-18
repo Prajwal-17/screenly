@@ -11,8 +11,6 @@ import {
   LogOut,
   Loader2,
   Menu,
-  ChevronRight,
-  Layers2,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -61,16 +59,6 @@ function Sidebar({
         <Brand />
       </div>
       <div className="px-3 pt-6">
-        <div className="mb-6 flex items-center gap-2.5 px-3 text-[13px] font-medium text-ink-secondary">
-          <Layers2
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-          Personal workspace
-        </div>
-        <p className="mb-2 px-3 text-[11px] font-medium text-muted-foreground">
-          WORKSPACE
-        </p>
         <nav className="space-y-1" aria-label="Main navigation">
           {navigation.map(({ href, label, icon: Icon }) => {
             const active = path === href;
@@ -232,17 +220,6 @@ export function Workspace({
                 onNavigate={() => setNavigationOpen(false)}
               />
             </Sheet>
-            <Layers2
-              className="hidden size-4 text-muted-foreground sm:block"
-              aria-hidden="true"
-            />
-            <span className="hidden text-muted-foreground sm:inline">
-              Workspace
-            </span>
-            <ChevronRight
-              className="hidden size-3.5 text-muted-foreground sm:block"
-              aria-hidden="true"
-            />
             <h1
               id="workspace-title"
               className="truncate text-sm leading-normal font-medium tracking-normal"
