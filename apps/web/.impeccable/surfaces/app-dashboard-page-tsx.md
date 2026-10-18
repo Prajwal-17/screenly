@@ -46,3 +46,7 @@ The user requested a minimal command-search overlay matching the compact input/l
 ## Navigation placement override
 
 The user removed Help & feedback from navigation and requested Settings directly below the other navigation buttons, rather than pinned at the bottom. Settings now shares the scrollable navigation area on desktop, in the rail, and in the mobile drawer. Only the account area remains anchored to the bottom. Help is also removed from command-search destinations.
+
+## Compact shell polish override
+
+The user requested a smaller top bar and a polished collapsed sidebar after supplying a screenshot of the incumbent rail. The workspace top bar and sidebar header are now 56px high, and the rail is 64px wide. Logo, search, navigation, Settings, and account share one center line and 44px controls. The rail removes the search field box and section rules, uses quiet group gaps and fern-tinted active squares, and keeps its inner column fixed during the fold to prevent icon drift. The 28px account avatar remains unobstructed; the local development indicator that overlapped it is disabled. Expanded navigation, mobile drawer, collapse persistence, and automatic interview focus remain.

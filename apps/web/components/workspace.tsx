@@ -100,9 +100,9 @@ export function Workspace({
       className="min-h-dvh"
       initial={false}
       style={
-        { "--sidebar-width": collapsed ? "72px" : "256px" } as CSSProperties
+        { "--sidebar-width": collapsed ? "64px" : "256px" } as CSSProperties
       }
-      animate={{ "--sidebar-width": collapsed ? "72px" : "256px" }}
+      animate={{ "--sidebar-width": collapsed ? "64px" : "256px" }}
       transition={{
         duration: reducedMotion ? 0 : 0.24,
         ease: [0.22, 1, 0.36, 1],
@@ -128,7 +128,7 @@ export function Workspace({
         />
       </aside>
       <div className="min-w-0 md:ml-[var(--sidebar-width)]">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-xs">
             <Button
               variant="ghost"

@@ -89,3 +89,13 @@ Independent review: `disposition: fix` for a Practice plans heading eyebrow; res
 - [x] Document the updated search/sidebar contract.
 
 Validation: types, zero-warning lint, formatting, production build, and the existing sidebar browser journey pass. Fresh desktop/mobile captures verify the compact search and removed callout. Independent review: `disposition: ship`, with no material fixes.
+
+## Compact top bar and rail polish
+
+- [x] Reduce workspace and sidebar headers from 64px to 56px.
+- [x] Narrow the rail to 64px with centered 44px controls, plain search, consistent selection, quieter grouping, and a smaller unobstructed account avatar.
+- [x] Keep the rail icons anchored while the sidebar and content animate. Preserve manual preference, mobile navigation, and interview focus.
+
+Validation: types, zero-warning lint, production build, changed frontend-file formatting, and all seven browser journeys pass. Live measurement confirms a 56px header, settled 64px rail, and 44px controls sharing the same center during the Motion fold. A batched visual review covers expanded, collapsed, mobile, Settings, and interview-focus states; the local development badge is hidden and the account avatar is unobstructed. Independent review: `disposition: ship`, with no material fixes. The actual development Settings capture is natively 1280×800; other desktop evidence is 1440×900 and mobile is 360×800.
+
+The repository-wide formatting check flags the unrelated existing edit in `apps/backend/src/config.ts`; that file and the other backend/turbo changes remain outside this UI commit.

@@ -81,7 +81,7 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await expect(sidebar).toHaveAttribute("data-state", "collapsed");
   await expect
     .poll(async () => Math.round((await sidebar.boundingBox())?.width ?? 0))
-    .toBe(72);
+    .toBe(64);
   await sidebar
     .getByRole("link", { name: "Question library", exact: true })
     .hover();
@@ -117,7 +117,7 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await expect(sidebar).toHaveAttribute("data-focus-mode", "true");
   await expect
     .poll(async () => Math.round((await sidebar.boundingBox())?.width ?? 0))
-    .toBe(72);
+    .toBe(64);
   await capture("sidebar-interview-focus");
   await page
     .getByRole("button", { name: "Expand sidebar", exact: true })
