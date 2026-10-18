@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { env } from "./config";
+import { devLoginEnabled, env } from "./config";
 import { db } from "./db";
 import * as schema from "./db/schema";
 
@@ -15,7 +15,12 @@ const googleProvider =
       }
     : undefined;
 
+const devPlugins = devLoginEnabled
+  ? [(await import("./lib/devAuth")).developmentAuth(env.FRONTEND_URL)]
+  : [];
+
 export const auth = betterAuth({
+  plugins: devPlugins,
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
   trustedOrigins: [env.FRONTEND_URL],
@@ -27,7 +32,10 @@ export const auth = betterAuth({
     identityStrategy: "provider-id",
   },
   emailAndPassword: {
-    enabled: true,
+    enabled: false,
   },
   socialProviders: googleProvider,
+  onAPIError: {
+    errorURL: `${env.FRONTEND_URL}/auth/sign-in?error=oauth`,
+  },
 } as BetterAuthOptions);

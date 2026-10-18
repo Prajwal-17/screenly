@@ -2,7 +2,7 @@
 
 Bun/Hono serves authentication, persistent interviews, and a real-time voice channel. SQLite migrations run on startup.
 
-Copy `.env.example` to `.env`; set `BETTER_AUTH_SECRET` (32+ characters), `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`. Set `DEEPGRAM_API_KEY` for the required microphone transcription and spoken replies. Google credentials are optional.
+Copy `.env.example` to `.env`; set `BETTER_AUTH_SECRET` (32+ characters), `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`. Set `DEEPGRAM_API_KEY` for the required microphone transcription and spoken replies. Google is the only sign-in method. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` and register `http://localhost:8787/api/auth/callback/google` as the redirect URI. Email/password authentication is disabled.
 
 ```sh
 bun run --cwd apps/backend dev
@@ -11,6 +11,12 @@ bun run --cwd apps/backend lint
 bun run --cwd apps/backend test
 bun run --cwd apps/backend db:generate
 ```
+
+## Local development authentication
+
+Set `ENABLE_DEV_LOGIN=true` in the ignored `.env`, use localhost frontend/backend URLs, and run `bun run dev`. `POST /api/auth/sign-in/development` accepts `{ "email": "developer@example.com" }` and creates a normal Better Auth session. It validates email and origin, leaves email unverified, and reuses the local account on subsequent visits. This mode binds the backend to `127.0.0.1`.
+
+`bun run start` forces `NODE_ENV=production`: this endpoint is absent even if `ENABLE_DEV_LOGIN=true`. Unset modes, test mode, and non-loopback origins also disable it. Use separate local data and credentials.
 
 ## API
 

@@ -8,7 +8,7 @@ A technical interview practice app built for learning and portfolio use. Choose 
 
 - Warm-paper light workspace with fern actions, a fixed desktop sidebar, mobile navigation drawer, local Geist typography, and keyboard access.
 - Centered voice stage tied to real session states and microphone input, concise live captions, optional inline transcript, and a mute/interrupt/finish dock.
-- Google OAuth (optional) and email/password authentication.
+- Google OAuth authentication through Better Auth.
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
 - Adaptive follow-ups using session settings and conversation history.
@@ -55,11 +55,23 @@ The LLM endpoint and model are configurable; DeepSeek is only the example endpoi
 bun run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Create an account, prepare an interview, and check your microphone and sound before starting.
+Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Sign in with Google, prepare an interview, and check your microphone and sound before starting.
 
 If the LLM or voice service is not configured, setup and history remain available, but starting an interview is disabled. Allow microphone access in your browser and retry if permission is denied. A transcription connection must succeed before the timer starts. If microphone transcription fails during the interview, retry the microphone; speech playback has its own **Retry speech** action. Use **Hear question** to replay the latest question. Answers are accepted only through microphone audio and transcription; there is no answer text field or text-submission event. Finalized messages remain saved for transcript review, feedback, and export.
 
-For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Email/password works without Google credentials.
+Google is the only sign-in method. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Register `http://localhost:3000` as an authorized JavaScript origin. For production, register the HTTPS frontend origin and backend callback URL and update the environment URLs. Without Google credentials the app starts, but sign-in is unavailable. Password authentication is disabled.
+
+### Local development sign-in
+
+For local work without Google, set `ENABLE_DEV_LOGIN=true` in `apps/backend/.env` and run `bun run dev`. Keep `FRONTEND_URL` and `BETTER_AUTH_URL` on localhost. The sign-in page then includes **Development email**: enter an email and select **Enter local workspace**. Reusing the email reopens the same local account.
+
+This bypass requires `NODE_ENV=development`, the explicit flag, loopback URLs, and a matching request origin. When enabled the backend binds to loopback. The production frontend omits the form and the backend `start` command forces production mode, which does not register the endpoint even if the flag is set. Use a separate development database and auth secret; never deploy a local database or its cookies.
+
+```sh
+bun run test:e2e:local
+```
+
+This runs real development servers on isolated ports and checks local sign-in, persistence, sign-out, and recovery. The normal browser suite checks that the production page never exposes the shortcut.
 
 When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT_PUBLIC_API_URL` together. The browser derives its WebSocket URL from the API origin. The frontend API URL is a build-time Next.js setting. Microphone access works on localhost or HTTPS.
 

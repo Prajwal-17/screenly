@@ -17,3 +17,5 @@ The refreshed shell captures use the 56px workspace header and 64px rail. `sideb
 `preflight.png` and `preflight-mobile.png` show the minimal session-summary/audio-controls layout. `preflight-checking.png` shows the real input meter during the four-second check; `preflight-resume.png` shows the saved-session action and remaining original budget. `preflight-recovery.png` shows a denied microphone with its retry action in the audio-control column. These use the controlled microphone/provider browser journey above.
 
 The refreshed `interview-voice-1440.png`, `interview-voice-mobile.png`, and transcript captures show Transcript in the interview content toolbar, below the app bar, beside the larger elapsed timer. The mobile toolbar stacks its session details above the timer and transcript action.
+
+`auth.png` shows the Google-only production sign-in page. `auth-local.png` shows the same page on a development server with the explicitly enabled local email entry. These screenshots were captured from the running application after fonts, session checks, and control transitions settled; the fern voice visual is static, and no microphone is active.

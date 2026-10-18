@@ -371,7 +371,7 @@ Both variable fonts are loaded locally through `next/font/local` from `apps/web/
 ### Hierarchy
 
 - **Display:** the landing headline uses the frontmatter display role, reducing to (46px) below the small breakpoint. Its deliberately short line length belongs to the landing composition.
-- **Headline:** the workspace route title appears once as a (14px), medium-weight h1 in the top bar; do not repeat it in the content. The global headline fallback remains (28px / 32px). Authentication uses its own (26px / 28px) heading, and preflight uses a (26px) task heading.
+- **Headline:** the workspace route title appears once as a (14px), medium-weight h1 in the top bar; do not repeat it in the content. The global headline fallback remains (28px / 32px). Authentication uses a route-specific semibold (46px / 72px) headline, switching at (640px), with (1.02) line height and (-0.04em) tracking; preflight uses a (26px) task heading.
 - **Title:** section headings use the title role; tertiary headings use (16px), semibold, with (1.4) line height.
 - **Body:** the base body role is used for general reading; most interface descriptions use the body-small role. Page descriptions stay within (65ch), with narrower copy on landing and authentication.
 - **Label:** buttons use the label role. Navigation and choice labels use the navigation role; metadata and status badges use compact caption sizing. Badge and attribution labels increase to medium weight.
@@ -388,7 +388,7 @@ Expanded navigation rows are (40px) on fine-pointer desktop and at least (44px) 
 
 Regular workspace content is centered within (1160px), with horizontal padding progressing through (16px), (24px), (32px), and (40px) as space grows. Voice content uses a wider (1280px) ceiling and (16px / 32px) padding. Most panel padding is (20px / 24px), repeated item gaps are (8px–16px), and section separation is commonly (28px–32px). These are compositions built from the extracted spacing steps, rather than a universal equal-gap grid.
 
-Overview metrics become three columns at (640px); role shortcuts become three columns at (1024px). Setup adds a (300px) summary column at (1280px). History keeps the interview and status visible, adds experience at (1024px), and places the date in its own column at (1100px); below that the date remains beneath the interview label. Landing becomes a two-column layout at (1024px), while authentication reveals its supporting column at the same breakpoint.
+Overview metrics become three columns at (640px); role shortcuts become three columns at (1024px). Setup adds a (300px) summary column at (1280px). History keeps the interview and status visible, adds experience at (1024px), and places the date in its own column at (1100px); below that the date remains beneath the interview label. Landing becomes a two-column layout at (1024px). Authentication stays a centered single column capped at (520px), with (24px) horizontal page padding and the brand/home link above it; the open composition has no enclosing card or marketing footer.
 
 The live interview centers its voice stage in the remaining workspace width. A flex column fills the viewport below the 56px app bar and 16px bottom padding (`calc(100dvh - 72px)`); the in-page session toolbar takes its natural height and the stage fills the rest. The dock stays below the flexible centered stage. The visual uses `clamp(144px, min(50vw, calc(100dvh - 550px)), 264px)`, adapting to both width and height. The voice page has no top padding. A bordered session toolbar sits below the top bar, with live status, session details, a prominent elapsed timer (30px on mobile / 36px from 640px) and smaller total duration. Transcript belongs to this toolbar, alongside the timer, with 16px before the stage. On mobile, status/details occupy a first row and the timer/action occupy a second row. Current captions remain within (540px). The dock is in document flow, so short screens can scroll without covering the stage or controls.
 
@@ -435,6 +435,12 @@ White working panels use a quiet border and the extra-large radius. Overview met
 ### Inputs / Fields
 
 Text fields are white, (44px) high, with medium corners, a stronger input stroke, and (8px 12px) padding. Field text is (16px) on narrow screens and (14px) from (768px), with muted placeholders and a fern caret. Focus uses the shared ring and offset. Invalid fields use a destructive border and associated field error; disabled fields use neutral disabled roles. Field labels, descriptions, and form choices remain connected to the underlying controls.
+
+### Authentication
+
+The short “Think out loud.” headline pairs charcoal with fern beside a static reuse of the voice orb, (112px) wide below (640px) and (168px) above it. The decorative orb is hidden from assistive technology and has no animation or input response on this route. A short sign-in line leads to the full-width white outline **Continue with Google** action, at least (52px) high with (20px) horizontal padding, followed by one brief account-creation note. Shared focus, loading, disabled, and error treatments remain in use; unavailable sign-in and failed availability checks show explicit messages, with retry for the latter.
+
+Production presents Google-only authentication through Better Auth. An opt-in **Local development** email form follows a dashed divider only when the frontend runs in development and the backend reports the local capability. Its labeled shared input and secondary action remain compact; the local form is excluded from production builds.
 
 ### Navigation
 

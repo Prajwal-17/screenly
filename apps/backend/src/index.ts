@@ -3,7 +3,7 @@ import { upgradeWebSocket, websocket } from "hono/bun";
 import { cors } from "hono/cors";
 import { clientEventSchema, settingsSchema } from "@repo/shared";
 import { auth } from "./auth";
-import { capabilities, env } from "./config";
+import { capabilities, devLoginEnabled, env } from "./config";
 import { interviews } from "./db/interviews";
 import { generateFeedback } from "./lib/feedbackService";
 import { InterviewSession } from "./lib/interviewSession";
@@ -157,6 +157,7 @@ app.onError((error, c) => {
 });
 interviews.recoverFeedback();
 export const server = Bun.serve({
+  ...(devLoginEnabled ? { hostname: "127.0.0.1" } : {}),
   port: env.PORT,
   fetch: app.fetch,
   websocket,

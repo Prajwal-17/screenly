@@ -92,7 +92,12 @@ export type Interview = InterviewSettings & {
   feedbackModel: string | null;
 };
 export type InterviewDetail = Interview & { messages: InterviewMessage[] };
-export type Capabilities = { google: boolean; voice: boolean; llm: boolean };
+export type Capabilities = {
+  google: boolean;
+  voice: boolean;
+  llm: boolean;
+  devLogin?: boolean;
+};
 export const clientEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("start") }).strict(),
   z.object({ type: z.literal("interrupt") }),

@@ -28,42 +28,29 @@ test("Fern actions, mobile reading, keyboard focus, loading recovery, and reduce
     ).toBe(true);
   }
   await page.setViewportSize({ width: 360, height: 800 });
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { google: true, voice: true, llm: true } }),
+  );
   await page.getByRole("link", { name: "Sign in", exact: true }).click();
-  const email = page.getByLabel("Email address");
-  await expect(email).toHaveCSS("font-size", "16px");
-  await email.focus();
-  await page.keyboard.press("Tab");
-  const password = page.getByLabel("Password", { exact: true });
-  await expect(password).toBeFocused();
-  const focus = await password.evaluate((node) => {
-    const style = getComputedStyle(node);
-    return {
-      shadow: style.boxShadow,
-      color: style.getPropertyValue("--ring").trim(),
-      boundary: style.borderColor,
-      background: style.backgroundColor,
-    };
-  });
-  expect(focus.shadow).toContain("rgb(31, 107, 69)");
-  expect(focus.color).toBe("#1f6b45");
-  expect(contrast(focus.boundary, focus.background)).toBeGreaterThanOrEqual(3);
-  const submit = page.getByRole("button", { name: "Sign in", exact: true });
+  const submit = page.getByRole("button", { name: "Continue with Google" });
+  await expect(submit).toBeEnabled();
+  await submit.focus();
+  await expect(submit).toBeFocused();
   expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await email.fill("candidate@example.com");
-  await password.fill("incorrect-password");
+  await expect(page.getByRole("textbox")).toHaveCount(0);
   let release!: () => void;
   const pending = new Promise<void>((resolve) => {
     release = resolve;
   });
   let requests = 0;
-  await page.route("**/api/auth/sign-in/email", async (route) => {
+  await page.route("**/api/auth/sign-in/social", async (route) => {
     requests++;
     await pending;
     await route.fulfill({
       status: 401,
       json: {
-        message: "Check your email and password, then try again.",
-        code: "INVALID_EMAIL_OR_PASSWORD",
+        message: "Google sign-in failed. Please try again.",
+        code: "OAUTH_FAILED",
       },
     });
   });
@@ -81,11 +68,9 @@ test("Fern actions, mobile reading, keyboard focus, loading recovery, and reduce
   );
   release();
   await expect(page.locator("[data-slot=alert][role=alert]")).toContainText(
-    "Check your email and password",
+    "Google sign-in failed",
   );
   await expect(submit).toBeEnabled();
-  await expect(email).toHaveValue("candidate@example.com");
-  await expect(password).toHaveValue("incorrect-password");
   expect(requests).toBe(1);
   expect(
     await page.evaluate(

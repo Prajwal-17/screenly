@@ -44,7 +44,7 @@ The previous presentation was removed in a separate reset commit before rebuildi
 ## Validation
 
 - Shared schema/audio framing tests.
-- Real email/password signup, authenticated API, invalid settings, cross-user isolation, and draft-finish rejection.
+- Disabled email/password endpoints, fixture-authenticated API, invalid settings, cross-user isolation, and draft-finish rejection.
 - Duplicate answer suppression, persisted interrupted output, stale generation rejection, idempotent finish, and ownership/deletion.
 - Local WebSocket transport test for JSON and binary speech frames.
 - Chromium journey: signup, setup, voice conversation, provider-error recovery, report, reload, transcript download, history, narrow desktop reflow, and deletion.
@@ -79,3 +79,9 @@ Saved conversations remain readable, including interviews created before this ch
 ## Tailwind and shadcn foundation
 
 All frontend routes and shared presentation components use Tailwind CSS utilities and the configured shadcn `radix-nova` component sources. The previous component-class stylesheet is removed; global CSS is limited to theme tokens, base typography and reduced-motion behavior. Input, choice and confirmation behavior is composed from the primitives rather than reimplemented in routes. Radio/checkbox choices use React Hook Form Controllers to preserve schema validation. Error and availability alerts remain distinct, using assertive error alerts and polite availability status updates. The voice-only change removes text-answer handling from the frontend controller, backend session handler, and shared event contract while preserving the microphone, speech, persistence, and timing lifecycle.
+
+## Authentication
+
+Production uses Google through Better Auth; email/password endpoints are disabled. First-time Google sign-in creates the account. OAuth errors return to the sign-in page with a retry.
+
+An explicit `ENABLE_DEV_LOGIN=true` plus development mode and localhost origins registers a local email-only endpoint using Better Auth sessions/cookies. Its UI is imported only in Next.js development builds. Production registration, production UI exclusion, email normalization, origin restrictions, persisted sessions, and sign-out are covered by tests.

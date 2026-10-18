@@ -1,3 +1,4 @@
+import { signInForTest } from "./session-fixture";
 import { expect, test } from "@playwright/test";
 import { backendURL } from "./environment";
 
@@ -10,16 +11,9 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/auth/sign-in");
-  await page.getByRole("button", { name: "Create an account" }).click();
-  await page.getByLabel("Your name").fill("Alex Morgan");
-  await page
-    .getByLabel("Email address")
-    .fill(`sidebar-${Date.now()}@example.com`);
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill("sidebar-preview-password");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await signInForTest(context);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/dashboard/);
   const sidebar = page.getByRole("complementary", {
     name: "Screenly workspace",
   });

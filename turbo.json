@@ -19,7 +19,10 @@
     "DEEPGRAM_TTS_EXPRESSIVITY",
     "DEEPGRAM_TTS_SPEED",
     "NEXT_PUBLIC_API_URL",
-    "DEEPGRAM_WS_URL"
+    "DEEPGRAM_WS_URL",
+    "NODE_ENV",
+    "ENABLE_DEV_LOGIN",
+    "WEB_PORT"
   ],
   "tasks": {
     "format": {

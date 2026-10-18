@@ -1,3 +1,4 @@
+import { signInForTest } from "./session-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { webURL, backendURL, voiceURL } from "./environment";
 import { contrast } from "./contrast";
@@ -106,14 +107,9 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await page.getByRole("link", { name: "Sign in", exact: true }).click();
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, { path: "docs/screenshots/auth.png", fullPage: true });
-  await page.getByRole("button", { name: "Create an account" }).click();
-  await page.getByLabel("Your name").fill("Alex");
-  await page.getByLabel("Email address").fill(`alex-${Date.now()}@example.com`);
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill("practice-password-123");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await signInForTest(context);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/dashboard/);
   await expect(page.getByText("No interviews yet")).toBeVisible();
   if (process.env.CAPTURE_SCREENSHOTS)
     await capture(page, {
@@ -367,16 +363,9 @@ test("full question stays readable while speaking highlights follow playback sta
   });
   try {
     await page.goto("/auth/sign-in");
-    await page.getByRole("button", { name: "Create an account" }).click();
-    await page.getByLabel("Your name").fill("Caption Candidate");
-    await page
-      .getByLabel("Email address")
-      .fill(`captions-${Date.now()}@example.com`);
-    await page
-      .getByLabel("Password", { exact: true })
-      .fill("caption-password-123");
-    await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await signInForTest(context);
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/dashboard/);
     await page
       .getByRole("link", { name: "New interview", exact: true })
       .last()
@@ -473,14 +462,9 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   page.on("pageerror", (error) => errors.push(error.message));
   await context.grantPermissions(["microphone"]);
   await page.goto("/auth/sign-in");
-  await page.getByRole("button", { name: "Create an account" }).click();
-  await page.getByLabel("Your name").fill("Voice Candidate");
-  await page
-    .getByLabel("Email address")
-    .fill(`voice-${Date.now()}@example.com`);
-  await page.getByLabel("Password", { exact: true }).fill("voice-password-123");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await signInForTest(context);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/dashboard/);
   await page
     .getByRole("link", { name: "New interview", exact: true })
     .last()
@@ -598,16 +582,9 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/auth/sign-in");
-  await page.getByRole("button", { name: "Create an account" }).click();
-  await page.getByLabel("Your name").fill("Voice Candidate");
-  await page
-    .getByLabel("Email address")
-    .fill(`voice-recovery-${Date.now()}@example.com`);
-  await page.getByLabel("Password", { exact: true }).fill("voice-password-123");
-  await page
-    .getByRole("button", { name: "Create account", exact: true })
-    .click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await signInForTest(context);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/dashboard/);
   await expect(page.getByRole("main")).toBeFocused();
   await page.getByRole("link", { name: /Backend APIs/ }).click();
   await expect(
