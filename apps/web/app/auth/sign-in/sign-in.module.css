@@ -1,0 +1,11 @@
+.presence {
+  width: 112px;
+  flex: 0 0 112px;
+}
+
+@media (min-width: 640px) {
+  .presence {
+    width: 168px;
+    flex-basis: 168px;
+  }
+}
