@@ -281,10 +281,7 @@ export function WorkspaceSidebar({
             </div>
           </div>
         ))}
-      </nav>
-
-      <div className="shrink-0 px-2.5">
-        <div className="space-y-0.5 border-t py-2">
+        <div className="mt-3 space-y-0.5 border-t pt-2">
           {workspaceUtilities.map(({ href, label, icon: Icon }) => (
             <Hint key={href} label={label} enabled={collapsed}>
               <Link
@@ -305,19 +302,12 @@ export function WorkspaceSidebar({
                   strokeWidth={1.65}
                   aria-hidden="true"
                 />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1">{label}</span>
-                    {href === "/help" && (
-                      <ArrowUpRight className="size-3.5 text-muted-foreground/70" />
-                    )}
-                  </>
-                )}
+                {!collapsed && <span className="flex-1">{label}</span>}
               </Link>
             </Hint>
           ))}
         </div>
-      </div>
+      </nav>
 
       <div className="shrink-0 border-t p-2.5">
         {error && (

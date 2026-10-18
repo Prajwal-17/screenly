@@ -42,3 +42,7 @@ The user supplied Vercel sidebar references and explicitly requested a denser pr
 ## Search simplification override
 
 The user requested a minimal command-search overlay matching the compact input/list hierarchy of the supplied reference. Keep only the input, Esc control, plain icons, destination names, and selected-row arrow visible; retain keyboard and screen-reader support. Remove the redundant heading, explanatory copy, icon tiles, and keyboard footer. The sidebar session callout was explicitly removed.
+
+## Navigation placement override
+
+The user removed Help & feedback from navigation and requested Settings directly below the other navigation buttons, rather than pinned at the bottom. Settings now shares the scrollable navigation area on desktop, in the rail, and in the mobile drawer. Only the account area remains anchored to the bottom. Help is also removed from command-search destinations.

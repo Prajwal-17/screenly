@@ -7,7 +7,6 @@ import {
   ChartNoAxesCombined,
   Bookmark,
   Settings2,
-  CircleHelp,
 } from "lucide-react";
 
 export const workspaceNavigation = [
@@ -80,12 +79,6 @@ export const workspaceUtilities = [
     label: "Settings",
     icon: Settings2,
     description: "Account and workspace preferences",
-  },
-  {
-    href: "/help",
-    label: "Help & feedback",
-    icon: CircleHelp,
-    description: "Get comfortable with Screenly",
   },
 ];
 export const workspaceDestinations = [
