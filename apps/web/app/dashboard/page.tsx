@@ -15,7 +15,7 @@ import {
 import { roles } from "@repo/shared";
 import { Workspace } from "@/components/workspace";
 import {
-  PageTitle,
+  PageIntro,
   InterviewRows,
   Loading,
   ErrorState,
@@ -70,8 +70,7 @@ export default function Dashboard() {
   ];
   return (
     <Workspace>
-      <PageTitle
-        title="Overview"
+      <PageIntro
         description="A little practice. A little more confidence."
         action={
           <Button asChild>

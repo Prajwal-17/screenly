@@ -40,3 +40,18 @@ Every frontend screen was rebuilt after the separate reset commit. Panels use th
 Validation: `bun run check` passed (types, zero-warning lint, 20 shared/backend unit and integration checks, production build); all five Chromium journeys passed after the contrast correction. Browser coverage includes voice capture/playback, recovery, saved transcripts, feedback retry, exports/deletion, mobile navigation focus restoration, selected-control contrast, reduced motion, and reflow at 360/640/1280/1440/1536px. Controlled providers verify behavior without claiming live-provider or Google OAuth validation. The mechanical design detector returned no findings. The independent reviewer requested one selected-text contrast correction; the deep-fern token now measures 7.94:1, 7.22:1, and 5.95:1 across its base/hover/pressed surfaces.
 
 Independent verdict: the selected-text contrast fix was scored resolved at screenshot/source scope. All other composition and capture checks had no material findings.
+
+## Requested refinements
+
+- [x] Remove the top-bar voice-first tagline and decorative logo/active-navigation dots.
+- [x] Keep the route title once, as the top-bar h1; retain contextual descriptions and actions.
+- [x] Replace the enclosing preflight card with open audio-check rows on the canvas.
+- [x] Expand the read-only transcript inline beside the voice stage, stacking and scrolling to it on mobile.
+- [x] Install and adapt Beautiful UI Streaming Text to real interviewer and candidate tokens, preserving the current caption through message persistence/audio playback.
+- [x] Replace the local preview’s test-provider endpoints with the existing real provider settings in ignored local configuration. Verify real synthesis: 47 PCM frames, 3.68 seconds, nonzero RMS 0.1213.
+- [x] Verify the complete real-provider browser path: a generated question produced 224 scheduled PCM buffers, 17.84 seconds of speech, RMS 0.1224, with the playback context running. The saved caption remained visible after playback. This checks browser output, not physical speaker audibility.
+- [x] Defer initial session connection until React’s development mount cleanup has completed. A fresh direct route reached ready state without the false duplicate-tab error.
+
+The previous preview voice fixture emitted a 100ms test tone; it did not synthesize speech. Browser fixtures remain isolated for automated checks. No provider credentials are committed.
+
+Refinement validation: all five browser journeys pass, including non-silent PCM, saved AI captions, candidate partial captions, inline transcript toggling/focus restoration, recovery, and mobile reflow. The independent finish reviewer returned `ship` with no material fixes.

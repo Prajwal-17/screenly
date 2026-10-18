@@ -5,7 +5,7 @@ import { Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import { Workspace } from "@/components/workspace";
 import {
-  PageTitle,
+  PageIntro,
   InterviewRows,
   Loading,
   ErrorState,
@@ -37,8 +37,7 @@ export default function History() {
   );
   return (
     <Workspace>
-      <PageTitle
-        title="History"
+      <PageIntro
         description="Your practice, saved. Pick up where you left off."
         action={
           <Button asChild>

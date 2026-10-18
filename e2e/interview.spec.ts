@@ -12,7 +12,7 @@ async function capture(
 async function openTranscript(page: Page) {
   await page.getByRole("button", { name: /^Transcript/ }).click();
   await expect(
-    page.getByRole("dialog", { name: "Transcript", exact: true }),
+    page.getByRole("region", { name: "Conversation", exact: true }),
   ).toBeVisible();
 }
 async function closeTranscript(page: Page) {
@@ -20,7 +20,7 @@ async function closeTranscript(page: Page) {
     .getByRole("button", { name: "Close transcript", exact: true })
     .click();
   await expect(
-    page.getByRole("dialog", { name: "Transcript", exact: true }),
+    page.getByRole("region", { name: "Conversation", exact: true }),
   ).toHaveCount(0);
 }
 async function navigateHistory(page: Page) {
@@ -36,14 +36,20 @@ async function navigateHistory(page: Page) {
 }
 async function trackSpeakerPlayback(page: Page) {
   await page.addInitScript(() => {
-    const target = window as Window & { formaPcmStarts: number };
+    const target = window as Window & {
+      formaPcmStarts: number;
+      formaPcmEnergy: number;
+    };
     target.formaPcmStarts = 0;
+    target.formaPcmEnergy = 0;
     const create = AudioContext.prototype.createBufferSource;
     AudioContext.prototype.createBufferSource = function () {
       const source = create.call(this);
       const start = source.start.bind(source);
       source.start = (...args: Parameters<AudioBufferSourceNode["start"]>) => {
         target.formaPcmStarts++;
+        for (const sample of source.buffer?.getChannelData(0) ?? [])
+          target.formaPcmEnergy += sample * sample;
         start(...args);
       };
       return source;
@@ -109,6 +115,14 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
       path: "docs/screenshots/preflight.png",
       fullPage: true,
     });
+  if (process.env.CAPTURE_SCREENSHOTS) {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await capture(page, {
+      path: "docs/screenshots/preflight-mobile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
   await page
     .getByLabel("Download my microphone recording when I finish")
     .check();
@@ -148,6 +162,16 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
     page.getByText("Listening to you", { exact: true }),
   ).toBeVisible();
   await expect.poll(() => playbackCount(page)).toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { formaPcmEnergy: number }).formaPcmEnergy,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await expect(
+    page.locator('[data-slot="live-caption"] [data-slot="streaming-text"]'),
+  ).toContainText("You mentioned testing behavior");
   const firstPlayback = await playbackCount(page);
   await page
     .getByRole("button", { name: "Hear question", exact: true })
@@ -156,6 +180,13 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await expect(
     page.getByText("Listening to you", { exact: true }),
   ).toBeVisible();
+  await page.request.post(`${voiceURL}/partial`, {
+    data: { transcript: "I am thinking through the failure cases." },
+  });
+  await expect(page.locator('[data-slot="live-caption"]')).toContainText("You");
+  await expect(page.locator('[data-slot="streaming-text"]')).toContainText(
+    "I am thinking through the failure cases.",
+  );
   // The controlled provider fails once; the UI must preserve the conversation.
   await page.request.post(`${voiceURL}/turn`, {
     data: {
@@ -579,6 +610,11 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
           ),
       )
       .toBeLessThan(64);
+    if (process.env.CAPTURE_SCREENSHOTS && (width === 1440 || width === 360))
+      await capture(page, {
+        path: `docs/screenshots/interview-transcript-${width}.png`,
+        fullPage: true,
+      });
     await closeTranscript(page);
     expect(
       await page.evaluate(

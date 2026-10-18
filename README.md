@@ -7,7 +7,7 @@ A technical interview practice app built for learning and portfolio use. Choose 
 ## What works
 
 - Warm-paper light workspace with fern actions, a fixed desktop sidebar, mobile navigation drawer, local Geist typography, and keyboard access.
-- Centered voice stage tied to real session states and microphone input, concise live captions, optional transcript drawer, and a mute/interrupt/finish dock.
+- Centered voice stage tied to real session states and microphone input, concise live captions, optional inline transcript, and a mute/interrupt/finish dock.
 - Google OAuth (optional) and email/password authentication.
 - Frontend, backend, and full-stack interviews at three experience levels.
 - Deepgram Flux transcription and speech, with streamed LLM replies through the OpenAI library.
@@ -67,7 +67,7 @@ When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT
 
 Geist Sans and Geist Mono variable fonts are committed in `apps/web/app/fonts` under the SIL Open Font License 1.1 and served with `next/font/local`. Development, type checks, and builds need no font downloads. [License and provenance](apps/web/app/fonts/SOURCE.txt) are retained beside the font files. Geist Sans covers headings, reading text, and controls; Geist Mono is reserved for code.
 
-The approved **warm-paper / fern** light palette uses charcoal text, quiet white surfaces, and semantic status colors. Customized shadcn/ui primitives and Tailwind CSS 4 utilities apply shared tokens across every route. A fixed 240px sidebar becomes a keyboard-accessible drawer below 768px. The voice-first interview centers the speaker, keeps captions brief, and opens its read-only transcript on demand. The same flow reflows from 360px through desktop widths. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
+The approved **warm-paper / fern** light palette uses charcoal text, quiet white surfaces, and semantic status colors. Customized shadcn/ui primitives and Tailwind CSS 4 utilities apply shared tokens across every route. A fixed 240px sidebar becomes a keyboard-accessible drawer below 768px. The voice-first interview centers the speaker, keeps captions brief, and opens its read-only transcript inline on demand. The same flow reflows from 360px through desktop widths. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
 
 ## Commands
 

@@ -31,6 +31,19 @@ const server = Bun.serve<State>({
   port: voicePort,
   async fetch(request, server) {
     const url = new URL(request.url);
+    if (url.pathname === "/partial" && request.method === "POST") {
+      const { transcript } = (await request.json()) as { transcript: string };
+      for (const socket of listeners)
+        socket.send(
+          JSON.stringify({
+            type: "TurnInfo",
+            event: "Update",
+            turn_index: socket.data.turnIndex,
+            transcript,
+          }),
+        );
+      return new Response("ok");
+    }
     if (url.pathname === "/turn" && request.method === "POST") {
       const { transcript } = (await request.json()) as { transcript: string };
       for (const socket of listeners) emitTurn(socket, transcript);

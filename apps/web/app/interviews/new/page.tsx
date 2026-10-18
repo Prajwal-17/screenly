@@ -13,7 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Mic, Clock3, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Workspace } from "@/components/workspace";
-import { PageTitle, InlineAlert } from "@/components/common";
+import { PageIntro, InlineAlert } from "@/components/common";
 import { ChoiceGroup, ChoiceLabel } from "@/components/form-choices";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,10 +64,7 @@ export default function Setup() {
   });
   return (
     <Workspace>
-      <PageTitle
-        title="New interview"
-        description="Make this practice session your own."
-      />
+      <PageIntro description="Make this practice session your own." />
       <form
         onSubmit={form.handleSubmit((v) => {
           if (!mutation.isPending) mutation.mutate(v);

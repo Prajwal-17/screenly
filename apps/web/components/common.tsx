@@ -35,27 +35,22 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-export function PageTitle({
-  title,
+export function PageIntro({
   description,
   action,
 }: {
-  title: string;
   description?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <header className="mb-7 flex flex-wrap items-center justify-between gap-4 sm:mb-8">
-      <div className="min-w-0">
-        <h1>{title}</h1>
-        {description && (
-          <p className="mt-2 max-w-[65ch] text-sm text-muted-foreground">
-            {description}
-          </p>
-        )}
-      </div>
+    <div className="mb-7 flex flex-wrap items-center justify-between gap-4 sm:mb-8">
+      {description && (
+        <p className="max-w-[65ch] text-sm text-muted-foreground">
+          {description}
+        </p>
+      )}
       {action}
-    </header>
+    </div>
   );
 }
 export function Loading({ label = "Loading…" }: { label?: string }) {

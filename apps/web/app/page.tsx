@@ -43,7 +43,7 @@ export default function Home() {
             </Button>
             <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
               <Mic className="size-3.5" aria-hidden="true" />
-              Voice-first practice, at your own pace.
+              Practice at your own pace.
             </p>
           </section>
           <section

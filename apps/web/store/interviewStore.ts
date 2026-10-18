@@ -9,6 +9,7 @@ type State = {
   messages: InterviewMessage[];
   status: LiveStatus;
   streaming: string;
+  caption: { role: "assistant" | "user"; text: string; turn: string } | null;
   partial: string;
   error: string;
   errorScope: "voice" | "speech" | "llm" | "session" | null;
@@ -23,6 +24,7 @@ export const initialState: State = {
   messages: [],
   status: "connecting",
   streaming: "",
+  caption: null,
   partial: "",
   error: "",
   errorScope: null,

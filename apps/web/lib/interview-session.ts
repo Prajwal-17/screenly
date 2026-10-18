@@ -15,6 +15,7 @@ export class Session {
   private chunks: Blob[] = [];
   private download = false;
   private responseId = 0;
+  private replayRequested = false;
   private cancelled = new Set<number>();
   private player = new AudioPlayer();
   constructor(
@@ -37,6 +38,7 @@ export class Session {
       error: "",
       streaming: "",
       partial: "",
+      caption: null,
     });
     const url = new URL(`${API_URL}/api/interviews/${this.id}/ws`);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -102,7 +104,21 @@ export class Session {
     )
       useInterviewStore.setState({ status: event.status });
     if (event.type === "partial")
-      useInterviewStore.setState({ partial: event.text });
+      useInterviewStore.setState((s) => ({
+        partial: event.text,
+        ...(event.text
+          ? {
+              caption: {
+                role: "user" as const,
+                text: event.text,
+                turn:
+                  s.caption?.role === "user"
+                    ? s.caption.turn
+                    : crypto.randomUUID(),
+              },
+            }
+          : {}),
+      }));
     if (event.type === "message")
       useInterviewStore.setState((s) => ({
         messages: s.messages.some((m) => m.id === event.message.id)
@@ -111,6 +127,15 @@ export class Session {
             )
           : [...s.messages, event.message],
         ...(event.message.role === "assistant" ? { streaming: "" } : {}),
+        // Saving a turn must not erase the words while its audio is still playing.
+        caption: {
+          role: event.message.role,
+          text: event.message.content,
+          turn:
+            s.caption?.role === event.message.role
+              ? s.caption.turn
+              : event.message.id,
+        },
         ...(event.message.role === "user" && s.errorScope === "llm"
           ? { error: "", errorScope: null }
           : {}),
@@ -123,10 +148,28 @@ export class Session {
       }
       useInterviewStore.setState((s) => ({
         streaming: s.streaming + event.text,
+        caption: {
+          role: "assistant",
+          text: s.streaming + event.text,
+          turn: String(event.responseId),
+        },
       }));
     }
     if (event.type === "audio-start") {
       this.responseId = event.responseId;
+      const saved = useInterviewStore.getState();
+      const last = saved.messages
+        .filter((message) => message.role === "assistant")
+        .at(-1);
+      if (this.replayRequested && last)
+        useInterviewStore.setState({
+          caption: {
+            role: "assistant",
+            text: last.content,
+            turn: String(event.responseId),
+          },
+        });
+      this.replayRequested = false;
       if (useInterviewStore.getState().errorScope === "speech")
         useInterviewStore.setState({ error: "", errorScope: null });
     }
@@ -144,7 +187,10 @@ export class Session {
     if (event.type === "interrupted") {
       this.cancelled.add(event.responseId);
       this.player.stop();
-      useInterviewStore.setState({ streaming: "" });
+      useInterviewStore.setState((s) => ({
+        streaming: "",
+        caption: s.caption?.role === "assistant" ? null : s.caption,
+      }));
     }
     if (event.type === "error") {
       useInterviewStore.setState({
@@ -295,6 +341,7 @@ export class Session {
   async speakLatest() {
     try {
       await this.player.unlock();
+      this.replayRequested = true;
       this.send({ type: "speak" });
     } catch {
       useInterviewStore.setState({

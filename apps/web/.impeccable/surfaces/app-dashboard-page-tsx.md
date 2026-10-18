@@ -30,3 +30,7 @@ FIRST VIEWPORT: A 240px fixed sidebar with 64px brand row, aligned 44px navigati
 FORM: User-pinned Ferndesk-inspired professional application shell. The supplied mockup fixes the visual world; layout and details are refined in code to the handoff's production constraints.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## User refinement override
+
+The route h1 now appears only in the workspace top bar, without the voice-first tagline. Logo and current-navigation dots are removed. Preflight uses open audio-check rows rather than a card. Transcript is an inline disclosure (side-by-side page content from 1024px, stacked on smaller screens), never a right overlay drawer. Current spoken words use the Beautiful UI Streaming Text adaptation and remain visible through audio playback. These explicit user corrections supersede the earlier drawer/large page-title composition in the direction contract.

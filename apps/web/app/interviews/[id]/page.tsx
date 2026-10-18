@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { Workspace } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
-import { Sheet } from "@/components/ui/sheet";
+import StreamingText from "@/components/primitives/StreamingText";
+import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { VoiceVisual } from "@/components/voice-visual";
@@ -23,7 +24,7 @@ import {
   Loading,
   ErrorState,
   InlineAlert,
-  PageTitle,
+  PageIntro,
   ConfirmAction,
 } from "@/components/common";
 import { LiveTranscript } from "@/components/transcript";
@@ -50,6 +51,21 @@ export default function InterviewPage() {
   const controller = useRef<Session | null>(null);
   const state = useInterviewStore();
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const transcriptTrigger = useRef<HTMLButtonElement>(null);
+  const transcriptScroll = useRef(0);
+  const closeTranscript = () => {
+    setTranscriptOpen(false);
+    requestAnimationFrame(() => {
+      transcriptTrigger.current?.focus({ preventScroll: true });
+      window.scrollTo({ top: transcriptScroll.current, behavior: "instant" });
+    });
+  };
+  useEffect(() => {
+    if (transcriptOpen && window.matchMedia("(max-width: 1023px)").matches)
+      document
+        .getElementById("live-transcript")
+        ?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [transcriptOpen]);
   const [now, setNow] = useState(() => Date.now());
   const finish = useMutation({
     mutationFn: () => api.finish(id),
@@ -67,7 +83,9 @@ export default function InterviewPage() {
       router.push(`/interviews/${done}/feedback`);
     });
     controller.current = session;
-    session.connect();
+    // Strict Mode cleans up its first mount before this runs, avoiding a second
+    // socket racing the first socket's close on the server.
+    queueMicrotask(() => session.connect());
     return () => {
       session.close();
       controller.current = null;
@@ -117,39 +135,38 @@ export default function InterviewPage() {
       }
     />
   );
-  const caption = state.partial || state.streaming;
-  const candidateSpeaking = !!state.partial;
-  const captionWords = caption.trim().split(/\s+/);
-  const shortCaption =
-    captionWords.length > 38
-      ? `…${captionWords.slice(-38).join(" ")}`
-      : caption;
+  const caption = state.caption;
+  const candidateSpeaking = caption?.role === "user";
+  const captionWords = caption?.text.match(/\S+\s*/g) ?? [];
+  const captionOffset = Math.max(0, captionWords.length - 38);
+  const captionTokens = captionWords
+    .slice(captionOffset)
+    .map((text, index) => ({ text, id: `${captionOffset + index}:${text}` }));
   return (
     <Workspace
       voice
       title={interview ? `${interview.role} interview` : "Interview"}
       actions={
-        <Sheet
-          open={transcriptOpen}
-          onOpenChange={setTranscriptOpen}
-          title="Transcript"
-          description="Your saved conversation. Read along or revisit a turn."
-          trigger={
-            <Button variant="outline" size="sm" aria-expanded={transcriptOpen}>
-              <FileText />
-              Transcript
-              <span className="hidden text-muted-foreground sm:inline">
-                {state.messages.length}
-              </span>
-            </Button>
-          }
+        <Button
+          ref={transcriptTrigger}
+          variant={transcriptOpen ? "secondary" : "outline"}
+          size="sm"
+          aria-expanded={transcriptOpen}
+          aria-controls="live-transcript"
+          onClick={() => {
+            if (transcriptOpen) closeTranscript();
+            else {
+              transcriptScroll.current = window.scrollY;
+              setTranscriptOpen(true);
+            }
+          }}
         >
-          <LiveTranscript
-            messages={state.messages}
-            streaming={state.streaming}
-            partial={state.partial}
-          />
-        </Sheet>
+          <FileText />
+          Transcript
+          <span className="hidden text-muted-foreground sm:inline">
+            {state.messages.length}
+          </span>
+        </Button>
       }
     >
       {query.isPending ? (
@@ -162,8 +179,7 @@ export default function InterviewPage() {
       ) : (
         interview && (
           <>
-            <PageTitle
-              title={`${interview.role} interview`}
+            <PageIntro
               description={`${interview.level} · ${interview.topics.join(" · ")}`}
               action={
                 <div className="flex flex-wrap items-center gap-3">
@@ -270,107 +286,161 @@ export default function InterviewPage() {
                     {finishTrigger("Finish saved interview", true)}
                   </div>
                 )}
+                {transcriptOpen && (
+                  <div
+                    id="live-transcript"
+                    className="mx-auto max-w-3xl scroll-mt-20 border-t pt-6"
+                  >
+                    <LiveTranscript
+                      messages={state.messages}
+                      streaming={state.streaming}
+                      partial={state.partial}
+                      onClose={closeTranscript}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="flex min-h-[calc(100dvh-216px)] flex-col items-center">
-                <div className="flex w-full flex-1 flex-col items-center justify-center py-2">
-                  <VoiceVisual
-                    status={state.status}
-                    muted={state.muted}
-                    micActive={state.micActive}
-                    level={state.level}
-                    error={!!state.error}
-                  />
-                  <div
-                    className="mt-3 flex min-h-16 w-full max-w-[540px] flex-col items-center justify-start px-2 text-center"
-                    data-slot="live-caption"
-                    aria-live="off"
-                  >
-                    {caption ? (
-                      <>
-                        <span
-                          className={`mb-2 inline-flex items-center gap-1.5 text-[11px] font-medium ${candidateSpeaking ? "text-candidate" : "text-primary"}`}
-                        >
-                          {candidateSpeaking ? (
-                            <Mic className="size-3" aria-hidden="true" />
-                          ) : (
-                            <AudioLines className="size-3" aria-hidden="true" />
-                          )}
-                          {candidateSpeaking ? "You" : "Interviewer"}
-                        </span>
-                        <p className="text-sm leading-relaxed text-ink-secondary sm:text-base">
-                          {shortCaption}
+              <div
+                className={cn(
+                  "grid min-h-[calc(100dvh-176px)] items-start gap-8 border-t pt-6",
+                  transcriptOpen &&
+                    "lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]",
+                )}
+              >
+                <div className="flex min-h-[calc(100dvh-208px)] min-w-0 flex-col items-center">
+                  <div className="flex w-full flex-1 flex-col items-center justify-center py-2">
+                    <VoiceVisual
+                      status={state.status}
+                      muted={state.muted}
+                      micActive={state.micActive}
+                      level={state.level}
+                      error={!!state.error}
+                    />
+                    <div
+                      className="mt-3 flex min-h-16 w-full max-w-[540px] flex-col items-center justify-start px-2 text-center"
+                      data-slot="live-caption"
+                      aria-live="off"
+                    >
+                      {caption?.text ? (
+                        <>
+                          <span
+                            className={`mb-2 inline-flex items-center gap-1.5 text-[11px] font-medium ${candidateSpeaking ? "text-candidate" : "text-primary"}`}
+                          >
+                            {candidateSpeaking ? (
+                              <Mic className="size-3" aria-hidden="true" />
+                            ) : (
+                              <AudioLines
+                                className="size-3"
+                                aria-hidden="true"
+                              />
+                            )}
+                            {candidateSpeaking ? "You" : "Interviewer"}
+                          </span>
+                          <StreamingText
+                            key={`${caption.role}:${caption.turn}`}
+                            content={captionTokens}
+                            isStreaming={
+                              candidateSpeaking
+                                ? !!state.partial
+                                : !!state.streaming ||
+                                  state.status === "speaking"
+                            }
+                            className="text-center sm:text-base"
+                          />
+                        </>
+                      ) : (
+                        <p className="pt-3 text-xs text-muted-foreground">
+                          {state.muted
+                            ? "Your microphone is muted."
+                            : state.status === "listening"
+                              ? "Your turn. Speak naturally when you’re ready."
+                              : state.status === "thinking"
+                                ? "Considering your answer…"
+                                : state.status === "finishing"
+                                  ? "Saving your conversation…"
+                                  : "Follow the conversation with your voice."}
                         </p>
-                      </>
-                    ) : (
-                      <p className="pt-3 text-xs text-muted-foreground">
-                        {state.muted
-                          ? "Your microphone is muted."
-                          : state.status === "listening"
-                            ? "Your turn. Speak naturally when you’re ready."
-                            : state.status === "thinking"
-                              ? "Considering your answer…"
-                              : state.status === "finishing"
-                                ? "Saving your conversation…"
-                                : "Follow the conversation with your voice."}
-                      </p>
-                    )}
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-1 text-xs"
+                      disabled={
+                        !lastQuestion ||
+                        !state.connected ||
+                        !capabilities.data?.voice ||
+                        state.status === "thinking" ||
+                        state.status === "finishing"
+                      }
+                      onClick={() => void controller.current?.speakLatest()}
+                    >
+                      <Volume2 className="size-3.5" />
+                      Hear question
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-1 text-xs"
-                    disabled={
-                      !lastQuestion ||
-                      !state.connected ||
-                      !capabilities.data?.voice ||
-                      state.status === "thinking" ||
-                      state.status === "finishing"
-                    }
-                    onClick={() => void controller.current?.speakLatest()}
+                  <motion.div
+                    initial={{ y: 10 }}
+                    animate={{ y: 0 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="z-10 mt-4 flex max-w-full items-center gap-1 rounded-xl bg-card p-2 shadow-[0_5px_20px_rgb(20_19_18/0.09),0_1px_3px_rgb(20_19_18/0.06)] sm:gap-2 sm:p-2.5"
+                    role="group"
+                    aria-label="Interview controls"
                   >
-                    <Volume2 className="size-3.5" />
-                    Hear question
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      className="px-3 sm:px-4"
+                      disabled={
+                        !state.micActive || state.status === "finishing"
+                      }
+                      onClick={() => controller.current?.mute()}
+                      aria-pressed={state.muted}
+                    >
+                      {state.muted ? <MicOff /> : <Mic />}
+                      {state.muted ? "Unmute" : "Mute"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="px-3 sm:px-4"
+                      disabled={
+                        state.status !== "speaking" &&
+                        state.status !== "thinking"
+                      }
+                      onClick={() => controller.current?.interrupt()}
+                    >
+                      <VolumeX />
+                      Interrupt
+                    </Button>
+                    <span
+                      className="mx-1 h-6 w-px shrink-0 bg-border"
+                      aria-hidden="true"
+                    />
+                    {finishTrigger("Finish interview")}
+                  </motion.div>
+                  <p className="mt-3 mb-1 text-center text-[11px] text-muted-foreground">
+                    Your conversation is saved as you go.
+                  </p>
                 </div>
-                <motion.div
-                  initial={{ y: 10 }}
-                  animate={{ y: 0 }}
-                  transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                  className="z-10 mt-4 flex max-w-full items-center gap-1 rounded-xl bg-card p-2 shadow-[0_5px_20px_rgb(20_19_18/0.09),0_1px_3px_rgb(20_19_18/0.06)] sm:gap-2 sm:p-2.5"
-                  role="group"
-                  aria-label="Interview controls"
-                >
-                  <Button
-                    variant="ghost"
-                    className="px-3 sm:px-4"
-                    disabled={!state.micActive || state.status === "finishing"}
-                    onClick={() => controller.current?.mute()}
-                    aria-pressed={state.muted}
+                {transcriptOpen && (
+                  <div
+                    id="live-transcript"
+                    className="min-w-0 scroll-mt-20 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7"
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.stopPropagation();
+                        closeTranscript();
+                      }
+                    }}
                   >
-                    {state.muted ? <MicOff /> : <Mic />}
-                    {state.muted ? "Unmute" : "Mute"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="px-3 sm:px-4"
-                    disabled={
-                      state.status !== "speaking" && state.status !== "thinking"
-                    }
-                    onClick={() => controller.current?.interrupt()}
-                  >
-                    <VolumeX />
-                    Interrupt
-                  </Button>
-                  <span
-                    className="mx-1 h-6 w-px shrink-0 bg-border"
-                    aria-hidden="true"
-                  />
-                  {finishTrigger("Finish interview")}
-                </motion.div>
-                <p className="mt-3 mb-1 text-center text-[11px] text-muted-foreground">
-                  Your conversation is saved as you go.
-                </p>
+                    <LiveTranscript
+                      messages={state.messages}
+                      streaming={state.streaming}
+                      partial={state.partial}
+                      onClose={closeTranscript}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </>

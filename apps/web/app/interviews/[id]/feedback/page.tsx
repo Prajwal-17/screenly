@@ -29,7 +29,7 @@ import {
   ErrorState,
   InlineAlert,
   ConfirmAction,
-  PageTitle,
+  PageIntro,
 } from "@/components/common";
 import { api, formatDate, elapsed, clock } from "@/lib/api";
 import { exportTranscript } from "@/lib/export";
@@ -78,8 +78,7 @@ export default function Report() {
       ) : (
         interview && (
           <>
-            <PageTitle
-              title="Feedback"
+            <PageIntro
               description={`${interview.role} · ${interview.level} · ${formatDate(interview.createdAt)} · ${clock(elapsed(interview))} practiced`}
               action={
                 <div className="flex items-center gap-2">

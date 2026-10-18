@@ -13,7 +13,6 @@ import {
   Menu,
   ChevronRight,
   Layers2,
-  Mic,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -33,10 +32,6 @@ export function Brand() {
         <AudioLines className="size-5" strokeWidth={1.8} aria-hidden="true" />
       </span>
       Screenly
-      <span
-        className="mb-2 -ml-1 size-1 rounded-full bg-primary"
-        aria-hidden="true"
-      />
     </Link>
   );
 }
@@ -98,12 +93,6 @@ function Sidebar({
                   aria-hidden="true"
                 />
                 {label}
-                {active && (
-                  <span
-                    className="ml-auto size-1.5 rounded-full bg-primary"
-                    aria-hidden="true"
-                  />
-                )}
               </Link>
             );
           })}
@@ -143,6 +132,7 @@ function Sidebar({
               try {
                 const result = await authClient.signOut();
                 if (result.error) throw new Error();
+                onNavigate?.();
                 router.push("/");
               } catch {
                 setError("Could not sign out. Try again.");
@@ -253,19 +243,18 @@ export function Workspace({
               className="hidden size-3.5 text-muted-foreground sm:block"
               aria-hidden="true"
             />
-            <span className="truncate font-medium">{context}</span>
+            <h1
+              id="workspace-title"
+              className="truncate text-sm leading-normal font-medium tracking-normal"
+            >
+              {context}
+            </h1>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            {actions ?? (
-              <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex">
-                <Mic className="size-3.5" aria-hidden="true" />
-                Voice-first practice
-              </span>
-            )}
-          </div>
+          <div className="flex shrink-0 items-center gap-3">{actions}</div>
         </header>
         <main
           id="workspace-content"
+          aria-labelledby="workspace-title"
           tabIndex={-1}
           className={cn(
             "min-w-0 outline-none",

@@ -314,7 +314,7 @@ components:
 
 Screenly gives spoken technical interview practice a steady working environment. Warm paper holds the page, a cooler sidebar anchors navigation, and white surfaces carry settings, saved sessions, and evidence. Charcoal type and fern actions make the interface feel calm, clear, and professional across landing, authentication, setup, conversation, and feedback.
 
-The voice session is the signature expression: a centered, responsive fern presence, a concise state label, current attributed captions, and a compact control dock. The saved conversation stays in a drawer until requested. Product data and recovery states remain visible and truthful; the landing conversation is explicitly labeled as an example.
+The voice session is the signature expression: a centered, responsive fern presence, a concise state label, current attributed captions, and a compact control dock. The saved conversation expands inline within the page when requested. Product data and recovery states remain visible and truthful; the landing conversation is explicitly labeled as an example.
 
 This documents the implemented application in `apps/web`, including its shared primitives. The frontmatter is the normative extracted token layer; `apps/web/app/globals.css` remains the runtime source. CSS aliases are resolved to their source values in the frontmatter because token primitives cannot reference one another. The sidecar extends these tokens with motion, depth, responsive metadata, and representative component snippets.
 
@@ -371,7 +371,7 @@ Both variable fonts are loaded locally through `next/font/local` from `apps/web/
 ### Hierarchy
 
 - **Display:** the landing headline uses the frontmatter display role, reducing to (46px) below the small breakpoint. Its deliberately short line length belongs to the landing composition.
-- **Headline:** workspace page headings use the headline role from the small breakpoint; the base size is (28px). Authentication uses a smaller (26px / 28px) page heading within its compact form.
+- **Headline:** the workspace route title appears once as a (14px), medium-weight h1 in the top bar; do not repeat it in the content. The global headline fallback remains (28px / 32px). Authentication uses its own (26px / 28px) heading, and preflight uses a (26px) task heading.
 - **Title:** section headings use the title role; tertiary headings use (16px), semibold, with (1.4) line height.
 - **Body:** the base body role is used for general reading; most interface descriptions use the body-small role. Page descriptions stay within (65ch), with narrower copy on landing and authentication.
 - **Label:** buttons use the label role. Navigation and choice labels use the navigation role; metadata and status badges use compact caption sizing. Badge and attribution labels increase to medium weight.
@@ -382,7 +382,7 @@ Both variable fonts are loaded locally through `next/font/local` from `apps/web/
 
 ## Layout
 
-At the medium breakpoint (768px), the workspace has a fixed, full-height sidebar (240px wide) and a matching main-content offset. The brand row and sticky workspace bar are both (64px high). Navigation rows are at least (44px high), and the account section stays anchored at the bottom of the sidebar. The content bar carries a breadcrumb/context label and contextual actions.
+At the medium breakpoint (768px), the workspace has a fixed, full-height sidebar (240px wide) and a matching main-content offset. The brand row and sticky workspace bar are both (64px high). Navigation rows are at least (44px high), and the account section stays anchored at the bottom of the sidebar. The content bar carries the single route-title h1, breadcrumb context, and contextual actions. Supporting descriptions and actions may appear in the content without another route heading. Do not add the removed voice-first tagline or decorative logo/navigation dots.
 
 Below (768px), the sidebar gives way to a labeled menu button and a left Radix sheet of `min(280px, 85vw)`. Selecting a route closes the drawer; Radix manages focus, Escape, and return to the trigger. The layout and long content reflow at (360px) and wider. At the small breakpoint (640px), breadcrumb details, compact button sizes, and some secondary labels become visible.
 
@@ -390,7 +390,7 @@ Regular workspace content is centered within (1160px), with horizontal padding p
 
 Overview metrics become three columns at (640px); role shortcuts become three columns at (1024px). Setup adds a (300px) summary column at (1280px). History keeps the interview and status visible, adds experience at (1024px), and places the date in its own column at (1100px); below that the date remains beneath the interview label. Landing becomes a two-column layout at (1024px), while authentication reveals its supporting column at the same breakpoint.
 
-The live interview centers its voice stage in the remaining workspace width. Its column has a minimum height of `calc(100dvh - 216px)` and places the dock below a flexible centered stage. The visual uses `clamp(144px, min(50vw, calc(100dvh - 550px)), 264px)`, adapting to both width and height. Current captions remain within (540px). The dock is in document flow, so short screens can scroll without covering the stage or controls.
+The live interview centers its voice stage in the remaining workspace width. Its column has a minimum height of `calc(100dvh - 208px)` and places the dock below a flexible centered stage. The visual uses `clamp(144px, min(50vw, calc(100dvh - 550px)), 264px)`, adapting to both width and height. Current captions remain within (540px). The dock is in document flow, so short screens can scroll without covering the stage or controls.
 
 Touch controls keep at least (44px) target height on small screens and coarse pointers, including icon actions and the caption/transcript controls. Compact (32px / 36px) variants are confined to larger fine-pointer layouts. Form choices and accordion triggers retain (44px) minimum height.
 
@@ -438,17 +438,17 @@ Text fields are white, (44px) high, with medium corners, a stronger input stroke
 
 ### Navigation
 
-The sidebar uses a structured brand row, compact workspace context, three aligned icon-and-label routes, and a bottom account area. The current route is a white bordered row with charcoal text, fern icon, small fern dot, and a subtle shadow. Other routes use muted ink and a neutral hover fill. Active state is also expressed with `aria-current`. The mobile version is the same navigation inside a left sheet. A visible-on-focus skip link and route-change focus on the content region support keyboard navigation.
+The sidebar uses a structured brand row, compact workspace context, three aligned icon-and-label routes, and a bottom account area. The current route is a white bordered row with charcoal text, fern icon, and a subtle shadow. Other routes use muted ink and a neutral hover fill. Active state is also expressed with `aria-current`. The mobile version is the same navigation inside a left sheet. A visible-on-focus skip link and route-change focus on the content region support keyboard navigation.
 
 ### Sheets and confirmations
 
-Sheets are square-edged, full-height white surfaces, with a bordered title row, a labeled (44px) close control, and a charcoal scrim. The transcript sheet opens on the right at `min(480px, 100%)`; navigation opens on the left at its narrower width. Sheet motion lasts (200ms). Radix provides dialog semantics and focus management. Confirmation dialogs fit within viewport margins, scroll when necessary, and present a clear cancel/confirm pair; deletion uses the destructive action variant.
+Sheets are square-edged, full-height white surfaces, with a bordered title row, a labeled (44px) close control, and a charcoal scrim. Navigation opens on the left at its narrower width. The live transcript is an inline disclosure, not a sheet or modal. Sheet motion lasts (200ms). Radix provides dialog semantics and focus management. Confirmation dialogs fit within viewport margins, scroll when necessary, and present a clear cancel/confirm pair; deletion uses the destructive action variant.
 
 ### Voice stage, captions, and control dock
 
 The responsive circular voice presence sits above its readable state label and hint. Fern light and ribbon layers animate only during listening, thinking, and speaking; muted, paused, attention, and disconnected modes switch to neutral shading. The microphone meter reflects actual input, while the decorative visual is hidden from assistive technology. The state label is announced through `role="status"`.
 
-The stage caption is the current candidate partial text when present, otherwise the current streaming interviewer text. It identifies **You** in candidate clay or **Interviewer** in fern, shows only the trailing (38 words) for long passages, and clears to the current state hint when no partial or stream is active. It does not substitute the last saved question as a permanent question panel. Caption updates have `aria-live="off"` so partial speech is not repeatedly announced. **Hear question** replays the available last question and is enabled according to real connection, voice, and session state.
+The stage caption follows the real current turn, from candidate partial transcription or interviewer deltas. It identifies **You** in candidate clay or **Interviewer** in fern and shows only the trailing (38 words) for long passages. Saving a message retains its caption through audio playback; the next speaker or turn replaces it. The adapted Beautiful UI Streaming Text primitive reveals incoming words with a (220ms) blur/opacity transition and a cursor while active; it has no demonstration timer, loop, fabricated citations, or follow-ups. Reduced motion removes the word/cursor animation. Caption updates have `aria-live="off"` so partial speech is not repeatedly announced. **Hear question** replays the available last question and is enabled according to real connection, voice, and session state.
 
 The white dock groups **Mute / Unmute**, **Interrupt**, and **Finish interview**, with a divider before finish. Mute reflects its pressed state; interrupt is available while speaking or thinking. Finish opens a confirmation before ending the interview and generating feedback. The narrow layout shortens the finish label while retaining its accessible name. The saved-as-you-go message remains directly below the dock.
 
@@ -456,7 +456,11 @@ The orb uses a (5s) breathing cycle, (16s) surface drift, and (7s) ribbon motion
 
 ### Transcript
 
-The full live conversation starts collapsed behind **Transcript** in the top bar. The right sheet shows read-only saved turns, timestamps, speaker labels, interruption status, and temporarily dashed live bubbles. Candidate turns align right with clay tint; interviewer turns align left with white surfaces and fern attribution. The reading viewport follows new content only while the reader is near the latest turn; scrolling back reveals **Jump to latest**. An empty conversation explains when turns will appear. Saved additions are politely announced; partial and streaming message copies are hidden from the accessibility tree. The transcript accepts no typed answer.
+The full live conversation starts collapsed behind **Transcript** in the top bar. It expands as a normal page column beside the voice stage at (1024px) and wider, separated by a hairline; smaller layouts stack it below the stage and scroll it into view. It does not overlay or trap focus. Closing restores the trigger and the previous scroll position; Escape works while reading the inline transcript. Live read-back uses flat left-aligned text rows with speaker labels, real timestamps, and interruption status, matching the supplied reference. Saved feedback retains its existing message bubbles. The reading viewport follows new content only while the reader is near the latest turn; scrolling back reveals **Jump to latest**. An empty conversation explains when turns will appear. Saved additions are politely announced; partial and streaming message copies are hidden from the accessibility tree. The transcript accepts no typed answer.
+
+### Preflight
+
+Audio setup sits directly on the paper canvas, without an enclosing card. A short task heading precedes two separated rows for microphone input and speaker testing, followed by optional recording and the start action. Device checks and errors remain real; no successful check is inferred from presentation alone.
 
 ### Loading, empty, and error states
 
