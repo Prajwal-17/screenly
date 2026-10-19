@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { emptyProfile, profileDetailsSchema } from "@repo/shared";
+import {
+  emptyProfile,
+  profileDetailsSchema,
+  safeProfileHref,
+} from "@repo/shared";
 import { zipSync, strToU8 } from "fflate";
 import { app } from "../src";
 import { createTestSession } from "./session-fixture";
@@ -111,7 +115,7 @@ describe("private profile lifecycle", () => {
           await app.request("/api/profile", {
             method: "PUT",
             headers: owner,
-            body: JSON.stringify({ details }),
+            body: JSON.stringify({ details, complete: true }),
           })
         ).status,
       ).toBe(400);
@@ -137,6 +141,80 @@ describe("private profile lifecycle", () => {
       ).status,
     ).toBe(503);
   });
+  test("keeps incomplete drafts, projects, current step, and unapproved AI results without completing", async () => {
+    const owner = await headers();
+    const details = {
+      ...emptyProfile(""),
+      githubUrl: "https://github.com/",
+      about: "An unfinished bio",
+      projects: [
+        {
+          name: "",
+          description: "Half-written project",
+          role: "",
+          stack: [],
+          url: "https://",
+          repositoryUrl: "",
+        },
+      ],
+    };
+    const onboarding = {
+      step: 3,
+      pendingImport: {
+        source: "PDF resume",
+        extractedCharacters: 200,
+        suggestions: {
+          headline: "Engineer",
+          projects: [{ name: "Imported project" }],
+        },
+      },
+    };
+    const response = await app.request("/api/profile", {
+      method: "PUT",
+      headers: owner,
+      body: JSON.stringify({ details, onboarding }),
+    });
+    expect(response.status).toBe(200);
+    const saved = await (
+      await app.request("/api/profile", { headers: owner })
+    ).json();
+    expect(saved.status).toBe("draft");
+    expect(saved.onboarding.step).toBe(3);
+    expect(saved.details.name).toBe("");
+    expect(saved.details.projects[0].description).toBe("Half-written project");
+    expect(saved.onboarding.pendingImport.suggestions.headline).toBe(
+      "Engineer",
+    );
+    expect(
+      (
+        await app.request("/api/profile", {
+          method: "PUT",
+          headers: owner,
+          body: JSON.stringify({ details, onboarding, complete: true }),
+        })
+      ).status,
+    ).toBe(400);
+    expect(safeProfileHref("javascript:alert(1)")).toBe("");
+    expect(safeProfileHref("https://example.com")).toBe("https://example.com/");
+  });
+  test("rejects irrelevant links before invoking an unavailable AI provider", async () => {
+    const owner = await headers();
+    for (const url of [
+      "https://youtube.com/watch?v=abc",
+      "https://youtu.be/abc",
+      "https://github.com/ada/a-repo",
+      "https://linkedin.com/company/acme",
+      "https://google.com/search?q=resume",
+    ]) {
+      const response = await app.request("/api/profile/import", {
+        method: "POST",
+        headers: owner,
+        body: JSON.stringify({ url }),
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBeTruthy();
+    }
+  });
 });
 describe("profile source and model boundaries", () => {
   test("extracts actual PDF, DOCX, and plain-text resumes", async () => {
@@ -147,13 +225,35 @@ describe("profile source and model boundaries", () => {
       "word/document.xml": strToU8(
         `<w:document><w:p><w:t>${text}</w:t></w:p></w:document>`,
       ),
+      "word/_rels/document.xml.rels": strToU8(
+        '<Relationships><Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://github.com/actual-link-target" TargetMode="External" /></Relationships>',
+      ),
     });
     expect((await resumeSource(new File([zip], "resume.docx"))).text).toContain(
       "PostgreSQL",
     );
+    expect((await resumeSource(new File([zip], "resume.docx"))).text).toContain(
+      "https://github.com/actual-link-target",
+    );
     expect((await resumeSource(new File([text], "resume.txt"))).text).toBe(
       text,
     );
+  });
+  test("preserves DOCX run boundaries, paragraphs, and encoded characters", async () => {
+    const zip = zipSync({
+      "word/document.xml": strToU8(
+        "<w:document><w:p><w:r><w:t>Maya Ch</w:t></w:r><w:r><w:t>en &amp; team build APIs.</w:t></w:r></w:p><w:p><w:r><w:t>Python engineer with PostgreSQL &amp; Docker.</w:t></w:r></w:p></w:document>",
+      ),
+    });
+    const result = await resumeSource(new File([zip], "resume.docx"));
+    expect(result.text).toContain("Maya Chen & team");
+    expect(result.text).toContain("\nPython");
+  });
+  test("extracts an actual legacy Word binary document", async () => {
+    const bytes = await Bun.file("test/fixtures/legacy-word.doc").arrayBuffer();
+    const result = await resumeSource(new File([bytes], "resume.doc"));
+    expect(result.text.length).toBeGreaterThan(40);
+    expect(result.source).toBe("DOC resume");
   });
   test("rejects unreadable, disguised, unsupported and oversized documents", async () => {
     for (const file of [

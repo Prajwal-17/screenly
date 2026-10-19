@@ -3,6 +3,7 @@ import {
   emptyProfile,
   type ProfileDetails,
   type UserProfile,
+  type OnboardingState,
 } from "@repo/shared";
 import { db } from "./index";
 import { user, userProfile } from "./schema";
@@ -16,7 +17,8 @@ export const profiles = {
       .get();
     if (row)
       return {
-        details: row.details,
+        details: { ...emptyProfile(), ...row.details },
+        onboarding: row.onboarding,
         status: row.status,
         completedAt: row.completedAt,
         updatedAt: row.updatedAt,
@@ -28,17 +30,26 @@ export const profiles = {
       .get();
     return {
       details: emptyProfile(owner?.name),
+      onboarding: { step: 0, pendingImport: null },
       status: "new",
       completedAt: null,
       updatedAt: null,
     };
   },
-  save(userId: string, details: ProfileDetails, complete = false): UserProfile {
+  save(
+    userId: string,
+    details: ProfileDetails,
+    complete = false,
+    onboarding?: OnboardingState,
+  ): UserProfile {
     const prior = profiles.get(userId);
     const now = Date.now();
     const values = {
       userId,
       details,
+      onboarding: complete
+        ? { step: 5, pendingImport: null }
+        : (onboarding ?? prior.onboarding),
       status: complete
         ? ("complete" as const)
         : prior.status === "new"
@@ -65,6 +76,7 @@ export const profiles = {
     const values = {
       userId,
       details: current.details,
+      onboarding: { ...current.onboarding, pendingImport: null },
       status: "skipped" as const,
       completedAt: current.completedAt ?? Date.now(),
       updatedAt: Date.now(),

@@ -2,9 +2,11 @@ import { lookup } from "node:dns/promises";
 // Use the real package: Bun’s undici shim does not implement dispatcher controls.
 import { Agent, ProxyAgent, fetch as safeFetch } from "undici/index.js";
 import ipaddr from "ipaddr.js";
-import { parseHTML } from "linkedom";
+import { DOMParser, parseHTML } from "linkedom";
 import { unzipSync } from "fflate";
-import { extractText, getDocumentProxy } from "unpdf";
+import { extractLinks, extractText, getDocumentProxy } from "unpdf";
+import { profileURLIssue } from "@repo/shared";
+import WordExtractor from "word-extractor";
 
 export class ImportError extends Error {
   constructor(
@@ -18,6 +20,8 @@ export const MAX_RESUME_BYTES = 5 * 1024 * 1024;
 const MAX_SOURCE_BYTES = 1024 * 1024;
 export const MAX_SOURCE_CHARS = 30000;
 export function normalizeSourceURL(value: string) {
+  const issue = profileURLIssue(value);
+  if (issue) throw new ImportError(issue, 400);
   try {
     if (
       /^[a-z][a-z0-9+.-]*:/i.test(value.trim()) &&
@@ -131,6 +135,10 @@ export async function fetchPublic(
   signal: AbortSignal,
   hops = 0,
 ): Promise<{ text: string; type: string }> {
+  const issue = profileURLIssue(url.toString());
+  // api.github.com is the internal, fixed-host GitHub metadata source.
+  if (issue && url.hostname !== "api.github.com")
+    throw new ImportError(issue, 400);
   const addresses = await assertPublicURL(url);
   const address =
     addresses.find((entry) => entry.family === 4)?.address ??
@@ -262,6 +270,16 @@ export async function profileLinkSource(
     throw new ImportError(
       "That profile isn’t publicly readable. Upload a resume or paste your profile text instead.",
     );
+  if (
+    !linkedin &&
+    !/\b(engineer|developer|designer|portfolio|projects?|experience|skills?|education|about me|software|researcher|consultant|architect|resume|curriculum|currículo)\b/i.test(
+      text,
+    )
+  )
+    throw new ImportError(
+      "That page doesn’t look like a personal portfolio. Use your own profile, upload a resume, or paste your background.",
+      400,
+    );
   return {
     text,
     source: linkedin ? "LinkedIn profile" : "Portfolio",
@@ -277,6 +295,7 @@ export async function resumeSource(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
     let text = "";
+    let links: string[] = [];
     if (ext === "txt") {
       if (bytes.includes(0))
         throw new ImportError(
@@ -289,36 +308,60 @@ export async function resumeSource(file: File) {
         throw new ImportError("That file does not appear to be a PDF.", 415);
       const pdf = await getDocumentProxy(bytes, {
         disableFontFace: true,
-        useSystemFonts: false,
+        useSystemFonts: true,
+        useWorkerFetch: false,
       });
       try {
         if (pdf.numPages > 20)
           throw new ImportError("Use a resume with 20 pages or fewer.", 413);
         text = (await extractText(pdf, { mergePages: true })).text;
+        links = (await extractLinks(pdf)).links;
       } finally {
         await pdf.loadingTask.destroy();
       }
+    } else if (ext === "doc") {
+      if (
+        Buffer.from(bytes.subarray(0, 8)).toString("hex") !== "d0cf11e0a1b11ae1"
+      )
+        throw new ImportError(
+          "That file isn’t a Word document. Export it as DOCX or PDF and try again.",
+          415,
+        );
+      text = (await new WordExtractor().extract(Buffer.from(bytes))).getBody();
     } else if (ext === "docx") {
       const entries = unzipSync(bytes, {
         filter: (entry) =>
-          entry.name === "word/document.xml" &&
-          entry.originalSize <= 2 * 1024 * 1024,
+          ["word/document.xml", "word/_rels/document.xml.rels"].includes(
+            entry.name,
+          ) && entry.originalSize <= 2 * 1024 * 1024,
       });
       const xml = entries["word/document.xml"];
       if (!xml)
         throw new ImportError(
           "That DOCX could not be read. Try a PDF or text resume.",
         );
-      text = new TextDecoder()
+      // Decode XML entities and join paragraphs/tabs without splitting words at run boundaries.
+      const raw = new TextDecoder("utf-8", { fatal: true })
         .decode(xml)
+        .replace(/<w:(?:tab|br|cr)\b[^>]*\/>/g, " ")
         .replace(/<\/w:p>/g, "\n")
-        .replace(/<[^>]*>/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'");
-    } else throw new ImportError("Upload a PDF, DOCX, or TXT resume.", 415);
+        .replace(/<[^>]*>/g, "");
+      text =
+        parseHTML(
+          `<html><body><div>${raw.replaceAll("<", "&lt;")}</div></body></html>`,
+        ).document.querySelector("div")?.textContent ?? "";
+      const relationships = entries["word/_rels/document.xml.rels"];
+      if (relationships) {
+        const document = new DOMParser().parseFromString(
+          new TextDecoder().decode(relationships),
+          "text/xml",
+        );
+        links = [...document.querySelectorAll("Relationship")]
+          .filter((node) => node.getAttribute("Type")?.endsWith("/hyperlink"))
+          .map((node) => node.getAttribute("Target") ?? "");
+      }
+    } else
+      throw new ImportError("Upload a PDF, DOCX, DOC, or TXT resume.", 415);
     text = text
       .replaceAll(String.fromCharCode(0), "")
       .trim()
@@ -327,9 +370,34 @@ export async function resumeSource(file: File) {
       throw new ImportError(
         "There isn’t enough readable text. For a scanned PDF, paste the resume text or enter your details manually.",
       );
-    return { text, source: "Resume", link: {} };
+    const urls = [...new Set(links)]
+      .filter((value) => {
+        try {
+          const url = new URL(value);
+          return (
+            value.length <= 2048 &&
+            url.protocol === "https:" &&
+            !url.username &&
+            !url.password
+          );
+        } catch {
+          return false;
+        }
+      })
+      .slice(0, 20);
+    if (urls.length)
+      text = `Linked URLs:\n${urls.join("\n")}\n\n${text}`.slice(
+        0,
+        MAX_SOURCE_CHARS,
+      );
+    return { text, source: `${ext?.toUpperCase()} resume`, link: {} };
   } catch (error) {
     if (error instanceof ImportError) throw error;
+    if (error instanceof Error && /password|encrypt/i.test(error.message))
+      throw new ImportError(
+        "This resume is password-protected. Upload an unlocked copy or paste its text.",
+        422,
+      );
     throw new ImportError(
       "That resume could not be read. Try an unprotected PDF, DOCX, or TXT file.",
     );

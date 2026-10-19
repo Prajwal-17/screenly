@@ -18,6 +18,7 @@
     "test:e2e:local": "SCREENLY_E2E_PORT_OFFSET=200 playwright test --config playwright.local.config.ts"
   },
   "devDependencies": {
+    "fflate": "^0.8.3",
     "prettier": "^3.7.4",
     "turbo": "^2.9.16",
     "typescript": "5.9.2",

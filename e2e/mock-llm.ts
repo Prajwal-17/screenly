@@ -13,6 +13,7 @@ const server = Bun.serve({
     };
     const last = body.messages.at(-1)?.content ?? "";
     if (body.messages[0]?.content.startsWith("screenly-profile-import")) {
+      await Bun.sleep(450);
       if (last.includes("PROFILE_PROVIDER_FAILURE"))
         return Response.json(
           { error: { message: "Test import failure" } },
@@ -23,12 +24,26 @@ const server = Bun.serve({
           {
             message: {
               content: JSON.stringify({
+                name: "Maya Chen",
                 headline: "Backend engineer",
+                about: "Builds reliable distributed systems.",
                 location: "London",
                 role: "Backend",
                 level: "Senior",
                 stack: ["Python", "SQL"],
                 githubUrl: "https://github.com/example-candidate",
+                ...(last.includes("https://maya.example/hidden-pdf-target")
+                  ? { portfolioUrl: "https://maya.example/hidden-pdf-target" }
+                  : {}),
+                projects: [
+                  {
+                    name: "Relay",
+                    description: "A queue monitoring dashboard.",
+                    role: "Built the API",
+                    stack: ["Python", "SQL"],
+                    repositoryUrl: "https://github.com/example-candidate/relay",
+                  },
+                ],
               }),
             },
           },

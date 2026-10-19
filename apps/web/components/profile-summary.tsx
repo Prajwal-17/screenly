@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { safeProfileHref } from "@repo/shared";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserProfile } from "@/lib/profile";
@@ -39,6 +40,11 @@ export function ProfileSummary() {
             {details?.headline ||
               "Add your background to make practice feel more relevant."}
           </p>
+          {!!details?.about && (
+            <p className="mt-3 max-w-[65ch] whitespace-pre-wrap text-sm text-muted-foreground">
+              {details.about}
+            </p>
+          )}
           {(details?.role || details?.level || details?.location) && (
             <p className="mt-2 text-xs text-muted-foreground">
               {[details.role, details.level, details.location]
@@ -71,11 +77,15 @@ export function ProfileSummary() {
               ["GitHub", details?.githubUrl],
               ["LinkedIn", details?.linkedinUrl],
               ["Portfolio", details?.portfolioUrl],
+              ...(details?.otherLinks ?? []).map((link) => [
+                link.label,
+                link.url,
+              ]),
             ].map(([label, url]) =>
-              url ? (
+              safeProfileHref(url) ? (
                 <a
                   key={label}
-                  href={url}
+                  href={safeProfileHref(url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-link underline-offset-4 hover:underline"
@@ -86,6 +96,50 @@ export function ProfileSummary() {
               ) : null,
             )}
           </div>
+          {!!details?.projects.length && (
+            <div className="mt-6 border-t pt-5">
+              <h3 className="text-sm font-medium">Projects</h3>
+              <ul className="mt-3 divide-y">
+                {details.projects.map((project, index) => (
+                  <li key={index} className="py-3">
+                    <p className="text-sm font-medium">{project.name}</p>
+                    {project.description && (
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                        {project.description}
+                      </p>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {[project.role, project.stack.join(", ")]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                    <div className="mt-2 flex gap-4 text-sm">
+                      {[
+                        ["Live project", project.url],
+                        ["Repository", project.repositoryUrl],
+                      ].map(([label, url]) =>
+                        safeProfileHref(url) ? (
+                          <a
+                            key={label}
+                            href={safeProfileHref(url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-link underline-offset-4 hover:underline"
+                          >
+                            {label}
+                            <span className="sr-only">
+                              {" "}
+                              (opens in a new tab)
+                            </span>
+                          </a>
+                        ) : null,
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
     </section>

@@ -5,6 +5,7 @@ import type {
   InterviewSettings,
   InterviewStatus,
   ProfileDetails,
+  OnboardingState,
 } from "@repo/shared";
 import {
   index,
@@ -163,6 +164,10 @@ export const userProfile = sqliteTable("user_profile", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   details: text("details", { mode: "json" }).$type<ProfileDetails>().notNull(),
+  onboarding: text("onboarding", { mode: "json" })
+    .$type<OnboardingState>()
+    .notNull()
+    .default({ step: 0, pendingImport: null }),
   status: text("status")
     .$type<"draft" | "complete" | "skipped">()
     .notNull()
