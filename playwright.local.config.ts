@@ -19,7 +19,7 @@ export default defineConfig({
         NODE_ENV: "development",
         ENABLE_DEV_LOGIN: "true",
         PORT: String(backendPort),
-        DATABASE_PATH: "../../.local-e2e.sqlite",
+        D1_PERSIST_PATH: "../../.local-e2e-workers",
         BETTER_AUTH_SECRET: "local-e2e-only-secret-at-least-32-characters",
         FRONTEND_URL: webURL,
         BETTER_AUTH_URL: backendURL,

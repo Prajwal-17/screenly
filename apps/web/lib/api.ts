@@ -42,8 +42,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(settings),
     }),
-  finish: (id: string) =>
-    request<InterviewDetail>(`/interviews/${id}/finish`, { method: "POST" }),
+  finish: (id: string, generateFeedback = true) =>
+    request<InterviewDetail>(`/interviews/${id}/finish`, {
+      method: "POST",
+      body: JSON.stringify({ generateFeedback }),
+    }),
   retryFeedback: (id: string) =>
     request(`/interviews/${id}/feedback`, { method: "POST" }),
   remove: (id: string) => request(`/interviews/${id}`, { method: "DELETE" }),

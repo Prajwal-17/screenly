@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 import type { Feedback, InterviewMessage } from "@repo/shared";
 import { normalizeStoredFeedback } from "../src/db/interviews";
 import { parseFeedback } from "../src/lib/llmService";

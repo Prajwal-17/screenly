@@ -1,20 +1,21 @@
 import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
-import { env } from "../config";
+import type { Config } from "../config";
 import { DeepgramSocket } from "./deepgramSocket";
 export class STTService {
   private socket: DeepgramSocket | null = null;
   constructor(
+    private env: Config,
     private onTurn: (event: ListenV2TurnInfo) => void,
     private onError: (error: Error) => void,
   ) {}
   async connect() {
-    const url = new URL("/v2/listen", env.DEEPGRAM_WS_URL);
+    const url = new URL("/v2/listen", this.env.DEEPGRAM_WS_URL);
     url.search = new URLSearchParams({
-      model: env.DEEPGRAM_STT_MODEL,
+      model: this.env.DEEPGRAM_STT_MODEL,
       encoding: "linear16",
       sample_rate: "16000",
     }).toString();
-    this.socket = new DeepgramSocket(url, env.DEEPGRAM_API_KEY ?? "", {
+    this.socket = new DeepgramSocket(url, this.env.DEEPGRAM_API_KEY ?? "", {
       json: (message) => {
         if (message.type === "TurnInfo")
           this.onTurn(message as unknown as ListenV2TurnInfo);

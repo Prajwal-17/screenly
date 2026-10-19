@@ -29,6 +29,10 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await expect(sidebar).toHaveAttribute("data-state", "expanded");
   await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(256);
   await capture("sidebar-expanded");
+  await page.keyboard.press("Control+b");
+  await expect(sidebar).toHaveAttribute("data-state", "collapsed");
+  await page.keyboard.press("Control+b");
+  await expect(sidebar).toHaveAttribute("data-state", "expanded");
   await page.getByRole("button", { name: "Switch workspace" }).click();
   await expect(
     page.getByRole("menuitem", { name: "Personal workspace" }),
@@ -51,6 +55,11 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await expect(search).toBeVisible();
   const query = page.getByRole("combobox", { name: "Search workspace pages" });
   await expect(query).toBeFocused();
+  await query.press("Control+b");
+  await expect(page.locator("#workspace-sidebar")).toHaveAttribute(
+    "data-state",
+    "expanded",
+  );
   await capture("sidebar-search");
   await query.fill("library");
   await query.press("Enter");
@@ -113,6 +122,10 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
     .poll(async () => Math.round((await sidebar.boundingBox())?.width ?? 0))
     .toBe(64);
   await capture("sidebar-interview-focus");
+  await page.keyboard.press("Control+b");
+  await expect(sidebar).toHaveAttribute("data-state", "expanded");
+  await page.keyboard.press("Control+b");
+  await expect(sidebar).toHaveAttribute("data-state", "collapsed");
   await page
     .getByRole("button", { name: "Expand sidebar", exact: true })
     .click();
@@ -123,6 +136,14 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await page.request.delete(`${backendURL}/api/interviews/${interviewId}`);
 
   await page.setViewportSize({ width: 360, height: 800 });
+  await page.keyboard.press("Control+b");
+  await expect(
+    page.getByRole("dialog", { name: "Navigation", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Control+b");
+  await expect(
+    page.getByRole("dialog", { name: "Navigation", exact: true }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Open navigation", exact: true })
     .click();

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type {
   Feedback,
   Interview,
@@ -6,7 +6,7 @@ import type {
   InterviewMessage,
   InterviewSettings,
 } from "@repo/shared";
-import { db } from "./index";
+import type { Database } from "./index";
 import { interviewMessage, interviewSession } from "./schema";
 
 type Row = typeof interviewSession.$inferSelect;
@@ -40,172 +40,188 @@ function serialize(row: Row): Interview {
     feedbackModel: row.feedbackModel,
   };
 }
-export const interviews = {
-  create(userId: string, settings: InterviewSettings) {
-    const now = new Date();
-    const row = db
-      .insert(interviewSession)
-      .values({
-        id: crypto.randomUUID(),
-        userId,
-        settings,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get();
-    return serialize(row);
-  },
-  list(userId: string) {
-    return db
-      .select()
-      .from(interviewSession)
-      .where(eq(interviewSession.userId, userId))
-      .orderBy(desc(interviewSession.createdAt))
-      .all()
-      .map(serialize);
-  },
-  owned(id: string, userId: string) {
-    const row = db
-      .select()
-      .from(interviewSession)
-      .where(
-        and(eq(interviewSession.id, id), eq(interviewSession.userId, userId)),
-      )
-      .get();
-    return row ? serialize(row) : null;
-  },
-  get(id: string): InterviewDetail | null {
-    const row = db
-      .select()
-      .from(interviewSession)
-      .where(eq(interviewSession.id, id))
-      .get();
-    if (!row) return null;
-    return {
-      ...serialize(row),
-      messages: db
-        .select({
+export function createInterviews(db: Database) {
+  return {
+    async create(userId: string, settings: InterviewSettings) {
+      const now = new Date();
+      const row = await db
+        .insert(interviewSession)
+        .values({
+          id: crypto.randomUUID(),
+          userId,
+          settings,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+        .get();
+      return serialize(row);
+    },
+    async list(userId: string) {
+      return (
+        await db
+          .select()
+          .from(interviewSession)
+          .where(eq(interviewSession.userId, userId))
+          .orderBy(desc(interviewSession.createdAt))
+          .all()
+      ).map(serialize);
+    },
+    async owned(id: string, userId: string) {
+      const row = await db
+        .select()
+        .from(interviewSession)
+        .where(
+          and(eq(interviewSession.id, id), eq(interviewSession.userId, userId)),
+        )
+        .get();
+      return row ? serialize(row) : null;
+    },
+    async get(id: string): Promise<InterviewDetail | null> {
+      const row = await db
+        .select()
+        .from(interviewSession)
+        .where(eq(interviewSession.id, id))
+        .get();
+      if (!row) return null;
+      return {
+        ...serialize(row),
+        messages: await db
+          .select({
+            id: interviewMessage.id,
+            role: interviewMessage.role,
+            content: interviewMessage.content,
+            status: interviewMessage.status,
+            createdAt: interviewMessage.createdAt,
+          })
+          .from(interviewMessage)
+          .where(eq(interviewMessage.interviewId, id))
+          .orderBy(asc(interviewMessage.createdAt), asc(interviewMessage.id))
+          .all(),
+      };
+    },
+    async start(id: string) {
+      await db
+        .update(interviewSession)
+        .set({ status: "active", startedAt: Date.now(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(interviewSession.id, id),
+            eq(interviewSession.status, "draft"),
+          ),
+        )
+        .run();
+      return (await this.get(id))!;
+    },
+    async hasMessageSource(id: string, sourceKey: string) {
+      return Boolean(
+        await db
+          .select({ id: interviewMessage.id })
+          .from(interviewMessage)
+          .where(
+            and(
+              eq(interviewMessage.interviewId, id),
+              eq(interviewMessage.sourceKey, sourceKey),
+            ),
+          )
+          .get(),
+      );
+    },
+    async addMessage(
+      id: string,
+      role: InterviewMessage["role"],
+      content: string,
+      sourceKey: string,
+      status: InterviewMessage["status"] = "complete",
+    ) {
+      return db
+        .insert(interviewMessage)
+        .values({
+          id: crypto.randomUUID(),
+          interviewId: id,
+          role,
+          content,
+          sourceKey,
+          status,
+          // Compute this inside the write: separate D1 reads can race across events.
+          createdAt: sql`max(${Date.now()}, coalesce((select max(${interviewMessage.createdAt}) + 1 from ${interviewMessage} where ${interviewMessage.interviewId} = ${id}), 0))`,
+        })
+        .onConflictDoNothing()
+        .returning({
           id: interviewMessage.id,
           role: interviewMessage.role,
           content: interviewMessage.content,
           status: interviewMessage.status,
           createdAt: interviewMessage.createdAt,
         })
-        .from(interviewMessage)
-        .where(eq(interviewMessage.interviewId, id))
-        .orderBy(asc(interviewMessage.createdAt), asc(interviewMessage.id))
-        .all(),
-    };
-  },
-  start(id: string) {
-    db.update(interviewSession)
-      .set({ status: "active", startedAt: Date.now(), updatedAt: new Date() })
-      .where(
-        and(eq(interviewSession.id, id), eq(interviewSession.status, "draft")),
-      )
-      .run();
-    return this.get(id)!;
-  },
-  hasMessageSource(id: string, sourceKey: string) {
-    return Boolean(
-      db
-        .select({ id: interviewMessage.id })
-        .from(interviewMessage)
+        .get();
+    },
+    async finish(id: string, generateFeedback = true) {
+      await db
+        .update(interviewSession)
+        .set({
+          status: "completed",
+          endedAt: Date.now(),
+          feedbackStatus: generateFeedback ? "pending" : "skipped",
+          updatedAt: new Date(),
+        })
         .where(
           and(
-            eq(interviewMessage.interviewId, id),
-            eq(interviewMessage.sourceKey, sourceKey),
+            eq(interviewSession.id, id),
+            eq(interviewSession.status, "active"),
           ),
         )
-        .get(),
-    );
-  },
-  addMessage(
-    id: string,
-    role: InterviewMessage["role"],
-    content: string,
-    sourceKey: string,
-    status: InterviewMessage["status"] = "complete",
-  ) {
-    const last = db
-      .select({ createdAt: interviewMessage.createdAt })
-      .from(interviewMessage)
-      .where(eq(interviewMessage.interviewId, id))
-      .orderBy(desc(interviewMessage.createdAt))
-      .get();
-    return db
-      .insert(interviewMessage)
-      .values({
-        id: crypto.randomUUID(),
-        interviewId: id,
-        role,
-        content,
-        sourceKey,
-        status,
-        createdAt: Math.max(Date.now(), (last?.createdAt ?? 0) + 1),
-      })
-      .onConflictDoNothing()
-      .returning({
-        id: interviewMessage.id,
-        role: interviewMessage.role,
-        content: interviewMessage.content,
-        status: interviewMessage.status,
-        createdAt: interviewMessage.createdAt,
-      })
-      .get();
-  },
-  finish(id: string) {
-    db.update(interviewSession)
-      .set({ status: "completed", endedAt: Date.now(), updatedAt: new Date() })
-      .where(
-        and(eq(interviewSession.id, id), eq(interviewSession.status, "active")),
-      )
-      .run();
-    return this.get(id)!;
-  },
-  interruptMessage(id: string) {
-    return db
-      .update(interviewMessage)
-      .set({ status: "interrupted" })
-      .where(eq(interviewMessage.id, id))
-      .returning({
-        id: interviewMessage.id,
-        role: interviewMessage.role,
-        content: interviewMessage.content,
-        status: interviewMessage.status,
-        createdAt: interviewMessage.createdAt,
-      })
-      .get();
-  },
-  feedbackState(id: string, state: "generating" | "failed") {
-    db.update(interviewSession)
-      .set({ feedbackStatus: state, updatedAt: new Date() })
-      .where(eq(interviewSession.id, id))
-      .run();
-  },
-  saveFeedback(id: string, feedback: Feedback, model: string) {
-    db.update(interviewSession)
-      .set({
-        feedbackStatus: "ready",
-        feedback,
-        feedbackModel: model,
-        updatedAt: new Date(),
-      })
-      .where(eq(interviewSession.id, id))
-      .run();
-  },
-  remove(id: string, userId: string) {
-    db.delete(interviewSession)
-      .where(
-        and(eq(interviewSession.id, id), eq(interviewSession.userId, userId)),
-      )
-      .run();
-  },
-  recoverFeedback() {
-    db.update(interviewSession)
-      .set({ feedbackStatus: "failed" })
-      .where(eq(interviewSession.feedbackStatus, "generating"))
-      .run();
-  },
-};
+        .run();
+      return (await this.get(id))!;
+    },
+    async interruptMessage(id: string) {
+      return db
+        .update(interviewMessage)
+        .set({ status: "interrupted" })
+        .where(eq(interviewMessage.id, id))
+        .returning({
+          id: interviewMessage.id,
+          role: interviewMessage.role,
+          content: interviewMessage.content,
+          status: interviewMessage.status,
+          createdAt: interviewMessage.createdAt,
+        })
+        .get();
+    },
+    async feedbackState(id: string, state: "generating" | "failed") {
+      await db
+        .update(interviewSession)
+        .set({ feedbackStatus: state, updatedAt: new Date() })
+        .where(eq(interviewSession.id, id))
+        .run();
+    },
+    async saveFeedback(id: string, feedback: Feedback, model: string) {
+      await db
+        .update(interviewSession)
+        .set({
+          feedbackStatus: "ready",
+          feedback,
+          feedbackModel: model,
+          updatedAt: new Date(),
+        })
+        .where(eq(interviewSession.id, id))
+        .run();
+    },
+    async remove(id: string, userId: string) {
+      await db
+        .delete(interviewSession)
+        .where(
+          and(eq(interviewSession.id, id), eq(interviewSession.userId, userId)),
+        )
+        .run();
+    },
+    async recoverFeedback() {
+      await db
+        .update(interviewSession)
+        .set({ feedbackStatus: "failed" })
+        .where(eq(interviewSession.feedbackStatus, "generating"))
+        .run();
+    },
+  };
+}
+export type InterviewStore = ReturnType<typeof createInterviews>;

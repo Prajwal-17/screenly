@@ -18,12 +18,8 @@ import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { VoiceVisual } from "@/components/voice-visual";
-import {
-  Loading,
-  ErrorState,
-  InlineAlert,
-  ConfirmAction,
-} from "@/components/common";
+import { Loading, ErrorState, InlineAlert } from "@/components/common";
+import { FinishInterviewDialog } from "@/components/finish-interview-dialog";
 import { LiveTranscript } from "@/components/transcript";
 import { Preflight } from "@/components/preflight";
 import { Session } from "@/lib/interview-session";
@@ -65,19 +61,25 @@ export default function InterviewPage() {
   }, [transcriptOpen]);
   const [now, setNow] = useState(() => Date.now());
   const finish = useMutation({
-    mutationFn: () => api.finish(id),
+    mutationFn: (generateFeedback: boolean) => api.finish(id, generateFeedback),
     onSuccess: (data) => {
       client.setQueryData(["interview", id], data);
       void client.invalidateQueries({ queryKey: ["interviews"] });
-      router.push(`/interviews/${id}/feedback`);
+      router.push(
+        data.feedbackStatus === "skipped"
+          ? "/history"
+          : `/interviews/${id}/feedback`,
+      );
     },
   });
   useEffect(() => {
     if (!authId) return;
-    const session = new Session(id, (done) => {
+    const session = new Session(id, (done, generateFeedback) => {
       void client.invalidateQueries({ queryKey: ["interviews"] });
       void client.invalidateQueries({ queryKey: ["interview", done] });
-      router.push(`/interviews/${done}/feedback`);
+      router.push(
+        generateFeedback ? `/interviews/${done}/feedback` : "/history",
+      );
     });
     controller.current = session;
     // Strict Mode cleans up its first mount before this runs, avoiding a second
@@ -97,13 +99,9 @@ export default function InterviewPage() {
     state.status,
   );
   const finishTrigger = (label: string, saved = false) => (
-    <ConfirmAction
-      title="Finish interview?"
-      description="This ends the interview and generates feedback from saved answers. Wait for your last answer to appear in the conversation before finishing."
-      confirmLabel="Finish and view feedback"
-      cancelLabel="Keep going"
+    <FinishInterviewDialog
       pending={finish.isPending}
-      onConfirm={() => finish.mutate()}
+      onFinish={(generateFeedback) => finish.mutate(generateFeedback)}
       trigger={
         <Button
           variant="outline"
@@ -141,7 +139,7 @@ export default function InterviewPage() {
                 size="sm"
                 onClick={() =>
                   finish.error
-                    ? finish.mutate()
+                    ? finish.mutate(finish.variables ?? true)
                     : state.errorScope === "speech"
                       ? void controller.current?.speakLatest()
                       : void controller.current?.start()

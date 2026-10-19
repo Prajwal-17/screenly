@@ -1,5 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+test("Google sign-ups return directly to onboarding while returning accounts open the dashboard", async ({
+  page,
+}) => {
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({ json: { google: true, voice: false, llm: false } }),
+  );
+  await page.route("**/api/auth/sign-in/social", (route) =>
+    route.fulfill({ json: { redirect: false } }),
+  );
+  await page.goto("/auth/sign-in");
+  const request = page.waitForRequest("**/api/auth/sign-in/social");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  const payload = (await request).postDataJSON();
+  expect(payload.provider).toBe("google");
+  expect(payload.newUserCallbackURL).toBe(
+    new URL("/onboarding", page.url()).href,
+  );
+  expect(payload.callbackURL).toBe(new URL("/dashboard", page.url()).href);
+});
+
 test("Google is the only sign-in option and unavailable configuration is explained", async ({
   page,
 }) => {

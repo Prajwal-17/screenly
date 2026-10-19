@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   profileSaveSchema,
+  emptyProfile,
   type ProfileDetails,
   type OnboardingState,
   type UserProfile,
@@ -18,11 +19,16 @@ export function useProfileDraft(
   userId: string | undefined,
   editing: boolean,
 ) {
-  const [draft, setDraft] = useState<ProfileDraft | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>({
+    details: emptyProfile(),
+    onboarding: { step: 0, pendingImport: null },
+  });
   const [sync, setSync] = useState<"saved" | "saving" | "error">("saved");
   const [revision, setRevision] = useState(0);
   const initialized = useRef("");
-  const latest = useRef<ProfileDraft | null>(null);
+  const latest = useRef<ProfileDraft>(draft);
+  const earlyFields = useRef(new Set<keyof ProfileDetails>());
+  const earlyStep = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const stopped = useRef(false);
   const persisted = useRef("");
@@ -33,7 +39,7 @@ export function useProfileDraft(
     initialized.current = userId;
     stopped.current = false;
     let next: ProfileDraft = {
-      details: profile.details,
+      details: { ...profile.details },
       onboarding: {
         ...profile.onboarding,
         step:
@@ -61,20 +67,36 @@ export function useProfileDraft(
     } catch {
       /* The server copy remains usable when device storage is unavailable. */
     }
+    for (const field of earlyFields.current)
+      Object.assign(next.details, { [field]: latest.current.details[field] });
+    if (earlyStep.current) next.onboarding = latest.current.onboarding;
     persisted.current = remote;
     latest.current = next;
     setDraft(next);
-    if (JSON.stringify(next) !== remote) setRevision(1);
+    if (JSON.stringify(next) !== remote) setRevision((value) => value + 1);
   }, [profile, userId, key, editing]);
   const update = useCallback(
     (change: (prior: ProfileDraft) => ProfileDraft) => {
       if (!latest.current || stopped.current) return;
       const next = change(latest.current);
       if (JSON.stringify(next) === JSON.stringify(latest.current)) return;
+      if (!initialized.current) {
+        for (const field of Object.keys(
+          next.details,
+        ) as (keyof ProfileDetails)[])
+          if (
+            JSON.stringify(next.details[field]) !==
+            JSON.stringify(latest.current.details[field])
+          )
+            earlyFields.current.add(field);
+        if (next.onboarding.step !== latest.current.onboarding.step)
+          earlyStep.current = true;
+      }
       latest.current = next;
       setDraft(next);
       setRevision((value) => value + 1);
       setSync("saving");
+      if (!userId) return;
       try {
         localStorage.setItem(
           key,
@@ -84,11 +106,12 @@ export function useProfileDraft(
         /* Remote autosave still runs. */
       }
     },
-    [key],
+    [key, userId],
   );
   const flush = useCallback(() => {
     const snapshot = latest.current;
-    if (!snapshot || stopped.current) return queue.current;
+    if (!userId || initialized.current !== userId || stopped.current)
+      return queue.current;
     const signature = JSON.stringify(snapshot);
     queue.current = queue.current
       .catch(() => {})

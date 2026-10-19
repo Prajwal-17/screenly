@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { Tooltip } from "radix-ui";
 import {
@@ -19,7 +18,6 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,16 +67,18 @@ export function WorkspaceSidebar({
   email,
   collapsed = false,
   onNavigate,
+  onSignOut,
+  signOutError = "",
 }: {
   name: string;
   email: string;
   collapsed?: boolean;
   onNavigate?: () => void;
+  onSignOut: () => Promise<void>;
+  signOutError?: string;
 }) {
   const path = usePathname();
-  const router = useRouter();
-  const { signingOut, setSigningOut } = useUIStore();
-  const [error, setError] = useState("");
+  const signingOut = useUIStore((state) => state.signingOut);
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
   const initial = name
     .trim()
@@ -331,9 +331,9 @@ export function WorkspaceSidebar({
         </nav>
 
         <div className={cn("shrink-0 border-t", collapsed ? "p-2" : "p-2.5")}>
-          {error && (
+          {signOutError && (
             <p role="alert" className="mb-2 px-2 text-xs text-destructive">
-              {error}
+              {signOutError}
             </p>
           )}
           <div
@@ -407,19 +407,7 @@ export function WorkspaceSidebar({
                 <DropdownMenuItem
                   disabled={signingOut}
                   className="text-destructive focus:bg-destructive-surface [&_svg]:text-destructive"
-                  onSelect={async () => {
-                    setSigningOut(true);
-                    setError("");
-                    try {
-                      const result = await authClient.signOut();
-                      if (result.error) throw new Error();
-                      onNavigate?.();
-                      router.replace("/");
-                    } catch {
-                      setSigningOut(false);
-                      setError("Could not sign out. Try again.");
-                    }
-                  }}
+                  onSelect={() => void onSignOut()}
                 >
                   <LogOut />
                   {signingOut ? "Signing out…" : "Sign out"}

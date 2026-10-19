@@ -1,6 +1,4 @@
-import { lookup } from "node:dns/promises";
-// Use the real package: Bun’s undici shim does not implement dispatcher controls.
-import { Agent, ProxyAgent, fetch as safeFetch } from "undici/index.js";
+import { resolve4, resolve6 } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { DOMParser, parseHTML } from "linkedom";
 import { unzipSync } from "fflate";
@@ -64,24 +62,25 @@ export async function assertPublicURL(url: URL) {
     url.password ||
     (url.port && url.port !== "443") ||
     !host.includes(".") ||
+    (ipaddr.isValid(host) && !publicAddress(host)) ||
     /(^|\.)(localhost|local|internal|test|invalid)$/.test(host)
   )
     throw new ImportError("Use a public profile or portfolio link.", 400);
-  const addresses = await new Promise<import("node:dns").LookupAddress[]>(
-    (resolve) => {
-      const timer = setTimeout(() => resolve([]), 5000);
-      lookup(host, { all: true }).then(
-        (entries) => {
-          clearTimeout(timer);
-          resolve(entries);
-        },
-        () => {
-          clearTimeout(timer);
-          resolve([]);
-        },
-      );
-    },
-  );
+  const addresses = await Promise.race([
+    Promise.allSettled([resolve4(host), resolve6(host)]).then((results) =>
+      results.flatMap((result, index) =>
+        result.status === "fulfilled"
+          ? result.value.map((address) => ({
+              address,
+              family: index === 0 ? 4 : 6,
+            }))
+          : [],
+      ),
+    ),
+    new Promise<{ address: string; family: number }[]>((resolve) =>
+      setTimeout(() => resolve([]), 5000),
+    ),
+  ]);
   if (
     !addresses.length ||
     addresses.some((entry) => !publicAddress(entry.address))
@@ -92,7 +91,7 @@ export async function assertPublicURL(url: URL) {
   return addresses;
 }
 export async function readBounded(
-  response: Response | Awaited<ReturnType<typeof safeFetch>>,
+  response: Pick<Response, "headers" | "body">,
   limit = MAX_SOURCE_BYTES,
 ) {
   const length = Number(response.headers.get("content-length") ?? 0);
@@ -130,44 +129,35 @@ export async function readBounded(
   }
   return new TextDecoder().decode(bytes);
 }
+export async function requestPublicURL(
+  url: URL,
+  signal: AbortSignal,
+  fetcher: (input: URL, init?: RequestInit) => Promise<Response> = fetch,
+) {
+  // Keep the public hostname in the URL for correct TLS/SNI and HTTP routing.
+  // Native Workers fetch uses public egress; no VPC or private service binding is used.
+  return fetcher(url, {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+    redirect: "manual",
+    headers: {
+      Accept: "text/html,application/json,text/plain",
+      "User-Agent": "Screenly-Profile-Import/1.0",
+    },
+  });
+}
 export async function fetchPublic(
   url: URL,
   signal: AbortSignal,
   hops = 0,
 ): Promise<{ text: string; type: string }> {
   const issue = profileURLIssue(url.toString());
-  // api.github.com is the internal, fixed-host GitHub metadata source.
   if (issue && url.hostname !== "api.github.com")
     throw new ImportError(issue, 400);
-  const addresses = await assertPublicURL(url);
-  const address =
-    addresses.find((entry) => entry.family === 4)?.address ??
-    addresses[0]!.address;
-  const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-  const target = new URL(url);
-  target.hostname = address.includes(":") ? `[${address}]` : address;
-  const dispatcher = proxy
-    ? new ProxyAgent({ uri: proxy, requestTls: { servername: url.hostname } })
-    : new Agent({ connect: { servername: url.hostname } });
-  let response: Awaited<ReturnType<typeof safeFetch>>;
+  await assertPublicURL(url);
+  let response: Response;
   try {
-    // Pin the verified destination at socket/CONNECT time; retain TLS identity and Host.
-    const incoming = await safeFetch(target, {
-      dispatcher,
-      signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
-      redirect: "manual",
-      headers: {
-        Host: url.hostname,
-        Accept: "text/html,application/json,text/plain",
-        "Accept-Encoding": "identity",
-        "User-Agent": "Screenly-Profile-Import/1.0",
-      },
-    });
-    response = incoming;
-    // close() waits for the response body before releasing its sockets.
-    void dispatcher.close().catch(() => {});
+    response = await requestPublicURL(url, signal);
   } catch {
-    void dispatcher.destroy().catch(() => {});
     throw new ImportError(
       "That website could not be reached. Try a resume or paste your profile text.",
     );
@@ -302,7 +292,9 @@ export async function resumeSource(file: File) {
           "Choose a plain-text resume, PDF, or DOCX file.",
           415,
         );
-      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(
+        bytes,
+      );
     } else if (ext === "pdf") {
       if (!new TextDecoder().decode(bytes.slice(0, 8)).startsWith("%PDF-"))
         throw new ImportError("That file does not appear to be a PDF.", 415);
@@ -341,7 +333,7 @@ export async function resumeSource(file: File) {
           "That DOCX could not be read. Try a PDF or text resume.",
         );
       // Decode XML entities and join paragraphs/tabs without splitting words at run boundaries.
-      const raw = new TextDecoder("utf-8", { fatal: true })
+      const raw = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false })
         .decode(xml)
         .replace(/<w:(?:tab|br|cr)\b[^>]*\/>/g, " ")
         .replace(/<\/w:p>/g, "\n")

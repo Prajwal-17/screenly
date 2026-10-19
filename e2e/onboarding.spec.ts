@@ -205,6 +205,7 @@ test("a real compressed PDF streams progress and exposes AI data for approval be
   const pdf = await page.pdf({ format: "A4" });
   await signInForTest(context, false);
   await page.goto("/onboarding");
+  await expect(page.getByLabel("Upload resume", { exact: true })).toBeEnabled();
   await page.getByLabel("Upload resume", { exact: true }).setInputFiles({
     name: "resume.pdf",
     mimeType: "application/pdf",
@@ -279,6 +280,7 @@ test("Word DOCX uploads extract real paragraphs and can be discarded without cha
       `<w:document><w:p><w:r><w:t>${resumeText}</w:t></w:r></w:p></w:document>`,
     ),
   });
+  await expect(page.getByLabel("Upload resume", { exact: true })).toBeEnabled();
   await page.getByLabel("Upload resume", { exact: true }).setInputFiles({
     name: "resume.docx",
     mimeType:
@@ -341,6 +343,7 @@ test("wrong URLs, unreadable profiles, invalid files and missing required detail
   );
   await page.unroute("**/api/profile/import");
   await page.getByRole("tab", { name: "Resume", exact: true }).click();
+  await expect(page.getByLabel("Upload resume", { exact: true })).toBeEnabled();
   await page.getByLabel("Upload resume", { exact: true }).setInputFiles({
     name: "fake.pdf",
     mimeType: "application/pdf",
@@ -429,4 +432,101 @@ test("failed autosave retains half-entered fields on device and syncs them after
   ).json();
   expect(data.details.about).toBe("Half-entered background");
   expect(data.onboarding.step).toBe(1);
+});
+
+test("onboarding opens immediately and keeps edits made before account hydration", async ({
+  page,
+  context,
+}) => {
+  await signInForTest(context, false);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/auth/get-session", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.route("**/api/profile", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  try {
+    await page.goto("/onboarding");
+    await expect(
+      page.getByRole("heading", { name: "Let’s start with your story." }),
+    ).toBeVisible();
+    await manual(page);
+    await page.getByLabel("Your name", { exact: true }).fill("My chosen name");
+    await expect(
+      page.getByRole("button", { name: "Continue", exact: true }),
+    ).toBeDisabled();
+    release();
+    await expect(
+      page.getByRole("button", { name: "Continue", exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByLabel("Your name", { exact: true })).toHaveValue(
+      "My chosen name",
+    );
+    await saved(page);
+    const profile = await (
+      await page.request.get(`${backendURL}/api/profile`)
+    ).json();
+    expect(profile.details.name).toBe("My chosen name");
+    expect(profile.onboarding.step).toBe(1);
+  } finally {
+    release();
+  }
+});
+
+test("final setup restores failed saves and prepares the workspace after collecting details", async ({
+  page,
+  context,
+}) => {
+  await signInForTest(context, false);
+  await page.goto("/onboarding");
+  await manual(page);
+  await page.getByLabel("Your name", { exact: true }).fill("Ada Lovelace");
+  await expect(
+    page.getByRole("button", { name: "Continue", exact: true }),
+  ).toBeEnabled();
+  for (let i = 0; i < 4; i++) await next(page);
+  await saved(page);
+  await expect(
+    page.getByText("Setting up your workspace…", { exact: true }),
+  ).toHaveCount(0);
+  let fail = true;
+  await page.route("**/api/profile", async (route) => {
+    if (route.request().method() === "PUT" && fail)
+      await route.fulfill({
+        status: 503,
+        json: { error: "Could not save your profile. Try again." },
+      });
+    else await route.continue();
+  });
+  await page.getByRole("button", { name: "Finish setup" }).click();
+  await expect(page.locator("main").getByRole("alert")).toContainText(
+    "Could not save your profile",
+  );
+  fail = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/interviews", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  try {
+    const preparation = page.waitForRequest("**/api/interviews");
+    await page.getByRole("button", { name: "Finish setup" }).click();
+    await preparation;
+    await expect(
+      page.getByRole("heading", { name: "Setting up your workspace…" }),
+    ).toBeVisible();
+    release();
+    await expect(page).toHaveURL(/\/interviews\/new$/, { timeout: 15000 });
+  } finally {
+    release();
+  }
 });

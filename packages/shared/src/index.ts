@@ -27,7 +27,13 @@ export const settingsSchema = z.object({
 });
 export type InterviewSettings = z.infer<typeof settingsSchema>;
 export type InterviewStatus = "draft" | "active" | "completed";
-export type FeedbackStatus = "pending" | "generating" | "ready" | "failed";
+export type FeedbackStatus =
+  "pending" | "generating" | "ready" | "failed" | "skipped";
+export const finishInterviewSchema = z
+  .object({
+    generateFeedback: z.boolean().default(true),
+  })
+  .strict();
 export type LiveStatus =
   | "connecting"
   | "ready"
@@ -106,7 +112,10 @@ export const clientEventSchema = z.discriminatedUnion("type", [
     type: z.literal("played"),
     responseId: z.number().int().nonnegative(),
   }),
-  z.object({ type: z.literal("finish") }),
+  z.object({
+    type: z.literal("finish"),
+    generateFeedback: z.boolean().optional(),
+  }),
 ]);
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 export type ServerEvent =
@@ -118,7 +127,7 @@ export type ServerEvent =
   | { type: "audio-start"; responseId: number }
   | { type: "audio-end"; responseId: number }
   | { type: "interrupted"; responseId: number }
-  | { type: "finished"; id: string }
+  | { type: "finished"; id: string; generateFeedback?: boolean }
   | {
       type: "error";
       message: string;

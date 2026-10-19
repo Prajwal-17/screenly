@@ -1,7 +1,6 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { app, server } from "../src";
-import { createTestSession } from "./session-fixture";
-afterAll(() => server.stop(true));
+import { describe, expect, test } from "vitest";
+import { app } from "./runtime";
+import { createTestSession } from "./runtime";
 describe("authenticated API", () => {
   test("Google sign-in starts an OAuth redirect with state", async () => {
     const response = await app.request("/api/auth/sign-in/social", {
@@ -17,7 +16,7 @@ describe("authenticated API", () => {
       }),
     });
     expect(response.status).toBe(200);
-    const result = await response.json();
+    const result = await response.json<any>();
     const url = new URL(result.url);
     expect(url.hostname).toBe("accounts.google.com");
     expect(url.searchParams.get("client_id")).toBe("test-google-client-id");
@@ -65,7 +64,7 @@ describe("authenticated API", () => {
       }),
     });
     expect(create.status).toBe(201);
-    const interview = await create.json();
+    const interview = await create.json<any>();
     expect(
       (await app.request(`/api/interviews/${interview.id}`, { headers }))
         .status,

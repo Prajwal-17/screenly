@@ -1,9 +1,36 @@
-import type { WebSocketOptions } from "bun";
-// Bun adds server-side headers and proxy options to the browser-compatible constructor.
-const NativeWebSocket = WebSocket as unknown as new (
+export type SocketFactory = (
   url: URL,
-  options: WebSocketOptions,
-) => WebSocket;
+  key: string,
+) => WebSocket | Promise<WebSocket>;
+export async function openProviderSocket(
+  url: URL,
+  key: string,
+  timeoutMs = 12000,
+): Promise<WebSocket> {
+  const target = new URL(url);
+  target.protocol = target.protocol === "wss:" ? "https:" : "http:";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(target, {
+      headers: { Upgrade: "websocket", Authorization: `Token ${key}` },
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    if (response.status !== 101 || !response.webSocket) {
+      await response.body?.cancel();
+      throw new DeepgramConnectionError(String(response.status));
+    }
+    return response.webSocket;
+  } catch (error) {
+    if (controller.signal.aborted) throw new DeepgramConnectionError("TIMEOUT");
+    throw error;
+  } finally {
+    // A fetch abort also closes an upgraded Workers WebSocket. Only time out
+    // the handshake; the established socket lives for the interview session.
+    clearTimeout(timer);
+  }
+}
 export type DeepgramMessage = { type: string; [key: string]: unknown };
 type Handlers = {
   json: (message: DeepgramMessage) => void;
@@ -39,18 +66,28 @@ export class DeepgramSocket {
     private url: URL,
     private key: string,
     private handlers: Handlers,
-    private makeSocket: (url: URL, key: string) => WebSocket = (url, key) =>
-      new NativeWebSocket(url, {
-        headers: { Authorization: `Token ${key}` },
-        proxy: ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
-          ? undefined
-          : (process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY),
-      }),
+    private makeSocket: (
+      url: URL,
+      key: string,
+    ) => WebSocket | Promise<WebSocket> = openProviderSocket,
   ) {}
   async connect() {
     if (this.closed) throw new Error("Connection was cancelled.");
     if (!this.key) throw new DeepgramConnectionError("MISSING_KEY");
-    const socket = this.makeSocket(this.url, this.key);
+    let socket: WebSocket;
+    try {
+      socket = await this.makeSocket(this.url, this.key);
+    } catch (error) {
+      throw error instanceof DeepgramConnectionError
+        ? error
+        : new DeepgramConnectionError();
+    }
+    if (this.closed) {
+      if ("accept" in socket && typeof socket.accept === "function")
+        socket.accept();
+      socket.close();
+      throw new Error("Connection was cancelled.");
+    }
     this.socket = socket;
     socket.binaryType = "arraybuffer";
     await new Promise<void>((resolve, reject) => {
@@ -59,7 +96,7 @@ export class DeepgramSocket {
         () => this.fail(new DeepgramConnectionError("TIMEOUT")),
         12000,
       );
-      socket.onmessage = (event: MessageEvent) => {
+      socket.addEventListener("message", (event: MessageEvent) => {
         if (this.closed) return;
         if (event.data instanceof ArrayBuffer) {
           this.handlers.audio?.(new Uint8Array(event.data));
@@ -80,16 +117,18 @@ export class DeepgramSocket {
         } catch {
           this.fail();
         }
-      };
-      socket.onerror = (event) => {
+      });
+      socket.addEventListener("error", (event) => {
         const status = (event as ErrorEvent).message?.match(
           /\b(400|401|403|429)\b/,
         )?.[1];
         this.fail(new DeepgramConnectionError(status));
-      };
-      socket.onclose = () => {
+      });
+      socket.addEventListener("close", () => {
         if (!this.closed) this.fail();
-      };
+      });
+      if ("accept" in socket && typeof socket.accept === "function")
+        socket.accept();
     });
   }
   send(data: unknown) {

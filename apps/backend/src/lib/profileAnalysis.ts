@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { profileSuggestionsSchema } from "@repo/shared";
-import { env } from "../config";
+import type { Config } from "../config";
 import { ImportError } from "./profileSource";
 
 export function parseProfileSuggestions(raw: string) {
@@ -18,7 +18,11 @@ export function parseProfileSuggestions(raw: string) {
     );
   return suggestions;
 }
-export async function analyzeProfile(text: string, signal: AbortSignal) {
+export async function analyzeProfile(
+  text: string,
+  signal: AbortSignal,
+  env: Config,
+) {
   if (!env.LLM_API_KEY || !env.LLM_MODEL)
     throw new ImportError(
       "AI import is unavailable. You can still enter your details manually.",

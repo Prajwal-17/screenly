@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AudioLines,
   Loader2,
@@ -16,6 +16,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "motion/react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
 import { WorkspaceSidebar } from "@/components/workspace-sidebar";
 import { useUserProfile } from "@/lib/profile";
@@ -53,6 +54,7 @@ export function Workspace({
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
+  const client = useQueryClient();
   const profile = useUserProfile();
   const needsOnboarding =
     profile.data?.status === "new" || profile.data?.status === "draft";
@@ -63,15 +65,66 @@ export function Workspace({
     sidebarCollapsed,
     setSidebarCollapsed,
     signingOut,
+    setSigningOut,
   } = useUIStore();
   const [focusExpanded, setFocusExpanded] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   const reducedMotion = useReducedMotion();
   const focusMode = voice && interviewActive;
   const collapsed = focusMode ? !focusExpanded : sidebarCollapsed;
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     if (focusMode) setFocusExpanded((value) => !value);
     else setSidebarCollapsed(!sidebarCollapsed);
-  };
+  }, [focusMode, setSidebarCollapsed, sidebarCollapsed]);
+  useEffect(() => {
+    if (signingOut || !session || profile.isPending || needsOnboarding) return;
+    const shortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        event.altKey ||
+        event.shiftKey ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== "b" ||
+        (event.target instanceof HTMLElement &&
+          event.target.closest(
+            'input, textarea, select, [role="textbox"], [contenteditable]:not([contenteditable="false"])',
+          ))
+      )
+        return;
+      event.preventDefault();
+      if (window.matchMedia("(min-width: 768px)").matches) toggleSidebar();
+      else setNavigationOpen(!useUIStore.getState().navigationOpen);
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [
+    signingOut,
+    session,
+    profile.isPending,
+    needsOnboarding,
+    toggleSidebar,
+    setNavigationOpen,
+  ]);
+  useEffect(() => {
+    router.prefetch("/");
+  }, [router]);
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    setNavigationOpen(false);
+    try {
+      const result = await authClient.signOut();
+      if (result.error) throw new Error();
+      client.clear();
+      router.replace("/");
+    } catch {
+      setSigningOut(false);
+      setSignOutError("Could not sign out. Try again.");
+    }
+  }
   useEffect(() => {
     if (!isPending && !session && !signingOut) router.replace("/auth/sign-in");
   }, [isPending, session, signingOut, router]);
@@ -80,7 +133,9 @@ export function Workspace({
   }, [session, needsOnboarding, router]);
   useEffect(() => {
     if (session && !needsOnboarding)
-      document.getElementById("workspace-content")?.focus();
+      document
+        .getElementById("workspace-content")
+        ?.focus({ preventScroll: true });
   }, [path, session, needsOnboarding, profile.isPending]);
   const context =
     title ??
@@ -94,14 +149,20 @@ export function Workspace({
           : path.endsWith("/feedback")
             ? "Feedback"
             : "Interview");
-  if (isPending || !session || profile.isPending || needsOnboarding)
+  if (
+    signingOut ||
+    isPending ||
+    !session ||
+    profile.isPending ||
+    needsOnboarding
+  )
     return (
       <div
         className="flex min-h-dvh items-center justify-center gap-2 text-sm text-muted-foreground"
         role="status"
       >
-        <Loader2 className="size-4 animate-spin" />
-        Loading your workspace…
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {signingOut ? "Signing out…" : "Loading your workspace…"}
       </div>
     );
   if (profile.isError)
@@ -148,6 +209,8 @@ export function Workspace({
           name={profile.data?.details.name || session.user.name}
           email={session.user.email}
           collapsed={collapsed}
+          onSignOut={signOut}
+          signOutError={signOutError}
         />
       </aside>
       <div className="min-w-0 md:ml-[var(--sidebar-width)]">
@@ -159,6 +222,8 @@ export function Workspace({
               className="-ml-2 mr-1 hidden md:inline-flex"
               onClick={toggleSidebar}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-keyshortcuts="Control+B Meta+B"
+              title={`${collapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
               aria-expanded={!collapsed}
               aria-controls="workspace-sidebar"
             >
@@ -182,6 +247,7 @@ export function Workspace({
                   size="icon"
                   className="-ml-2 md:hidden"
                   aria-label="Open navigation"
+                  aria-keyshortcuts="Control+B Meta+B"
                 >
                   <Menu />
                 </Button>
@@ -191,6 +257,8 @@ export function Workspace({
                 name={profile.data?.details.name || session.user.name}
                 email={session.user.email}
                 onNavigate={() => setNavigationOpen(false)}
+                onSignOut={signOut}
+                signOutError={signOutError}
               />
             </Sheet>
             <h1

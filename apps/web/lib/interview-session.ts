@@ -17,7 +17,7 @@ export class Session {
   private player = new AudioPlayer();
   constructor(
     private id: string,
-    private finished: (id: string) => void,
+    private finished: (id: string, generateFeedback: boolean) => void,
   ) {
     useInterviewStore.setState(initialState);
   }
@@ -93,7 +93,8 @@ export class Session {
         interview: event.interview,
         messages: event.interview.messages,
       });
-      if (event.interview.status === "completed") this.finished(this.id);
+      if (event.interview.status === "completed")
+        this.finished(this.id, event.interview.feedbackStatus !== "skipped");
     }
     if (
       event.type === "status" &&
@@ -202,7 +203,7 @@ export class Session {
     if (event.type === "finished") {
       this.stopCapture();
       this.player.stop();
-      this.finished(event.id);
+      this.finished(event.id, event.generateFeedback !== false);
     }
   }
   private send(event: ClientEvent) {
@@ -331,8 +332,8 @@ export class Session {
     });
     useInterviewStore.setState({ muted });
   }
-  finish() {
-    this.send({ type: "finish" });
+  finish(generateFeedback = true) {
+    this.send({ type: "finish", generateFeedback });
   }
   close() {
     this.disposed = true;

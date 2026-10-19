@@ -39,7 +39,7 @@ test("Deepgram transport separates JSON control events from binary PCM audio", a
         failed = true;
       },
     },
-    (url) => new WebSocket(url),
+    (url) => new WebSocket(url.toString()),
   );
   try {
     await socket.connect();
@@ -55,7 +55,10 @@ test("Deepgram transport separates JSON control events from binary PCM audio", a
 
 test("speech waits for final audio metadata instead of closing at Flushed", async () => {
   const { TTSService } = await import("../src/lib/ttsService");
-  const { env } = await import("../src/config");
+  const { readConfig } = await import("../src/config");
+  const env = readConfig({
+    BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
+  });
   let configuredSpeed: number | undefined;
   const server = Bun.serve<{ timer: ReturnType<typeof setTimeout> | null }>({
     port: 0,
@@ -90,7 +93,11 @@ test("speech waits for final audio metadata instead of closing at Flushed", asyn
   env.DEEPGRAM_WS_URL = `ws://localhost:${server.port}`;
   env.DEEPGRAM_API_KEY = "fixture-key";
   const frames: number[][] = [];
-  const speech = new TTSService((audio) => frames.push(Array.from(audio)));
+  const speech = new TTSService(
+    env,
+    (audio) => frames.push(Array.from(audio)),
+    (url) => new WebSocket(url.toString()),
+  );
   try {
     await speech.connect();
     speech.sendText("A question worth hearing.");

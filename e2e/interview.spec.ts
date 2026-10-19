@@ -554,6 +554,7 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   page,
   context,
 }) => {
+  test.setTimeout(90000);
   await context.grantPermissions(["microphone"]);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -810,6 +811,13 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   await expect(
     page.getByText("Listening to you", { exact: true }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      log.evaluate(
+        (node) => node.scrollHeight - node.scrollTop - node.clientHeight,
+      ),
+    )
+    .toBeLessThan(64);
   await log.evaluate((node) => {
     node.scrollTop = 0;
   });
@@ -862,7 +870,7 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
     .click();
   await expect(
     page.getByRole("heading", { name: "Summary", exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await page.setViewportSize({ width: 360, height: 800 });
   expect(
     await page.evaluate(

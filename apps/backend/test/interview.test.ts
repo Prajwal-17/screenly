@@ -1,13 +1,21 @@
-import { beforeAll, describe, expect, test } from "bun:test";
-import { db } from "../src/db";
+import { beforeAll, describe, expect, test } from "vitest";
+import { db } from "./runtime";
 import { user } from "../src/db/schema";
-import { interviews } from "../src/db/interviews";
+import { interviews } from "./runtime";
 import {
   InterviewSession,
   type SessionDependencies,
 } from "../src/lib/interviewSession";
 import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
 import type { ServerEvent } from "@repo/shared";
+const pendingTasks = new Set<Promise<unknown>>();
+function background(task: Promise<unknown>) {
+  pendingTasks.add(task);
+  void task.finally(() => pendingTasks.delete(task));
+}
+async function drain() {
+  while (pendingTasks.size) await Promise.all([...pendingTasks]);
+}
 const userId = "test-candidate";
 const settings = {
   role: "Frontend",
@@ -15,16 +23,17 @@ const settings = {
   topics: ["React"],
   duration: 10,
 } as const;
-beforeAll(() => {
-  db.insert(user)
+beforeAll(async () => {
+  await db
+    .insert(user)
     .values({ id: userId, name: "Candidate", email: "candidate@example.com" })
     .run();
 });
-function fixture(
+async function fixture(
   reply: SessionDependencies["reply"],
   options: Partial<SessionDependencies> = {},
 ) {
-  const interview = interviews.create(userId, {
+  const interview = await interviews.create(userId, {
     ...settings,
     topics: [...settings.topics],
   });
@@ -40,6 +49,9 @@ function fixture(
     },
     {
       store: interviews,
+      background,
+      scheduleDeadline: async () => {},
+      cancelDeadline: async () => {},
       speechEnabled: false,
       reply,
       feedback: async () => {
@@ -68,7 +80,7 @@ function fixture(
       transcript: text,
       turn_index: index,
     } as ListenV2TurnInfo);
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    await drain();
   }
   return {
     session,
@@ -80,16 +92,37 @@ function fixture(
   };
 }
 describe("interview persistence and orchestration", () => {
+  test("concurrent D1 writes retain a strictly ordered transcript", async () => {
+    const interview = await interviews.create(userId, {
+      ...settings,
+      topics: [...settings.topics],
+    });
+    await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        interviews.addMessage(
+          interview.id,
+          "user",
+          `Answer ${index}`,
+          `concurrent:${index}`,
+        ),
+      ),
+    );
+    const saved = await interviews.get(interview.id);
+    const timestamps = saved!.messages.map((message) => message.createdAt);
+    expect(timestamps).toHaveLength(8);
+    expect(new Set(timestamps).size).toBe(8);
+    expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
+  });
   test("starts with a question and saves one response per unique answer", async () => {
     let calls = 0;
-    const f = fixture(async function* () {
+    const f = await fixture(async function* () {
       calls++;
       yield "How would you test this component?";
     });
     await f.session.handle({ type: "start" });
     await f.turn("I would test the user-visible behavior.");
     await f.turn("I would test the user-visible behavior.");
-    const saved = interviews.get(f.interview.id)!;
+    const saved = (await interviews.get(f.interview.id))!;
     expect(saved.messages.map((m) => m.role)).toEqual([
       "assistant",
       "user",
@@ -98,22 +131,25 @@ describe("interview persistence and orchestration", () => {
     expect(calls).toBe(2);
     const start = saved.startedAt;
     await f.session.handle({ type: "start" });
-    expect(interviews.get(saved.id)?.startedAt).toBe(start);
-    f.session.close();
+    expect((await interviews.get(saved.id))?.startedAt).toBe(start);
+    await f.session.close();
   });
   test("voice reconnect reopens transcription and preserves the timer and saved conversation", async () => {
-    const f = fixture(async function* () {
+    const f = await fixture(async function* () {
       yield "Explain a cache invalidation strategy.";
     });
     await f.session.handle({ type: "start" });
     await f.turn("I would invalidate on writes.");
-    const began = interviews.get(f.interview.id)!.startedAt;
-    f.session.close();
+    const began = (await interviews.get(f.interview.id))!.startedAt;
+    await f.session.close();
     let connected = false;
     let receivedAudio = 0;
     let onTurn!: (event: ListenV2TurnInfo) => void;
     const reconnect = new InterviewSession(f.interview.id, () => {}, {
       store: interviews,
+      background,
+      scheduleDeadline: async () => {},
+      cancelDeadline: async () => {},
       speechEnabled: false,
       reply: async function* () {
         yield "How would you test that strategy?";
@@ -141,8 +177,8 @@ describe("interview persistence and orchestration", () => {
     expect(receivedAudio).toBe(0);
     await reconnect.handle({ type: "start" });
     expect(connected).toBe(true);
-    expect(interviews.get(f.interview.id)!.startedAt).toBe(began);
-    expect(interviews.get(f.interview.id)!.messages).toHaveLength(3);
+    expect((await interviews.get(f.interview.id))!.startedAt).toBe(began);
+    expect((await interviews.get(f.interview.id))!.messages).toHaveLength(3);
     reconnect.audio(new Uint8Array([1, 0]));
     expect(receivedAudio).toBe(1);
     onTurn({
@@ -150,9 +186,9 @@ describe("interview persistence and orchestration", () => {
       transcript: "I would exercise a stale cache.",
       turn_index: 0,
     } as ListenV2TurnInfo);
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(interviews.get(f.interview.id)!.messages).toHaveLength(5);
-    reconnect.close();
+    await drain();
+    expect((await interviews.get(f.interview.id))!.messages).toHaveLength(5);
+    await reconnect.close();
     expect(connected).toBe(false);
     reconnect.audio(new Uint8Array([1, 0]));
     expect(receivedAudio).toBe(1);
@@ -162,17 +198,19 @@ describe("interview persistence and orchestration", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const f = fixture(async function* () {
+    const f = await fixture(async function* () {
       yield "Consider a cache.";
       await gate;
       yield "This late chunk must never appear.";
     });
     const pending = f.session.handle({ type: "start" });
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    f.session.interrupt();
+    await expect
+      .poll(() => f.events.some((event) => event.type === "delta"))
+      .toBe(true);
+    await f.session.interrupt();
     release();
     await pending;
-    const messages = interviews.get(f.interview.id)!.messages;
+    const messages = (await interviews.get(f.interview.id))!.messages;
     expect(messages).toHaveLength(1);
     expect(messages[0]?.status).toBe("interrupted");
     expect(messages[0]?.content).toBe("Consider a cache.");
@@ -181,22 +219,22 @@ describe("interview persistence and orchestration", () => {
         .filter((e) => e.type === "delta")
         .map((e) => (e.type === "delta" ? e.text : "")),
     ).toEqual(["Consider a cache."]);
-    f.session.close();
+    await f.session.close();
   });
   test("speech remains interruptible until browser playback is acknowledged", async () => {
-    const f = fixture(
+    const f = await fixture(
       async function* () {
         yield "Explain an HTTP cache.";
       },
       { speechEnabled: true },
     );
     await f.session.handle({ type: "start" });
-    f.session.interrupt();
-    expect(interviews.get(f.interview.id)!.messages[0]?.status).toBe(
+    await f.session.interrupt();
+    expect((await interviews.get(f.interview.id))!.messages[0]?.status).toBe(
       "interrupted",
     );
-    f.session.close();
-    const acknowledged = fixture(
+    await f.session.close();
+    const acknowledged = await fixture(
       async function* () {
         yield "Explain an HTTP cache.";
       },
@@ -204,11 +242,11 @@ describe("interview persistence and orchestration", () => {
     );
     await acknowledged.session.handle({ type: "start" });
     await acknowledged.session.handle({ type: "played", responseId: 1 });
-    acknowledged.session.interrupt();
-    expect(interviews.get(acknowledged.interview.id)!.messages[0]?.status).toBe(
-      "complete",
-    );
-    acknowledged.session.close();
+    await acknowledged.session.interrupt();
+    expect(
+      (await interviews.get(acknowledged.interview.id))!.messages[0]?.status,
+    ).toBe("complete");
+    await acknowledged.session.close();
   });
   test("a new answer follows interrupted output in the persisted transcript", async () => {
     let release!: () => void;
@@ -220,7 +258,7 @@ describe("interview persistence and orchestration", () => {
       entered = resolve;
     });
     let calls = 0;
-    const f = fixture(async function* () {
+    const f = await fixture(async function* () {
       calls++;
       if (calls === 1) {
         yield "An opening question.";
@@ -234,7 +272,7 @@ describe("interview persistence and orchestration", () => {
     await f.turn("Here is my answer.");
     release();
     await opening;
-    const saved = interviews.get(f.interview.id)!.messages;
+    const saved = (await interviews.get(f.interview.id))!.messages;
     expect(
       saved.map((message) => [message.role, message.status, message.content]),
     ).toEqual([
@@ -242,10 +280,10 @@ describe("interview persistence and orchestration", () => {
       ["user", "complete", "Here is my answer."],
       ["assistant", "complete", "A follow-up question."],
     ]);
-    f.session.close();
+    await f.session.close();
   });
   test("voice interviews receive spoken replies and replay does not duplicate the transcript", async () => {
-    const f = fixture(
+    const f = await fixture(
       async function* () {
         yield "Tell me about React.";
       },
@@ -266,8 +304,8 @@ describe("interview persistence and orchestration", () => {
     expect(f.audioFrames.length).toBe(2);
     await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(3);
-    expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
-    f.session.close();
+    expect((await interviews.get(f.interview.id))!.messages).toHaveLength(1);
+    await f.session.close();
   });
   test("Deepgram frames pass through immediately and unchanged, with one flush per response", async () => {
     let release!: () => void;
@@ -289,7 +327,7 @@ describe("interview persistence and orchestration", () => {
       new Uint8Array([1, 0, 255, 127, 0, 128]),
       new Uint8Array([7, 0, 8, 0]),
     ];
-    const f = fixture(
+    const f = await fixture(
       async function* () {
         yield tokens[0]!;
         generated();
@@ -328,14 +366,14 @@ describe("interview persistence and orchestration", () => {
     expect(f.audioFrames.map((frame) => Array.from(frame.slice(4)))).toEqual(
       frames.map((frame) => Array.from(frame)),
     );
-    f.session.interrupt();
+    await f.session.interrupt();
     lateAudio(new Uint8Array([9, 0]));
     expect(f.audioFrames).toHaveLength(2);
-    f.session.close();
+    await f.session.close();
   });
   test("failed transcription leaves the draft unstarted and can be retried", async () => {
     let fail = true;
-    const f = fixture(
+    const f = await fixture(
       async function* () {
         yield "Describe an HTTP cache.";
       },
@@ -363,38 +401,75 @@ describe("interview persistence and orchestration", () => {
       ),
     ).toBe(true);
     expect(f.audioFrames).toHaveLength(0);
-    expect(interviews.get(f.interview.id)!.status).toBe("draft");
-    expect(interviews.get(f.interview.id)!.startedAt).toBeNull();
+    expect((await interviews.get(f.interview.id))!.status).toBe("draft");
+    expect((await interviews.get(f.interview.id))!.startedAt).toBeNull();
     fail = false;
     await f.session.handle({ type: "start" });
     expect(f.audioFrames.length).toBe(1);
-    expect(interviews.get(f.interview.id)!.messages).toHaveLength(1);
-    f.session.close();
+    expect((await interviews.get(f.interview.id))!.messages).toHaveLength(1);
+    await f.session.close();
+  });
+  test("ending without feedback saves the transcript and cancels its deadline without a report", async () => {
+    let cancelled = 0;
+    const f = await fixture(
+      async function* () {
+        yield "How would you test an API?";
+      },
+      {
+        cancelDeadline: async () => {
+          cancelled++;
+        },
+      },
+    );
+    await f.session.handle({ type: "start" });
+    await f.turn("I would test the success and error responses.");
+    await f.session.handle({ type: "finish", generateFeedback: false });
+    await f.session.finish();
+    const saved = (await interviews.get(f.interview.id))!;
+    expect(saved.status).toBe("completed");
+    expect(saved.feedbackStatus).toBe("skipped");
+    expect(saved.feedback).toBeNull();
+    expect(saved.messages).toHaveLength(3);
+    expect(saved.endedAt).toBeGreaterThan(0);
+    expect(cancelled).toBe(1);
+    expect(f.reports()).toBe(0);
+    expect(f.events).toContainEqual({
+      type: "finished",
+      id: f.interview.id,
+      generateFeedback: false,
+    });
+    await f.turn("A late answer must not be saved.", 1);
+    expect((await interviews.get(f.interview.id))!.messages).toHaveLength(3);
+    await f.session.close();
   });
   test("finishing is idempotent and prevents later answers", async () => {
-    const f = fixture(async function* () {
+    const f = await fixture(async function* () {
       yield "What is a closure?";
     });
     await f.session.handle({ type: "start" });
-    await f.session.finish();
-    const ended = interviews.get(f.interview.id)?.endedAt;
+    await Promise.all([
+      f.session.finish(),
+      f.session.finish(),
+      f.session.finish(),
+    ]);
+    const ended = (await interviews.get(f.interview.id))?.endedAt;
     await f.session.finish();
     await f.turn("Too late.");
-    expect(interviews.get(f.interview.id)?.endedAt).toBe(ended);
+    expect((await interviews.get(f.interview.id))?.endedAt).toBe(ended);
     expect(f.reports()).toBe(1);
-    expect(interviews.get(f.interview.id)?.messages).toHaveLength(1);
-    f.session.close();
+    expect((await interviews.get(f.interview.id))?.messages).toHaveLength(1);
+    await f.session.close();
   });
-  test("ownership and cascade deletion preserve isolation", () => {
-    const interview = interviews.create(userId, {
+  test("ownership and cascade deletion preserve isolation", async () => {
+    const interview = await interviews.create(userId, {
       ...settings,
       topics: [...settings.topics],
     });
-    interviews.addMessage(interview.id, "user", "An answer.", "unique");
-    expect(interviews.owned(interview.id, "another-user")).toBeNull();
-    interviews.remove(interview.id, "another-user");
-    expect(interviews.get(interview.id)).not.toBeNull();
-    interviews.remove(interview.id, userId);
-    expect(interviews.get(interview.id)).toBeNull();
+    await interviews.addMessage(interview.id, "user", "An answer.", "unique");
+    expect(await interviews.owned(interview.id, "another-user")).toBeNull();
+    await interviews.remove(interview.id, "another-user");
+    expect(await interviews.get(interview.id)).not.toBeNull();
+    await interviews.remove(interview.id, userId);
+    expect(await interviews.get(interview.id)).toBeNull();
   });
 });

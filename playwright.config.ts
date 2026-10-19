@@ -47,7 +47,7 @@ export default defineConfig({
       reuseExistingServer: false,
       env: {
         PORT: String(backendPort),
-        DATABASE_PATH: `../../.e2e${portOffset ? `-${portOffset}` : ""}.sqlite`,
+        D1_PERSIST_PATH: `../../.e2e-workers${portOffset ? `-${portOffset}` : ""}`,
         BETTER_AUTH_SECRET: "e2e-only-secret-with-at-least-32-characters",
         FRONTEND_URL: webURL,
         BETTER_AUTH_URL: backendURL,

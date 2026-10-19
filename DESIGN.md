@@ -444,6 +444,8 @@ Production presents Google-only authentication through Better Auth. An opt-in **
 
 ### Profile onboarding
 
+New Google accounts enter onboarding immediately while account and profile checks run in the background. Early edits survive profile hydration. Finishing or skipping setup shows **Setting up your workspace…** while saving and preparing workspace data, without an artificial delay. Failed saves restore the editable draft.
+
 `/onboarding` extends the existing warm paper, charcoal, fern, local Geist, and shared shadcn/Radix components. A viewport-height shell places Brand and **Skip for now** in a (72px) header above a working area capped at (1120px). From (768px), a (216px) step rail sits beside one white, bordered panel with extra-large corners. Its six destinations are **Get started**, **About you**, **Your links**, **Projects**, **Practice focus**, and **Review**. The current row has a fern wash and filled fern icon circle; earlier steps use checks. Below (768px), the rail is hidden and the panel header carries the step name, count, and save status.
 
 The panel separates a compact task header, independently scrolling body, and pinned action footer with quiet borders. The header includes a thin fern progress bar, a semibold task heading at (24px / 28px) across the (640px) breakpoint, (1.25) line height, and (-0.03em) tracking, followed by muted (14px) copy. This compact heading is specific to this route. Panel padding moves from (20px) to (32px) horizontally at (640px); field groups commonly use (20px) gaps. The working body retains scrolling on short and narrow screens while the task header and actions stay reachable. **Back** and **Continue** occupy opposite footer edges; the final action is **Finish setup**.

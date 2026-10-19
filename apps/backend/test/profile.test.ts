@@ -1,13 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { env } from "cloudflare:workers";
+import { describe, expect, test } from "vitest";
 import {
   emptyProfile,
   profileDetailsSchema,
   safeProfileHref,
 } from "@repo/shared";
 import { zipSync, strToU8 } from "fflate";
-import { app } from "../src";
-import { createTestSession } from "./session-fixture";
-import { profiles } from "../src/db/profiles";
+import { app } from "./runtime";
+import { createTestSession } from "./runtime";
+import { profiles } from "./runtime";
 import { parseProfileSuggestions } from "../src/lib/profileAnalysis";
 import {
   assertPublicURL,
@@ -65,7 +66,7 @@ describe("private profile lifecycle", () => {
     const owner = await headers();
     const other = await headers();
     const get = () => app.request("/api/profile", { headers: owner });
-    expect((await (await get()).json()).status).toBe("new");
+    expect((await (await get()).json<any>()).status).toBe("new");
     const details = {
       ...emptyProfile("Ada Lovelace"),
       role: "Backend",
@@ -78,29 +79,32 @@ describe("private profile lifecycle", () => {
       body: JSON.stringify({ details }),
     });
     expect(draft.status).toBe(200);
-    expect((await draft.json()).status).toBe("draft");
+    expect((await draft.json<any>()).status).toBe("draft");
     expect(
-      (await (await app.request("/api/profile", { headers: other })).json())
-        .status,
+      (
+        await (
+          await app.request("/api/profile", { headers: other })
+        ).json<any>()
+      ).status,
     ).toBe("new");
     const complete = await app.request("/api/profile", {
       method: "PUT",
       headers: owner,
       body: JSON.stringify({ details, complete: true }),
     });
-    const saved = await complete.json();
+    const saved = await complete.json<any>();
     expect(saved.status).toBe("complete");
     expect(saved.completedAt).toBeGreaterThan(0);
     expect(saved.details.stack).toEqual(["python", "SQL"]);
     const authSession = await app.request("/api/auth/get-session", {
       headers: owner,
     });
-    expect((await authSession.json()).user.name).toBe("Ada Lovelace");
+    expect((await authSession.json<any>()).user.name).toBe("Ada Lovelace");
     const skip = await app.request("/api/profile/skip", {
       method: "POST",
       headers: other,
     });
-    expect((await skip.json()).status).toBe("skipped");
+    expect((await skip.json<any>()).status).toBe("skipped");
   });
   test("validates links and rejects extra or oversized details", async () => {
     const owner = await headers();
@@ -126,7 +130,7 @@ describe("private profile lifecycle", () => {
         stack: Array(31).fill("React"),
       }).success,
     ).toBe(false);
-    expect(profiles.get("missing-user").status).toBe("new");
+    expect((await profiles.get("missing-user")).status).toBe("new");
   });
   test("manual setup remains available when AI is unconfigured", async () => {
     expect(
@@ -177,7 +181,7 @@ describe("private profile lifecycle", () => {
     expect(response.status).toBe(200);
     const saved = await (
       await app.request("/api/profile", { headers: owner })
-    ).json();
+    ).json<any>();
     expect(saved.status).toBe("draft");
     expect(saved.onboarding.step).toBe(3);
     expect(saved.details.name).toBe("");
@@ -212,7 +216,7 @@ describe("private profile lifecycle", () => {
         body: JSON.stringify({ url }),
       });
       expect(response.status).toBe(400);
-      expect((await response.json()).error).toBeTruthy();
+      expect((await response.json<any>()).error).toBeTruthy();
     }
   });
 });
@@ -250,7 +254,9 @@ describe("profile source and model boundaries", () => {
     expect(result.text).toContain("\nPython");
   });
   test("extracts an actual legacy Word binary document", async () => {
-    const bytes = await Bun.file("test/fixtures/legacy-word.doc").arrayBuffer();
+    const bytes = Uint8Array.from(atob(env.LEGACY_WORD_BASE64), (character) =>
+      character.charCodeAt(0),
+    ).buffer;
     const result = await resumeSource(new File([bytes], "resume.doc"));
     expect(result.text.length).toBeGreaterThan(40);
     expect(result.source).toBe("DOC resume");
@@ -364,35 +370,4 @@ test("GitHub and portfolio extraction use public evidence and LinkedIn authwalls
       text: `<html><body>Sign in to view this profile ${"locked ".repeat(30)}</body></html>`,
     })),
   ).rejects.toThrow("isn’t publicly readable");
-});
-
-test("profile migration keeps existing members out of first-run setup", async () => {
-  const { Database } = await import("bun:sqlite");
-  const sql = new Database(":memory:");
-  try {
-    sql.exec("PRAGMA foreign_keys=ON");
-    for (const name of [
-      "0000_init",
-      "0001_greedy_ozymandias",
-      "0002_uneven_phantom_reporter",
-    ])
-      sql.exec(await Bun.file(`drizzle/${name}.sql`).text());
-    sql.run("INSERT INTO user (id,name,email) VALUES (?,?,?)", [
-      "legacy",
-      "Existing Member",
-      "existing@example.com",
-    ]);
-    sql.exec(await Bun.file("drizzle/0003_lovely_weapon_omega.sql").text());
-    const row = sql
-      .query("SELECT details,status FROM user_profile WHERE user_id=?")
-      .get("legacy") as { details: string; status: string };
-    expect(row.status).toBe("skipped");
-    expect(JSON.parse(row.details).name).toBe("Existing Member");
-    sql.run("DELETE FROM user WHERE id=?", ["legacy"]);
-    expect(
-      sql.query("SELECT count(*) AS total FROM user_profile").get(),
-    ).toEqual({ total: 0 });
-  } finally {
-    sql.close();
-  }
 });

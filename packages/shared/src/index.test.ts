@@ -5,8 +5,21 @@ import {
   settingsSchema,
   feedbackSchema,
   clientEventSchema,
+  finishInterviewSchema,
 } from "./index";
 describe("shared contracts", () => {
+  test("finishing can explicitly skip feedback while existing callers keep it", () => {
+    expect(finishInterviewSchema.parse({}).generateFeedback).toBe(true);
+    expect(
+      finishInterviewSchema.parse({ generateFeedback: false }).generateFeedback,
+    ).toBe(false);
+    expect(
+      finishInterviewSchema.safeParse({ generateFeedback: "false" }).success,
+    ).toBe(false);
+    expect(
+      clientEventSchema.parse({ type: "finish", generateFeedback: false }),
+    ).toEqual({ type: "finish", generateFeedback: false });
+  });
   test("accepts voice controls and rejects text submissions and mode flags", () => {
     expect(clientEventSchema.safeParse({ type: "start" }).success).toBe(true);
     for (const typed of [true, false]) {

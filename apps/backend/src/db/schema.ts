@@ -1,4 +1,3 @@
-import { relations, sql } from "drizzle-orm";
 import type {
   Feedback,
   FeedbackStatus,
@@ -7,6 +6,7 @@ import type {
   ProfileDetails,
   OnboardingState,
 } from "@repo/shared";
+import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -174,6 +174,15 @@ export const userProfile = sqliteTable("user_profile", {
     .default("draft"),
   completedAt: integer("completed_at"),
   updatedAt: integer("updated_at").notNull(),
+});
+
+export const profileImportLimit = sqliteTable("profile_import_limit", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  windowStart: integer("window_start").notNull(),
+  count: integer("count").notNull(),
+  activeUntil: integer("active_until").notNull(),
 });
 
 export const userRelations = relations(user, ({ many }) => ({

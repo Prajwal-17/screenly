@@ -63,11 +63,12 @@ export default function Report() {
   });
   const interview = query.data;
   const feedback = interview?.feedback;
+  const feedbackSkipped = interview?.feedbackStatus === "skipped";
   useEffect(() => {
     if (feedback) void client.invalidateQueries({ queryKey: ["interviews"] });
   }, [feedback, client]);
   return (
-    <Workspace>
+    <Workspace title={feedbackSkipped ? "Saved interview" : undefined}>
       {query.isPending ? (
         <Loading label="Loading feedback…" />
       ) : query.error ? (
@@ -129,7 +130,12 @@ export default function Report() {
                 className="rounded-xl border bg-card p-8 text-center"
                 role="status"
               >
-                {interview.feedbackStatus === "failed" ? (
+                {feedbackSkipped ? (
+                  <Check
+                    className="mx-auto mb-4 size-6 text-success"
+                    aria-hidden="true"
+                  />
+                ) : interview.feedbackStatus === "failed" ? (
                   <RefreshCw
                     className="mx-auto mb-4 size-6 text-muted-foreground"
                     aria-hidden="true"
@@ -141,23 +147,27 @@ export default function Report() {
                   />
                 )}
                 <h2>
-                  {interview.feedbackStatus === "failed"
-                    ? "Feedback could not be generated"
-                    : "Generating feedback…"}
+                  {feedbackSkipped
+                    ? "Ended without feedback"
+                    : interview.feedbackStatus === "failed"
+                      ? "Feedback could not be generated"
+                      : "Generating feedback…"}
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {interview.feedbackStatus === "failed"
-                    ? "Your transcript is saved below. Retry to generate feedback."
-                    : "Your saved transcript is available below."}
+                  {feedbackSkipped
+                    ? "Your conversation is saved below. You can generate feedback later if you choose."
+                    : interview.feedbackStatus === "failed"
+                      ? "Your transcript is saved below. Retry to generate feedback."
+                      : "Your saved transcript is available below."}
                 </p>
-                {interview.feedbackStatus === "failed" && (
+                {(feedbackSkipped || interview.feedbackStatus === "failed") && (
                   <Button
                     className="mt-5"
                     loading={retry.isPending}
                     onClick={() => retry.mutate()}
                   >
                     <RefreshCw />
-                    Retry feedback
+                    {feedbackSkipped ? "Generate feedback" : "Retry feedback"}
                   </Button>
                 )}
                 {retry.error && (

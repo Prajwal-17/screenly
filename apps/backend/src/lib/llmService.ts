@@ -4,7 +4,7 @@ import {
   type InterviewDetail,
   type InterviewMessage,
 } from "@repo/shared";
-import { env } from "../config";
+import type { Config } from "../config";
 import { feedbackPrompt, interviewPrompt } from "../constants";
 
 export function parseFeedback(raw: string, messages: InterviewMessage[]) {
@@ -33,14 +33,14 @@ export function parseFeedback(raw: string, messages: InterviewMessage[]) {
 
 export class LLMService {
   private client: OpenAI;
-  constructor() {
-    if (!env.LLM_API_KEY || !env.LLM_MODEL)
+  constructor(private env: Config) {
+    if (!this.env.LLM_API_KEY || !this.env.LLM_MODEL)
       throw new Error(
         "Configure the LLM API key and model to start an interview.",
       );
     this.client = new OpenAI({
-      apiKey: env.LLM_API_KEY,
-      baseURL: env.LLM_BASE_URL,
+      apiKey: this.env.LLM_API_KEY,
+      baseURL: this.env.LLM_BASE_URL,
       timeout: 45000,
       maxRetries: 0,
     });
@@ -54,7 +54,7 @@ export class LLMService {
       (Date.now() - (interview.startedAt ?? Date.now())) / 60000;
     const stream = await this.client.chat.completions.create(
       {
-        model: env.LLM_MODEL!,
+        model: this.env.LLM_MODEL!,
         messages: [
           {
             role: "system",
@@ -80,7 +80,7 @@ export class LLMService {
   }
   async evaluate(interview: InterviewDetail) {
     const result = await this.client.chat.completions.create({
-      model: env.LLM_MODEL!,
+      model: this.env.LLM_MODEL!,
       messages: [
         { role: "system", content: feedbackPrompt },
         {

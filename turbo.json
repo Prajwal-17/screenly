@@ -4,7 +4,6 @@
   "globalEnv": [
     "PORT",
     "FRONTEND_URL",
-    "DATABASE_PATH",
     "BETTER_AUTH_URL",
     "BETTER_AUTH_SECRET",
     "GOOGLE_CLIENT_ID",
@@ -22,7 +21,11 @@
     "DEEPGRAM_WS_URL",
     "NODE_ENV",
     "ENABLE_DEV_LOGIN",
-    "WEB_PORT"
+    "WEB_PORT",
+    "D1_PERSIST_PATH",
+    "CLOUDFLARE_DATABASE_ID",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "LIVE_PROFILE_URL"
   ],
   "tasks": {
     "format": {
@@ -56,6 +59,8 @@
     "HTTPS_PROXY",
     "NO_PROXY",
     "SSL_CERT_FILE",
-    "NODE_EXTRA_CA_CERTS"
+    "NODE_EXTRA_CA_CERTS",
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_D1_TOKEN"
   ]
 }

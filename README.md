@@ -18,7 +18,7 @@ A technical interview practice app built for learning and portfolio use. Choose 
 
 ## Requirements
 
-Bun 1.3.5+ (verified with 1.4.3), Node.js 20.9+, and an OpenAI-compatible Chat Completions provider. Deepgram is required for microphone transcription and spoken replies. All interview answers are spoken through the microphone.
+Bun 1.3.5+ (verified with 1.4.3), Node.js 22+, and an OpenAI-compatible Chat Completions provider. Deepgram is required for microphone transcription and spoken replies. All interview answers are spoken through the microphone.
 
 ## Local setup
 
@@ -55,7 +55,7 @@ The LLM endpoint and model are configurable; DeepSeek is only the example endpoi
 bun run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). The backend runs on port 8787, creates `apps/backend/storage/local.sqlite`, and applies committed Drizzle migrations automatically. Sign in with Google, prepare an interview, and check your microphone and sound before starting.
+Open [localhost:3000](http://localhost:3000). The Hono backend runs in the local Cloudflare Workers runtime on port 8787, persists D1 data under `apps/backend/.wrangler/state`, and applies committed Drizzle migrations automatically. Bun runs the development and migration commands. Sign in with Google, prepare an interview, and check your microphone and sound before starting.
 
 If the LLM or voice service is not configured, setup and history remain available, but starting an interview is disabled. Allow microphone access in your browser and retry if permission is denied. A transcription connection must succeed before the timer starts. If microphone transcription fails during the interview, retry the microphone; speech playback has its own **Retry speech** action. Use **Hear question** to replay the latest question. Answers are accepted only through microphone audio and transcription; there is no answer text field or text-submission event. Finalized messages remain saved for transcript review, feedback, and export.
 
@@ -74,6 +74,18 @@ bun run test:e2e:local
 This runs real development servers on isolated ports and checks local sign-in, persistence, sign-out, and recovery. The normal browser suite checks that the production page never exposes the shortcut.
 
 When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT_PUBLIC_API_URL` together. The browser derives its WebSocket URL from the API origin. The frontend API URL is a build-time Next.js setting. Microphone access works on localhost or HTTPS.
+
+## Backend deployment
+
+See [backend setup and deployment](apps/backend/README.md) for creating the D1 database, configuring Worker secrets and production URLs, and deploying. From the root:
+
+```sh
+bun run db:migrate:local    # local development D1
+bun run db:migrate:remote   # configured Cloudflare D1
+bun run deploy:backend
+```
+
+Existing `storage/local.sqlite` files are left intact; the Worker uses D1. Back up and explicitly import any existing data before switching a production database. The frontend is deployed separately with `NEXT_PUBLIC_API_URL` pointing at the Worker.
 
 ## Profile onboarding
 
@@ -110,7 +122,7 @@ bun run build
 bun run test:e2e
 ```
 
-The suite starts its own frontend, backend, LLM fixture, and voice fixture. It uses `.e2e.sqlite`, test-only credentials, and simulated microphone input. Ports 3000, 8787, 8790, and 8791 must be free (or set `SCREENLY_E2E_PORT_OFFSET` to isolate them). To use an installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+The suite starts its own frontend, backend, LLM fixture, and voice fixture. It uses isolated local D1 storage (`.e2e-workers-*`), test-only credentials, and simulated microphone input. Ports 3000, 8787, 8790, and 8791 must be free (or set `SCREENLY_E2E_PORT_OFFSET` to isolate them). To use an installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
 For parallel worktrees, set `SCREENLY_E2E_PORT_OFFSET` to shift all four ports and isolate the test database. Compile the frontend with the matching API origin first, for example:
 
@@ -124,7 +136,7 @@ Use `CAPTURE_SCREENSHOTS=1` to refresh the route and mobile screenshots, or `CAP
 ## Architecture
 
 - `apps/web`: Next.js, React, Tailwind CSS 4, shadcn/ui (Radix), React Hook Form, TanStack Query, Zustand.
-- `apps/backend`: Bun, Hono, Better Auth, Drizzle, SQLite, OpenAI library.
+- `apps/backend`: Hono on Cloudflare Workers, D1 through Drizzle, Better Auth, Cloudflare WebSockets and Durable Objects, OpenAI library. Bun manages dependencies and CLI tooling.
 - `packages/shared`: Zod request/report schemas, domain types, and the audio frame contract.
 - `e2e`: controlled provider fixtures and Playwright journeys.
 - [Implementation notes](docs/implementation.md): voice lifecycle, storage, protocol, and verification.
@@ -132,10 +144,10 @@ Use `CAPTURE_SCREENSHOTS=1` to refresh the route and mobile screenshots, or `CAP
 
 The backend owns interview timing, conversation history, and provider requests. The browser owns microphone capture and ordered playback. Deepgram turn detection establishes answer boundaries; no browser VAD model assets are required.
 
-The installed Deepgram SDK's speech WebSocket implementation attempts to JSON-parse binary frames. The app uses a small typed Bun WebSocket transport for both Deepgram channels, retaining SDK transcript types. This separates binary PCM audio from JSON control events and supports the runtime's configured HTTP proxy.
+The installed Deepgram SDK's speech WebSocket implementation attempts to JSON-parse binary frames. The app uses native Workers WebSocket upgrades for both Deepgram channels, retaining SDK transcript types and separating binary PCM audio from JSON control events. One Durable Object owns each interview, its client/provider sockets, original deadline, and retryable feedback alarm. D1 stores accounts, profiles, interviews, and transcripts.
 
 ## Review notes
 
 The automated journeys use controlled providers, so they verify app behavior without provider charges. A live Deepgram check in the implementation environment returned HTTP 401; live transcription and voice quality still need verification with a working key. Live LLM verification awaits your chosen endpoint/model.
 
-Active sessions can resume until their original wall-clock duration expires. Feedback is generated once after completion; failed generation can be retried. A completed session is never restarted. The optional audio download contains microphone input, while transcript export includes both speakers.
+Active sessions can resume until their original wall-clock duration expires. When finishing, choose **Finish and view feedback** or **End without feedback**. Both save the conversation and stop audio. Ending without feedback returns to History; feedback is generated only if you request it later from the saved interview. Failed generation can be retried. A completed session is never restarted. The optional audio download contains microphone input, while transcript export includes both speakers.

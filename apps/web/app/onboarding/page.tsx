@@ -30,6 +30,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { profileApi, useUserProfile } from "@/lib/profile";
 import { useProfileDraft } from "@/lib/use-profile-draft";
+import { api } from "@/lib/api";
 import { Brand } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -103,6 +104,8 @@ export default function Onboarding() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [settingUp, setSettingUp] = useState(false);
+  const ready = !!session && !!profile.data && modeReady;
   const [projectIndex, setProjectIndex] = useState<number | null>(null);
   const [selection, setSelection] = useState<string[]>([]);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -196,7 +199,7 @@ export default function Onboarding() {
     return false;
   }
   async function next() {
-    if (saving || busy || !draft) return;
+    if (saving || busy || (step > 0 && !ready)) return;
     if (step === 0 && pending) {
       update((prior) => ({
         ...prior,
@@ -220,11 +223,14 @@ export default function Onboarding() {
       return;
     }
     setSaving(true);
+    if (!editing) setSettingUp(true);
     setError("");
     try {
       await finish();
-      router.replace(editing ? "/settings" : "/interviews/new");
+      if (editing) router.replace("/settings");
+      else await openWorkspace("/interviews/new");
     } catch (cause) {
+      setSettingUp(false);
       setError(
         cause instanceof Error
           ? cause.message
@@ -234,8 +240,20 @@ export default function Onboarding() {
       setSaving(false);
     }
   }
+  async function openWorkspace(destination: string) {
+    await Promise.all([
+      client.prefetchQuery({ queryKey: ["interviews"], queryFn: api.list }),
+      client.prefetchQuery({
+        queryKey: ["capabilities"],
+        queryFn: api.capabilities,
+      }),
+    ]);
+    router.replace(destination);
+  }
   async function exit() {
+    if (!ready || saving) return;
     setSaving(true);
+    if (!editing) setSettingUp(true);
     setError("");
     try {
       await flush();
@@ -245,8 +263,10 @@ export default function Onboarding() {
           await profileApi.skip(),
         );
       clear();
-      router.replace(editing ? "/settings" : "/dashboard");
+      if (editing) router.replace("/settings");
+      else await openWorkspace("/dashboard");
     } catch {
+      setSettingUp(false);
       setError(
         "Your draft is kept on this device. Could not sync it; try again.",
       );
@@ -254,27 +274,30 @@ export default function Onboarding() {
       setSaving(false);
     }
   }
-  if (isPending || !session || !draft)
+  if (settingUp)
     return (
-      <div className="grid min-h-dvh place-items-center px-6">
-        <div
-          role="status"
-          className="text-center text-sm text-muted-foreground"
-        >
-          {profile.isError ? (
-            <>
-              <p>Could not load your profile.</p>
-              <Button variant="link" onClick={() => void profile.refetch()}>
-                Try again
-              </Button>
-            </>
-          ) : (
-            <span className="flex items-center gap-2">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              Getting your profile ready…
-            </span>
-          )}
-        </div>
+      <div className="flex min-h-dvh flex-col">
+        <header className="mx-auto w-full max-w-6xl px-6 py-5 sm:px-10">
+          <Brand />
+        </header>
+        <main className="grid flex-1 place-items-center px-6 pb-24">
+          <div
+            className="max-w-sm text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2
+              className="mx-auto mb-6 size-6 animate-spin text-primary"
+              aria-hidden="true"
+            />
+            <h1 className="text-2xl sm:text-[28px]">
+              Setting up your workspace…
+            </h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Saving your preferences and getting your practice space ready.
+            </p>
+          </div>
+        </main>
       </div>
     );
   const details = draft.details;
@@ -333,7 +356,15 @@ export default function Onboarding() {
       ) : (
         <CloudCheck className="size-3.5 text-primary" aria-hidden="true" />
       )}
-      {sync === "saving" ? (
+      {!ready ? (
+        profile.isError ? (
+          <Button variant="link" onClick={() => void profile.refetch()}>
+            Could not load profile. Retry
+          </Button>
+        ) : (
+          "Connecting your account…"
+        )
+      ) : sync === "saving" ? (
         "Saving changes…"
       ) : sync === "error" ? (
         <>
@@ -473,6 +504,7 @@ export default function Onboarding() {
                 />
               ) : (
                 <ImportPanel
+                  ready={ready}
                   onBusy={setBusy}
                   onResult={(result) => {
                     update((prior) => ({
@@ -760,7 +792,7 @@ export default function Onboarding() {
             <Button
               type="button"
               variant="ghost"
-              disabled={saving || busy}
+              disabled={saving || busy || !ready}
               onClick={() => {
                 if (pending) {
                   update((prior) => ({
@@ -778,7 +810,9 @@ export default function Onboarding() {
               type="button"
               className="ml-auto"
               loading={saving}
-              disabled={busy || (!!pending && !selection.length)}
+              disabled={
+                busy || (!!pending && !selection.length) || (step > 0 && !ready)
+              }
               onClick={() => void next()}
             >
               {pending

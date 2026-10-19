@@ -25,9 +25,11 @@ const stages = [
 export function ImportPanel({
   onResult,
   onBusy,
+  ready = true,
 }: {
   onResult: (result: ProfileImport) => void;
   onBusy: (busy: boolean) => void;
+  ready?: boolean;
 }) {
   const capabilities = useQuery({
     queryKey: ["capabilities"],
@@ -53,7 +55,7 @@ export function ImportPanel({
     [],
   );
   async function start(input: File | { url?: string; text?: string }) {
-    if (busy) return;
+    if (busy || !ready) return;
     if (!(input instanceof File) && input.url) {
       const issue = profileURLIssue(input.url);
       if (issue) {
@@ -102,7 +104,7 @@ export function ImportPanel({
       onBusy(false);
     }
   }
-  const available = !!capabilities.data?.llm;
+  const available = ready && !!capabilities.data?.llm;
   if (busy)
     return (
       <div className="py-4" aria-busy="true">
@@ -195,7 +197,7 @@ export function ImportPanel({
             Retry
           </Button>
         </InlineAlert>
-      ) : !capabilities.isPending && !available ? (
+      ) : ready && !capabilities.isPending && !available ? (
         <p role="status" className="text-sm text-muted-foreground">
           AI import is unavailable. You can enter your details manually.
         </p>

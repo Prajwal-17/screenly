@@ -7,9 +7,8 @@ import {
   type ProfileImportEvent,
   type ProfileImportStage,
 } from "@repo/shared";
-import { auth } from "../auth";
-import { env, capabilities } from "../config";
-import { profiles } from "../db/profiles";
+import { getCapabilities } from "../config";
+import type { AppEnv } from "../context";
 import { analyzeProfile } from "../lib/profileAnalysis";
 import {
   ImportError,
@@ -19,21 +18,24 @@ import {
   resumeSource,
 } from "../lib/profileSource";
 
-export const profileRoutes = new Hono<{ Variables: { userId: string } }>();
-const imports = new Map<
-  string,
-  { start: number; count: number; active: boolean }
->();
+export const profileRoutes = new Hono<AppEnv>();
 profileRoutes.use("*", async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  const session = await c
+    .get("services")
+    .auth.api.getSession({ headers: c.req.raw.headers });
   if (!session) return c.json({ error: "Sign in to continue." }, 401);
-  if (c.req.method !== "GET" && c.req.header("Origin") !== env.FRONTEND_URL)
+  if (
+    c.req.method !== "GET" &&
+    c.req.header("Origin") !== c.get("config").FRONTEND_URL
+  )
     return c.json({ error: "Origin is not allowed." }, 403);
   c.set("userId", session.user.id);
   c.header("Cache-Control", "no-store");
   await next();
 });
-profileRoutes.get("/", (c) => c.json(profiles.get(c.get("userId"))));
+profileRoutes.get("/", async (c) =>
+  c.json(await c.get("services").profiles.get(c.get("userId"))),
+);
 profileRoutes.put("/", bodyLimit({ maxSize: 128 * 1024 }), async (c) => {
   const result = profileSaveSchema.safeParse(
     await c.req.json().catch(() => null),
@@ -51,15 +53,19 @@ profileRoutes.put("/", bodyLimit({ maxSize: 128 * 1024 }), async (c) => {
     );
   const { details, complete, onboarding } = result.data;
   return c.json(
-    profiles.save(
-      c.get("userId"),
-      complete ? profileDetailsSchema.parse(details) : details,
-      complete,
-      onboarding,
-    ),
+    await c
+      .get("services")
+      .profiles.save(
+        c.get("userId"),
+        complete ? profileDetailsSchema.parse(details) : details,
+        complete,
+        onboarding,
+      ),
   );
 });
-profileRoutes.post("/skip", (c) => c.json(profiles.skip(c.get("userId"))));
+profileRoutes.post("/skip", async (c) =>
+  c.json(await c.get("services").profiles.skip(c.get("userId"))),
+);
 profileRoutes.post(
   "/import",
   bodyLimit({
@@ -116,7 +122,7 @@ profileRoutes.post(
             );
       return c.json({ error: issue.message }, issue.status);
     }
-    if (!capabilities.llm)
+    if (!getCapabilities(c.get("config")).llm)
       return c.json(
         {
           error:
@@ -125,15 +131,26 @@ profileRoutes.post(
         503,
       );
     const now = Date.now();
-    for (const [key, value] of imports)
-      if (!value.active && now - value.start > 600000) imports.delete(key);
     const id = c.get("userId");
-    const activity = imports.get(id) ?? { start: now, count: 0, active: false };
-    if (
-      activity.active ||
-      activity.count >= 8 ||
-      [...imports.values()].filter((value) => value.active).length >= 8
+    const acquired = await c.env.DB.prepare(
+      `INSERT INTO profile_import_limit (user_id, window_start, count, active_until) VALUES (?, ?, 1, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+      window_start = CASE WHEN window_start < ? THEN excluded.window_start ELSE window_start END,
+      count = CASE WHEN window_start < ? THEN 1 ELSE count + 1 END,
+      active_until = excluded.active_until
+      WHERE active_until < ? AND (window_start < ? OR count < 8) RETURNING user_id`,
     )
+      .bind(
+        id,
+        now,
+        now + 120000,
+        now - 600000,
+        now - 600000,
+        now,
+        now - 600000,
+      )
+      .first();
+    if (!acquired)
       return c.json(
         {
           error:
@@ -141,9 +158,13 @@ profileRoutes.post(
         },
         429,
       );
-    activity.active = true;
-    activity.count++;
-    imports.set(id, activity);
+    const release = async () => {
+      await c.env.DB.prepare(
+        "UPDATE profile_import_limit SET active_until=0 WHERE user_id=? AND active_until=?",
+      )
+        .bind(id, now + 120000)
+        .run();
+    };
     const controller = new AbortController();
     const signal = AbortSignal.any([
       c.req.raw.signal,
@@ -160,7 +181,11 @@ profileRoutes.post(
       extractedText = source.text;
       signal.throwIfAborted();
       await progress("analyzing");
-      const suggestions = await analyzeProfile(source.text, signal);
+      const suggestions = await analyzeProfile(
+        source.text,
+        signal,
+        c.get("config"),
+      );
       signal.throwIfAborted();
       return {
         suggestions: { ...suggestions, ...source.link },
@@ -200,7 +225,7 @@ profileRoutes.post(
             });
           }
         } finally {
-          activity.active = false;
+          await release();
         }
       });
     }
@@ -213,7 +238,7 @@ profileRoutes.post(
         issue.status,
       );
     } finally {
-      activity.active = false;
+      await release();
     }
   },
 );
