@@ -12,6 +12,29 @@ const server = Bun.serve({
       messages: { role: string; content: string }[];
     };
     const last = body.messages.at(-1)?.content ?? "";
+    if (body.messages[0]?.content.startsWith("screenly-profile-import")) {
+      if (last.includes("PROFILE_PROVIDER_FAILURE"))
+        return Response.json(
+          { error: { message: "Test import failure" } },
+          { status: 503 },
+        );
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                headline: "Backend engineer",
+                location: "London",
+                role: "Backend",
+                level: "Senior",
+                stack: ["Python", "SQL"],
+                githubUrl: "https://github.com/example-candidate",
+              }),
+            },
+          },
+        ],
+      });
+    }
     if (body.stream) {
       if (
         last.includes("I would test a failed request and show a retry control.")

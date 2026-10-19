@@ -442,6 +442,16 @@ The short “Think out loud.” headline pairs charcoal with fern beside a stati
 
 Production presents Google-only authentication through Better Auth. An opt-in **Local development** email form follows a dashed divider only when the frontend runs in development and the backend reports the local capability. Its labeled shared input and secondary action remain compact; the local form is excluded from production builds.
 
+### Profile onboarding
+
+`/onboarding` extends the existing palette, local Geist, and shared fields/buttons. The open working column is capped at (680px), including (24px) horizontal padding, without an enclosing card. A compact Brand / **Skip for now** header sits above three labeled progress steps: **Import**, **Profile**, and **Focus**. Fern circles mark the current and completed steps; completed steps use a check. Task headings use (28px / 32px) type across the (640px) breakpoint, followed by short muted copy.
+
+Import places **Enter details myself** before the upload area. A source disclosure explains that the AI provider receives the source and the original is not saved. The flat white resume dropzone has a dashed input-colored border, gently rounded (16px) corners, a plain upload icon, and a file action for PDF, DOCX, or TXT up to (5 MB). A labeled public GitHub, LinkedIn, or portfolio link field follows; its action moves below the input on small screens. Pasted text is available through a native disclosure. Loading, cancel, unavailable, and error states remain inline, and manual entry stays available.
+
+Profile review shows an editable AI draft with a fern-wash source notice when imported. Name, optional headline, and optional location precede the optional GitHub, LinkedIn, and portfolio fields, grouped by a quiet divider. Focus uses native role/experience selects, two columns from (640px), followed by removable fern stack chips, an add field, wrapping technology suggestions, and an optional goal textarea. **Back** and **Continue** remain in normal flow below a divider; the final action reads **Continue to practice**. Fields and actions retain visible focus and mobile touch targets.
+
+Settings presents the saved profile as an open, divided summary with compact neutral stack tags, real links, and **Edit profile**. Editing reuses the review flow with **Cancel** and **Save profile**. Saved role and experience seed interview setup while preserving an explicit role link and changes already made in the setup form.
+
 ### Navigation
 
 The sidebar follows the supplied Vercel reference's firm hierarchy within Screenly's warm-paper palette: workspace switcher, bordered search, Workspace / Practice / Insights groups, fine dividers, Settings directly below the other navigation links, and a pinned account menu with notifications. Expanded current routes use a white bordered row, charcoal text, fern icon, and a restrained Motion selection transition; the compact rail uses a flat fern-tinted square. Settings shares the same active treatment as other destinations. The compact rail retains labeled links and keyboard/hover tooltips.

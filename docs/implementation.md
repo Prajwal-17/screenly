@@ -85,3 +85,9 @@ All frontend routes and shared presentation components use Tailwind CSS utilitie
 Production uses Google through Better Auth; email/password endpoints are disabled. First-time Google sign-in creates the account. OAuth errors return to the sign-in page with a retry.
 
 An explicit `ENABLE_DEV_LOGIN=true` plus development mode and localhost origins registers a local email-only endpoint using Better Auth sessions/cookies. Its UI is imported only in Next.js development builds. Production registration, production UI exclusion, email normalization, origin restrictions, persisted sessions, and sign-out are covered by tests.
+
+## Profile onboarding and imports
+
+`user_profile` stores validated per-user details and draft/completion/skip state. Migration 0003 preserves existing accounts as skipped. New-user UI routing checks the private profile endpoint before exposing the workspace, while the interview APIs retain their existing authentication/ownership contract. Settings reopens the same editable flow; role and experience seed new-session defaults.
+
+Resume extraction is bounded to 5 MB and 20 PDF pages (PDF/DOCX/TXT), with pasted text as a fallback. Public link fetching rejects private/reserved IPs and revalidates redirects, pins the resolved public IP at socket/CONNECT time, preserves TLS identity and the configured proxy, and limits body size/time. GitHub uses public profile/repository metadata; restricted LinkedIn pages are reported as unreadable rather than bypassed. AI has no tools; source instructions are untrusted, output is schema-validated, and users review before completion. No original file/text is persisted. Import concurrency and attempts are bounded; unavailable providers leave manual entry/skip intact.

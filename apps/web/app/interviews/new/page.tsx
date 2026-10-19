@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldSet, FieldLegend, FieldError } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useUserProfile } from "@/lib/profile";
 import { api } from "@/lib/api";
 const roleTopics: Record<
   InterviewSettings["role"],
@@ -32,6 +33,8 @@ const roleTopics: Record<
 export default function Setup() {
   const router = useRouter();
   const client = useQueryClient();
+  const profile = useUserProfile();
+  const appliedProfile = useRef(false);
   const form = useForm<InterviewSettings>({
     resolver: zodResolver(settingsSchema),
     defaultValues: {
@@ -50,6 +53,22 @@ export default function Setup() {
       setValue("topics", roleTopics[valid]);
     }
   }, [setValue]);
+  useEffect(() => {
+    if (!profile.data || appliedProfile.current || form.formState.isDirty)
+      return;
+    appliedProfile.current = true;
+    const explicitRole = roles.find(
+      (role) =>
+        role === new URLSearchParams(window.location.search).get("role"),
+    );
+    const role = explicitRole || profile.data.details.role;
+    if (role) {
+      setValue("role", role);
+      setValue("topics", roleTopics[role]);
+    }
+    if (profile.data.details.level)
+      setValue("level", profile.data.details.level);
+  }, [profile.data, form, setValue]);
   const values = useWatch({ control: form.control });
   const capabilities = useQuery({
     queryKey: ["capabilities"],

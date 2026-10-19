@@ -33,3 +33,7 @@ Visible keyboard focus, labeled controls, Radix focus management, reduced motion
 ## Navigation previews
 
 The user authorized additional preview pages to evaluate the navigation. Question library and Practice plans use clearly labeled sample content; Progress and Saved answers show honest preview states. They do not fabricate personal session data or results. Settings and Help expose real local preferences and documented behavior.
+
+## Profile onboarding
+
+New members can import a resume or public profile, review editable AI suggestions, and set a role, experience, stack, links and practice goal in three short steps. Manual entry and a visible skip are always available. Sources are sent to the configured AI provider for import but not stored. Profiles save to the signed-in account, can be edited in Settings, and seed role/experience in interview setup. Returning members are not blocked by the migration.

@@ -4,6 +4,7 @@ import type {
   FeedbackStatus,
   InterviewSettings,
   InterviewStatus,
+  ProfileDetails,
 } from "@repo/shared";
 import {
   index,
@@ -156,6 +157,19 @@ export const interviewMessage = sqliteTable(
     index("message_interview_idx").on(table.interviewId),
   ],
 );
+
+export const userProfile = sqliteTable("user_profile", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  details: text("details", { mode: "json" }).$type<ProfileDetails>().notNull(),
+  status: text("status")
+    .$type<"draft" | "complete" | "skipped">()
+    .notNull()
+    .default("draft"),
+  completedAt: integer("completed_at"),
+  updatedAt: integer("updated_at").notNull(),
+});
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),

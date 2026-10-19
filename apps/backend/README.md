@@ -40,3 +40,9 @@ Provider keys remain on the backend. The LLM uses the OpenAI library against the
 Unit/integration tests use an in-memory database and test-only credentials. Browser tests use their own file database and local provider fixtures. `DEEPGRAM_WS_URL` is normally left at `wss://api.deepgram.com`; tests override it with a loopback fixture.
 
 See [the root README](../../README.md) for setup and verification notes.
+
+## Profile API
+
+Authenticated profile endpoints: `GET /api/profile`, `PUT /api/profile` with `{ details, complete }`, `POST /api/profile/skip`, and `POST /api/profile/import`. Import accepts multipart `resume` or JSON `{ url }` / `{ text }`. Mutations require the configured frontend Origin.
+
+Import uses the existing LLM settings, reads documents in memory, validates and pins public HTTPS destinations (including proxy CONNECT), and treats all source content as untrusted. Suggestions pass the shared schema. Source files/text are never saved; only reviewed details sent to PUT are persisted. AI absence/failure leaves manual setup usable. The profile migration backfills existing members as skipped so active work remains accessible.

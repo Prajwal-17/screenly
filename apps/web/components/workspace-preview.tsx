@@ -11,6 +11,8 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
+import { useUserProfile } from "@/lib/profile";
+import { ProfileSummary } from "@/components/profile-summary";
 import { Workspace } from "@/components/workspace";
 import { PageIntro } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -90,6 +92,7 @@ export function WorkspacePreview({
     null,
   );
   const { data: session } = authClient.useSession();
+  const profile = useUserProfile();
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const preview = ["library", "plans", "progress", "saved"].includes(section);
   return (
@@ -289,7 +292,9 @@ export function WorkspacePreview({
             <dl className="mt-5 grid gap-5 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-muted-foreground">Name</dt>
-                <dd className="mt-1.5">{session?.user.name}</dd>
+                <dd className="mt-1.5">
+                  {profile.data?.details.name || session?.user.name}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Email</dt>
@@ -297,6 +302,7 @@ export function WorkspacePreview({
               </div>
             </dl>
           </section>
+          <ProfileSummary />
           <section className="border-b py-6">
             <h2 className="text-base">Workspace preferences</h2>
             <label className="mt-5 flex cursor-pointer items-center justify-between gap-6">

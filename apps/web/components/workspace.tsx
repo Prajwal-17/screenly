@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "motion/react";
 import type { CSSProperties } from "react";
 import { WorkspaceSidebar } from "@/components/workspace-sidebar";
+import { useUserProfile } from "@/lib/profile";
+import { InlineAlert } from "@/components/common";
 import { WorkspaceSearch } from "@/components/workspace-search";
 import { workspaceDestinations } from "@/lib/workspace-navigation";
 
@@ -51,6 +53,9 @@ export function Workspace({
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
+  const profile = useUserProfile();
+  const needsOnboarding =
+    profile.data?.status === "new" || profile.data?.status === "draft";
   const path = usePathname();
   const {
     navigationOpen,
@@ -71,8 +76,12 @@ export function Workspace({
     if (!isPending && !session && !signingOut) router.replace("/auth/sign-in");
   }, [isPending, session, signingOut, router]);
   useEffect(() => {
-    if (session) document.getElementById("workspace-content")?.focus();
-  }, [path, session]);
+    if (session && needsOnboarding) router.replace("/onboarding");
+  }, [session, needsOnboarding, router]);
+  useEffect(() => {
+    if (session && !needsOnboarding)
+      document.getElementById("workspace-content")?.focus();
+  }, [path, session, needsOnboarding, profile.isPending]);
   const context =
     title ??
     workspaceDestinations.find((item) => item.href === path)?.label ??
@@ -85,7 +94,7 @@ export function Workspace({
           : path.endsWith("/feedback")
             ? "Feedback"
             : "Interview");
-  if (isPending || !session)
+  if (isPending || !session || profile.isPending || needsOnboarding)
     return (
       <div
         className="flex min-h-dvh items-center justify-center gap-2 text-sm text-muted-foreground"
@@ -93,6 +102,20 @@ export function Workspace({
       >
         <Loader2 className="size-4 animate-spin" />
         Loading your workspace…
+      </div>
+    );
+  if (profile.isError)
+    return (
+      <div className="mx-auto max-w-lg px-6 py-16">
+        <Brand />
+        <div className="mt-10">
+          <InlineAlert>
+            Could not load your profile.{" "}
+            <Button variant="link" onClick={() => void profile.refetch()}>
+              Try again
+            </Button>
+          </InlineAlert>
+        </div>
       </div>
     );
   return (
@@ -122,7 +145,7 @@ export function Workspace({
         data-focus-mode={focusMode}
       >
         <WorkspaceSidebar
-          name={session.user.name}
+          name={profile.data?.details.name || session.user.name}
           email={session.user.email}
           collapsed={collapsed}
         />
@@ -165,7 +188,7 @@ export function Workspace({
               }
             >
               <WorkspaceSidebar
-                name={session.user.name}
+                name={profile.data?.details.name || session.user.name}
                 email={session.user.email}
                 onNavigate={() => setNavigationOpen(false)}
               />

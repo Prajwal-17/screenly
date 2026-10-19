@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { profileRoutes } from "./routes/profile";
 import { upgradeWebSocket, websocket } from "hono/bun";
 import { cors } from "hono/cors";
 import { clientEventSchema, settingsSchema } from "@repo/shared";
@@ -15,7 +16,7 @@ app.use(
   cors({
     origin: env.FRONTEND_URL,
     credentials: true,
-    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type"],
   }),
 );
@@ -24,6 +25,7 @@ app.get("/", (c) =>
 );
 app.get("/api/capabilities", (c) => c.json(capabilities));
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+app.route("/api/profile", profileRoutes);
 app.use("/api/interviews/*", async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session) return c.json({ error: "Sign in to continue." }, 401);

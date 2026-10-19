@@ -14,6 +14,8 @@ test("local email entry opens a real persistent workspace without Google", async
   const email = `local-${Date.now()}@example.com`;
   await input.fill(email);
   await page.getByRole("button", { name: "Enter local workspace" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.getByRole("button", { name: "Skip for now" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   const session = await (
     await page.request.get(`${backendURL}/api/auth/get-session`)

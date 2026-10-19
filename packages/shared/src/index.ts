@@ -144,3 +144,5 @@ export function unpackAudio(
     audio: frame.slice(4),
   };
 }
+
+export * from "./profile";

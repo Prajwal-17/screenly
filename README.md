@@ -75,6 +75,14 @@ This runs real development servers on isolated ports and checks local sign-in, p
 
 When changing ports/origins, update `FRONTEND_URL`, `BETTER_AUTH_URL`, and `NEXT_PUBLIC_API_URL` together. The browser derives its WebSocket URL from the API origin. The frontend API URL is a build-time Next.js setting. Microphone access works on localhost or HTTPS.
 
+## Profile onboarding
+
+New members get a three-step setup: import a source (optional), review their details, and choose a practice focus. They can upload a PDF, DOCX, or TXT resume up to 5 MB, paste a public GitHub/LinkedIn/portfolio link, paste relevant profile text, or enter details manually. PDF extraction supports text-based documents up to 20 pages; scanned or protected files offer a text/manual fallback.
+
+The configured Chat Completions model drafts editable suggestions. Nothing is completed automatically: users review before saving. Original files and source text are not stored. Link imports follow only validated public HTTPS destinations, with bounded responses, redirects, timeouts, and per-user limits. LinkedIn or other pages that require login cannot be imported; the UI offers resume/text/manual alternatives.
+
+Profiles, links, stack, and goals are private to the signed-in member. Drafts save on Continue; setup can be skipped and edited later in Settings. Saved target role and experience prefill interview setup. Existing members keep their workspace access after migration and can add their profile from Settings. AI credentials are required only for import; manual setup remains available without them.
+
 ## Fonts and responsive layout
 
 Geist Sans and Geist Mono variable fonts are committed in `apps/web/app/fonts` under the SIL Open Font License 1.1 and served with `next/font/local`. Development, type checks, and builds need no font downloads. [License and provenance](apps/web/app/fonts/SOURCE.txt) are retained beside the font files. Geist Sans covers headings, reading text, and controls; Geist Mono is reserved for code.
@@ -111,7 +119,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8887 bun run build
 SCREENLY_E2E_PORT_OFFSET=100 bun run test:e2e
 ```
 
-Use `CAPTURE_SCREENSHOTS=1` to refresh the route and mobile screenshots. These captures use the local provider fixtures, not live provider responses.
+Use `CAPTURE_SCREENSHOTS=1` to refresh the route and mobile screenshots, or `CAPTURE_ONBOARDING=1` for the onboarding review captures. These captures use the local provider fixtures, not live provider responses.
 
 ## Architecture
 
@@ -120,7 +128,7 @@ Use `CAPTURE_SCREENSHOTS=1` to refresh the route and mobile screenshots. These c
 - `packages/shared`: Zod request/report schemas, domain types, and the audio frame contract.
 - `e2e`: controlled provider fixtures and Playwright journeys.
 - [Implementation notes](docs/implementation.md): voice lifecycle, storage, protocol, and verification.
-- [Screenshots](docs/screenshots): landing, authentication, overview, setup, preflight, voice interview, feedback, and history.
+- [Screenshots](docs/screenshots): landing, authentication, onboarding, overview, setup, preflight, voice interview, feedback, and history.
 
 The backend owns interview timing, conversation history, and provider requests. The browser owns microphone capture and ordered playback. Deepgram turn detection establishes answer boundaries; no browser VAD model assets are required.
 
