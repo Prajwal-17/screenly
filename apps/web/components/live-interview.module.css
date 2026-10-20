@@ -141,16 +141,53 @@
   left: 50%;
   height: 72.5%;
   aspect-ratio: 1;
-  transform: translate(-50%, -50%) scale(calc(1 + var(--orb-energy) * 0.04));
+  transform: translate(-50%, -50%) scale(calc(1 + var(--orb-energy) * 0.009));
   border-radius: 50%;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--accent-active);
+  box-shadow: inset -7px -10px 18px
+    color-mix(in srgb, var(--primary-active) 18%, transparent);
+}
+.fallback::before,
+.fallback::after {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  border-radius: inherit;
+}
+.fallback::before {
+  background:
+    radial-gradient(ellipse at 70% 24%, var(--background) 8%, transparent 62%),
+    radial-gradient(ellipse at 20% 80%, var(--primary) 2%, transparent 68%),
+    radial-gradient(
+      ellipse at 80% 78%,
+      color-mix(in srgb, var(--candidate) 22%, var(--background)),
+      transparent 55%
+    ),
+    var(--accent-active);
+  animation: porcelain-current 24s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+.fallback::after {
   background: radial-gradient(
-    circle at 34% 28%,
-    #fff6e6 0%,
-    #e6d9c2 48%,
-    #aa9987 82%,
-    #88796e 100%
+    ellipse at 32% 26%,
+    color-mix(in srgb, var(--card) 58%, transparent),
+    transparent 48%
   );
-  box-shadow: inset -6px -9px 18px rgb(71 69 63 / 10%);
+  box-shadow: inset -10px -16px 24px
+    color-mix(in srgb, var(--primary-active) 25%, transparent);
+}
+.orb[data-moving="true"] .fallback::before {
+  animation-play-state: running;
+}
+@keyframes porcelain-current {
+  from {
+    transform: rotate(-7deg) scale(1.02);
+  }
+  to {
+    transform: rotate(7deg) scale(1.05);
+  }
 }
 .orb[data-renderer="webgl"] .fallback {
   visibility: hidden;
@@ -158,17 +195,16 @@
 .orb[data-renderer="fallback"] canvas {
   visibility: hidden;
 }
-.orb[data-candidate="true"] .fallback {
-  background: radial-gradient(
-    circle at 34% 28%,
-    #fff0e7,
-    #e9c9b9 48%,
-    #b58268 82%,
-    #8c6753
-  );
-}
 .orb[data-inactive="true"] .fallback {
-  filter: saturate(0.25);
+  filter: saturate(0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fallback {
+    transform: translate(-50%, -50%);
+  }
+  .fallback::before {
+    animation: none;
+  }
 }
 .speakerStatus {
   display: flex;

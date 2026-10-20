@@ -165,6 +165,10 @@ test("Porcelain studio preserves voice playback, audio controls, transcript, and
     ).toBeVisible();
     await page.getByRole("button", { name: "Mute", exact: true }).click();
     await expect(visual).toHaveAttribute("data-state", "muted");
+    await expect(visual.locator("[data-renderer]")).toHaveAttribute(
+      "data-moving",
+      "false",
+    );
     await expect
       .poll(() =>
         visual
@@ -176,6 +180,10 @@ test("Porcelain studio preserves voice playback, audio controls, transcript, and
       page.getByRole("button", { name: "Unmute", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Unmute", exact: true }).click();
+    await expect(visual.locator("[data-renderer]")).toHaveAttribute(
+      "data-moving",
+      "true",
+    );
     await page
       .getByRole("button", { name: "Close transcript", exact: true })
       .click();
@@ -231,6 +239,10 @@ test("Porcelain studio preserves voice playback, audio controls, transcript, and
     }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(visual.locator("[data-renderer]")).toHaveAttribute(
+      "data-moving",
+      "false",
+    );
     const reducedSpeed = controls.getByRole("button", {
       name: "Interviewer playback speed, 1.25×",
       exact: true,
