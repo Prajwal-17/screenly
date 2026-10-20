@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { backendURL, voiceURL } from "./environment";
 import { signInForTest } from "./session-fixture";
+import { acceptDocumentExit } from "./navigation";
 
 test("continuous microphone input keeps the interview responsive and partial words current", async ({
   page,
@@ -91,7 +92,7 @@ test("continuous microphone input keeps the interview responsive and partial wor
       .click();
     await expect(
       page.getByText("Listening to you", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
     const metrics = await page.evaluate(async () => {
       const read = () =>
         (
@@ -157,7 +158,7 @@ test("continuous microphone input keeps the interview responsive and partial wor
     }
     expect(partialPaintMs).toBeLessThan(250);
   } finally {
-    await page.goto("/history");
+    await acceptDocumentExit(page, () => page.goto("/history"));
     await page.request.delete(`${backendURL}/api/interviews/${id}`);
     await page.request.post(`${voiceURL}/speech-settings`, {
       data: { wordMs: 45, automaticAnswer: true },

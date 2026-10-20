@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { resolve } from "node:path";
 import {
   webPort,
   backendPort,
@@ -25,6 +26,7 @@ export default defineConfig({
           args: [
             "--use-fake-ui-for-media-stream",
             "--use-fake-device-for-media-stream",
+            `--use-file-for-fake-audio-capture=${resolve("e2e/fixtures/vad-speech.wav")}`,
           ],
         },
       },

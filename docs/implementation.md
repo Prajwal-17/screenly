@@ -49,6 +49,10 @@ Microphone metering stays outside React's page subscriptions. Saved transcript r
 
 The previous presentation was removed in a separate reset commit before rebuilding. Routing, authentication, API contracts, server timing, microphone ownership/cleanup, reconnect, persistence, feedback, exports, and deletion are retained. Dashboard metrics use real query data; example landing content is explicitly labeled. No simulated audio or mock interview loop is part of the production UI. See [the design system](../DESIGN.md) and [the rebuild plan](ui-rebuild-plan.md).
 
+Microphone capture uses a self-hosted Silero v5 ONNX model in a dedicated worker, with mono 16 kHz / 512-sample analysis frames. Three positive frames confirm an onset; a bounded 256 ms pre-roll preserves the beginning. Confirmed speech streams in 80 ms PCM16 packets with up to 256 ms of tail padding. A one-second quiet interval sends `speech-end`, which maps to Flux `ForceEndTurn` after the last packet has time to decode; natural provider end-of-turn detection and barge-in remain enabled. Muting/pausing discards local buffers, advances an epoch to reject stale worker output, and sends no silent PCM. Model load/inference failure closes capture without a continuous-upload fallback. Inference backlog and provider-handshake buffering are bounded. All microphone tracks, contexts and workers are released on departure.
+
+Flux does not support the v1 `KeepAlive` message. STT sockets retire after five idle seconds and reconnect on demand, preserving PCM packet order and remapping restarted provider turn indices so subsequent answers are accepted. Socket handshakes are attached to the interview's background-work lifetime. Build scripts copy version-locked runtime/model assets and license notices from dependencies; no CDN or third-party browser request is needed.
+
 ## Validation
 
 - Shared schema/audio framing tests.

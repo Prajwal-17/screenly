@@ -265,6 +265,115 @@ test("Deepgram transport separates JSON control events from binary PCM audio", a
   }
 });
 
+test("speech-only transcription finalizes without silent PCM and resumes after idle with monotonic turn IDs", async () => {
+  let connections = 0;
+  let closedConnections = 0;
+  const audio: number[][] = [];
+  const controls: string[] = [];
+  const turns: { event: string; index: number }[] = [];
+  const errors: string[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch(request, server) {
+      return server.upgrade(request)
+        ? undefined
+        : new Response("Upgrade required", { status: 400 });
+    },
+    websocket: {
+      open(socket) {
+        connections++;
+        socket.send(JSON.stringify({ type: "Connected" }));
+      },
+      message(socket, message) {
+        if (typeof message === "string") {
+          const { type } = JSON.parse(message);
+          controls.push(type);
+          if (type === "ForceEndTurn")
+            socket.send(
+              JSON.stringify({
+                type: "TurnInfo",
+                event: "EndOfTurn",
+                turn_index: 0,
+                transcript: "Index the customer identifier.",
+              }),
+            );
+          return;
+        }
+        audio.push(Array.from(message));
+        socket.send(
+          JSON.stringify({
+            type: "TurnInfo",
+            event: "Update",
+            turn_index: 0,
+            transcript: "Index the customer identifier.",
+          }),
+        );
+      },
+      close() {
+        closedConnections++;
+      },
+    },
+  });
+  const config = readConfig({
+    BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
+    DEEPGRAM_API_KEY: "fixture-key",
+    DEEPGRAM_WS_URL: `ws://localhost:${server.port}`,
+  });
+  const stt = new STTService(
+    config,
+    (turn) => turns.push({ event: turn.event, index: turn.turn_index }),
+    (error) => errors.push(error.message),
+    [],
+    (url) => new WebSocket(url.toString()),
+  );
+  const until = async (condition: () => boolean) => {
+    const deadline = Date.now() + 7000;
+    while (!condition()) {
+      if (Date.now() > deadline) throw new Error("Provider fixture timed out");
+      await Bun.sleep(10);
+    }
+  };
+  try {
+    await stt.connect();
+    await until(() => closedConnections === 1); // Initial warm connection receives no audio.
+    expect(audio).toHaveLength(0);
+    await Promise.all([
+      stt.sendAudio(new Uint8Array([1, 0, 2, 0])),
+      stt.sendAudio(new Uint8Array([3, 0, 4, 0])),
+    ]);
+    stt.endSpeech();
+    await until(() => turns.some((turn) => turn.event === "EndOfTurn"));
+    expect(connections).toBe(2); // Concurrent packets share one handshake.
+    expect(audio).toEqual([
+      [1, 0, 2, 0],
+      [3, 0, 4, 0],
+    ]);
+    await until(() => closedConnections === 2);
+    expect(audio).toHaveLength(2); // No zero-filled keepalive frames while idle.
+    await stt.sendAudio(new Uint8Array([5, 0, 6, 0]));
+    stt.endSpeech();
+    await until(
+      () => turns.filter((turn) => turn.event === "EndOfTurn").length === 2,
+    );
+    expect(
+      turns
+        .filter((turn) => turn.event === "EndOfTurn")
+        .map((turn) => turn.index),
+    ).toEqual([0, 1]);
+    expect(audio).toEqual([
+      [1, 0, 2, 0],
+      [3, 0, 4, 0],
+      [5, 0, 6, 0],
+    ]);
+    expect(controls.filter((type) => type === "ForceEndTurn")).toHaveLength(2);
+    expect(controls).not.toContain("KeepAlive");
+    expect(errors).toEqual([]);
+  } finally {
+    stt.close();
+    server.stop(true);
+  }
+}, 20000);
+
 test("speech waits for final audio metadata instead of closing at Flushed", async () => {
   const { TTSService } = await import("../src/lib/ttsService");
   const { readConfig } = await import("../src/config");

@@ -61,7 +61,8 @@ async function fixture(
         onTurn = turn;
         return {
           connect: async () => {},
-          sendAudio: () => {},
+          endSpeech: () => {},
+          sendAudio: async () => {},
           close: () => {},
         };
       },
@@ -564,7 +565,8 @@ describe("interview persistence and orchestration", () => {
           connect: async () => {
             connected = true;
           },
-          sendAudio: () => {
+          endSpeech: () => {},
+          sendAudio: async () => {
             receivedAudio++;
           },
           close: () => {
@@ -786,7 +788,8 @@ describe("interview persistence and orchestration", () => {
           connect: async () => {
             if (fail) throw new Error("Transcription failed");
           },
-          sendAudio: () => {},
+          endSpeech: () => {},
+          sendAudio: async () => {},
           close: () => {},
         }),
         tts: (audio) => ({

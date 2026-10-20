@@ -37,9 +37,13 @@ describe("shared contracts", () => {
         text: "An answer",
       }).success,
     ).toBe(false);
-    for (const type of ["interrupt", "speak", "finish"]) {
+    for (const type of ["interrupt", "speak", "finish", "speech-end"]) {
       expect(clientEventSchema.safeParse({ type }).success).toBe(true);
     }
+    expect(
+      clientEventSchema.safeParse({ type: "speech-end", text: "typed answer" })
+        .success,
+    ).toBe(false);
     expect(
       clientEventSchema.safeParse({ type: "played", responseId: 1 }).success,
     ).toBe(true);

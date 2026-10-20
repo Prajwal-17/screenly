@@ -229,7 +229,11 @@ test("ending a disconnected interview without feedback cancels its alarm and rem
     "generating",
   );
   await runDurableObjectAlarm(room);
-  expect((await interviews.get(interview.id))?.feedbackStatus).toBe("failed");
+  // The one-millisecond alarm may already be running when the test helper
+  // checks it. Await its result instead of racing the background handler.
+  await expect
+    .poll(async () => (await interviews.get(interview.id))?.feedbackStatus)
+    .toBe("failed");
   await room.closeSession();
 });
 test("WebSocket completion can skip feedback and releases the persisted deadline", async () => {

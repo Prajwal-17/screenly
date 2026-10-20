@@ -27,7 +27,7 @@ export type SessionDependencies = {
     turn: (event: ListenV2TurnInfo) => void,
     error: (error: Error) => void,
     topics: InterviewDetail["topics"],
-  ) => Pick<STTService, "connect" | "sendAudio" | "close">;
+  ) => Pick<STTService, "connect" | "sendAudio" | "endSpeech" | "close">;
   tts: (
     audio: (data: Uint8Array) => void,
   ) => Pick<TTSService, "connect" | "sendText" | "flush" | "close">;
@@ -72,6 +72,10 @@ export class InterviewSession {
   }
   async handle(event: ClientEvent) {
     if (this.closed || this.finishing) return;
+    if (event.type === "speech-end") {
+      if (this.voice) this.stt?.endSpeech();
+      return;
+    }
     if (event.type === "finish") {
       await this.finish(event.generateFeedback ?? true);
       return;
@@ -100,8 +104,8 @@ export class InterviewSession {
     }
   }
   audio(data: Uint8Array) {
-    if (!this.closed && this.voice && !this.finishing)
-      this.stt?.sendAudio(data);
+    if (!this.closed && this.voice && !this.finishing && this.stt)
+      this.deps.background(this.stt.sendAudio(data));
   }
   private async start() {
     if (this.starting) return;

@@ -106,6 +106,7 @@ export type Capabilities = {
 };
 export const clientEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("start") }).strict(),
+  z.object({ type: z.literal("speech-end") }).strict(),
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("speak") }),
   z.object({

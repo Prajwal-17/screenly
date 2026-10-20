@@ -1,4 +1,4 @@
-import { closeAudioContext } from "./audio-context";
+import { SpeechCapture, SpeechDetectionError } from "./speech-capture";
 import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
 import { initialState, useInterviewStore } from "@/store/interviewStore";
 import { API_URL } from "./api";
@@ -7,10 +7,7 @@ import { AudioPlayer } from "./audio-player";
 export class Session {
   private socket: WebSocket | null = null;
   private disposed = false;
-  private stream: MediaStream | null = null;
-  private ctx: AudioContext | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
-  private worklet: AudioWorkletNode | null = null;
+  private captureDevice: SpeechCapture | null = null;
   private responseId = 0;
   private replayRequested = false;
   private playbackStartResponseId: number | null = null;
@@ -248,11 +245,14 @@ export class Session {
       if (this.disposed) return;
       try {
         await this.capture();
-      } catch {
+      } catch (error) {
         this.stopCapture();
+        if (this.disposed) return;
         useInterviewStore.setState({
           error:
-            "Microphone access is unavailable. Allow microphone access in your browser, then retry.",
+            error instanceof SpeechDetectionError
+              ? error.message
+              : "Microphone access is unavailable. Allow microphone access in your browser, then retry.",
           errorScope: "voice",
         });
         return;
@@ -273,63 +273,46 @@ export class Session {
     }
   }
   private async capture() {
-    if (this.stream) return;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+    if (this.captureDevice) return;
+    const device = new SpeechCapture({
+      audio: (samples) => {
+        if (this.canSendMicrophone()) this.socket!.send(samples.buffer);
       },
-      video: false,
+      end: () => {
+        if (
+          this.socket?.readyState === WebSocket.OPEN &&
+          useInterviewStore.getState().interview?.status === "active"
+        )
+          this.send({ type: "speech-end" });
+      },
+      level: (level) => useInterviewStore.setState({ level }),
+      error: (error) => {
+        this.stopCapture();
+        if (!this.disposed)
+          useInterviewStore.setState({
+            error: error.message,
+            errorScope: "voice",
+          });
+      },
     });
-    if (this.disposed) {
-      stream.getTracks().forEach((t) => t.stop());
-      return;
-    }
-    this.stream = stream;
-    this.ctx = new AudioContext({ sampleRate: 16000 });
-    await this.ctx.resume();
-    if (this.ctx.sampleRate !== 16000)
-      throw new Error("This browser does not support 16 kHz capture.");
-    await this.ctx.audioWorklet.addModule("/audio/pcm-processor.js");
-    this.source = this.ctx.createMediaStreamSource(stream);
-    this.worklet = new AudioWorkletNode(this.ctx, "pcm-processor");
-    this.source.connect(this.worklet);
-    const silent = this.ctx.createGain();
-    silent.gain.value = 0;
-    this.worklet.connect(silent);
-    silent.connect(this.ctx.destination);
-    this.worklet.port.onmessage = (
-      e: MessageEvent<{ type: string; samples: Int16Array; level: number }>,
-    ) => {
-      if (this.disposed) return;
-      const { muted: micMuted, paused } = useInterviewStore.getState();
-      const muted = micMuted || paused;
-      useInterviewStore.setState({ level: muted ? 0 : e.data.level });
-      // Keep the stream clock running while muted without sending microphone content.
-      if (
-        this.socket?.readyState === WebSocket.OPEN &&
-        useInterviewStore.getState().interview?.status === "active"
-      ) {
-        this.socket.send(
-          muted
-            ? new ArrayBuffer(e.data.samples.byteLength)
-            : e.data.samples.buffer,
-        );
-      }
-    };
-    useInterviewStore.setState({ micActive: true, muted: false });
+    this.captureDevice = device;
+    await device.start();
+    if (!this.disposed && this.captureDevice === device)
+      useInterviewStore.setState({ micActive: true, muted: false });
+  }
+  private canSendMicrophone() {
+    const state = useInterviewStore.getState();
+    return (
+      !this.disposed &&
+      !state.muted &&
+      !state.paused &&
+      this.socket?.readyState === WebSocket.OPEN &&
+      state.interview?.status === "active"
+    );
   }
   private stopCapture() {
-    this.worklet?.disconnect();
-    if (this.worklet) this.worklet.port.onmessage = null;
-    this.worklet = null;
-    this.source?.disconnect();
-    this.source = null;
-    void closeAudioContext(this.ctx);
-    this.ctx = null;
-    this.stream?.getTracks().forEach((t) => t.stop());
-    this.stream = null;
+    this.captureDevice?.close();
+    this.captureDevice = null;
     if (!this.disposed)
       useInterviewStore.setState({
         micActive: false,
@@ -363,18 +346,14 @@ export class Session {
   mute() {
     const { muted: wasMuted, paused } = useInterviewStore.getState();
     const muted = !wasMuted;
-    this.stream?.getAudioTracks().forEach((t) => {
-      t.enabled = !muted && !paused;
-    });
+    this.captureDevice?.setEnabled(!muted && !paused);
     useInterviewStore.setState({ muted });
   }
   async pauseAudio() {
     const { paused: wasPaused, muted } = useInterviewStore.getState();
     const paused = !wasPaused;
     useInterviewStore.setState({ paused, level: 0 });
-    this.stream?.getAudioTracks().forEach((track) => {
-      track.enabled = !paused && !muted;
-    });
+    this.captureDevice?.setEnabled(!paused && !muted);
     try {
       await this.player.setPaused(paused);
     } catch {

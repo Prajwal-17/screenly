@@ -69,7 +69,7 @@ async function setup(page: Page, context: BrowserContext) {
     .click();
   await expect(
     page.getByText("Listening to you", { exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 }); // Includes the first local ONNX/WASM load.
   return id as string;
 }
 const warning = (page: Page) =>

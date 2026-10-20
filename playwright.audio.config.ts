@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
 const audioURL = `http://127.0.0.1:${process.env.SCREENLY_AUDIO_TEST_PORT ?? 9493}`;
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "audio-playback.spec.ts",
+  testMatch: ["audio-playback.spec.ts", "audio-vad.spec.ts"],
   workers: 1,
   timeout: 60000,
   webServer: {

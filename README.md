@@ -55,6 +55,8 @@ For voice replies, optionally set `LLM_INTERVIEW_MODEL` to a tested fast model o
 
 `DEEPGRAM_EOT_TIMEOUT_MS` defaults to `3000`, reducing the silence backstop for uncertain turn endings from the provider's five-second default. Natural end-of-turn confidence remains unchanged. Increase this value if your thinking pauses are frequently split into separate answers. See [Deepgram's turn-detection configuration](https://developers.deepgram.com/docs/flux/configuration).
 
+Live microphone audio passes through a local Silero v5 ONNX speech detector before upload. The detector runs in a dedicated browser worker; model weights and ONNX Runtime WASM are bundled by `build:audio` and served from this app. Only detected speech and a 256 ms boundary buffer are streamed to transcription. Silence, muted audio, and paused audio are not uploaded. After about a second without speech, a `speech-end` control finalizes the provider turn without uploading the rest of the silence. Flux's natural turn detection stays enabled; see [Force End Turn](https://developers.deepgram.com/docs/flux/force-end-turn). Idle transcription sockets close after five seconds and reopen with bounded, ordered speech buffering. Detector failure stops capture and offers microphone retry instead of silently reverting to continuous uploads. Savings depend on how much of an interview is spent speaking; this does not change LLM or speech-synthesis usage.
+
 ```sh
 bun run dev
 ```
