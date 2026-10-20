@@ -6,6 +6,7 @@ import {
   feedbackSchema,
   clientEventSchema,
   finishInterviewSchema,
+  interviewElapsedMs,
 } from "./index";
 describe("shared contracts", () => {
   test("finishing can explicitly skip feedback while existing callers keep it", () => {
@@ -99,4 +100,31 @@ describe("shared contracts", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+test("elapsed time excludes completed pauses and stays fixed during the current pause", () => {
+  const clock = {
+    startedAt: 1000,
+    endedAt: null,
+    pausedAt: null as number | null,
+    pausedMs: 2000,
+  };
+  expect(interviewElapsedMs(clock, 9000)).toBe(6000);
+  expect(interviewElapsedMs({ ...clock, pausedAt: 8000 }, 900000)).toBe(5000);
+  expect(interviewElapsedMs({ ...clock, endedAt: 10000 }, 900000)).toBe(7000);
+  expect(interviewElapsedMs({ ...clock, startedAt: null }, 900000)).toBe(0);
+  expect(
+    clientEventSchema.safeParse({
+      type: "pause",
+      paused: true,
+      requestId: crypto.randomUUID(),
+    }).success,
+  ).toBe(true);
+  expect(
+    clientEventSchema.safeParse({
+      type: "pause",
+      paused: "true",
+      requestId: crypto.randomUUID(),
+    }).success,
+  ).toBe(false);
 });

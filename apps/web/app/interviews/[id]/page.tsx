@@ -47,6 +47,7 @@ export default function InterviewPage() {
       interview?.status === "active" ||
       (state.interview?.id === id && (started || state.starting)),
     timerStarted: interview?.startedAt != null,
+    timerPaused: interview?.pausedAt != null,
     endInterview: () => finish.mutateAsync(true),
   });
   const [transcriptOpen, setTranscriptOpen] = useState(true);
@@ -57,6 +58,10 @@ export default function InterviewPage() {
       transcriptTrigger.current?.focus({ preventScroll: true });
     });
   }, []);
+  const toggleTranscript = useCallback(() => {
+    if (transcriptOpen) closeTranscript();
+    else setTranscriptOpen(true);
+  }, [transcriptOpen, closeTranscript]);
   useEffect(() => {
     const shortWindow = matchMedia(
       "(max-width: 767px) and (max-height: 500px)",
@@ -205,12 +210,8 @@ export default function InterviewPage() {
         size="sm"
         aria-expanded={transcriptOpen}
         aria-controls="live-transcript"
-        onClick={() => {
-          if (transcriptOpen) closeTranscript();
-          else {
-            setTranscriptOpen(true);
-          }
-        }}
+        aria-keyshortcuts="T"
+        onClick={toggleTranscript}
       >
         <FileText />
         Transcript
@@ -244,6 +245,7 @@ export default function InterviewPage() {
             transcriptOpen={transcriptOpen}
             transcriptControl={transcriptControl}
             closeTranscript={closeTranscript}
+            toggleTranscript={toggleTranscript}
             notices={notices}
             finishControl={finishTrigger("Finish interview")}
           />

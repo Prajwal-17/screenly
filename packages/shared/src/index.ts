@@ -93,11 +93,25 @@ export type Interview = InterviewSettings & {
   createdAt: number;
   startedAt: number | null;
   endedAt: number | null;
+  pausedAt?: number | null;
+  pausedMs?: number;
   feedbackStatus: FeedbackStatus;
   feedback: Feedback | null;
   feedbackModel: string | null;
 };
 export type InterviewDetail = Interview & { messages: InterviewMessage[] };
+export function interviewElapsedMs(
+  interview: Pick<Interview, "startedAt" | "endedAt" | "pausedAt" | "pausedMs">,
+  now = Date.now(),
+) {
+  if (interview.startedAt == null) return 0;
+  return Math.max(
+    0,
+    (interview.endedAt ?? interview.pausedAt ?? now) -
+      interview.startedAt -
+      (interview.pausedMs ?? 0),
+  );
+}
 export type Capabilities = {
   google: boolean;
   voice: boolean;
@@ -107,6 +121,13 @@ export type Capabilities = {
 export const clientEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("start") }).strict(),
   z.object({ type: z.literal("speech-end") }).strict(),
+  z
+    .object({
+      type: z.literal("pause"),
+      paused: z.boolean(),
+      requestId: z.string().uuid(),
+    })
+    .strict(),
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("speak") }),
   z.object({
@@ -125,6 +146,7 @@ export const clientEventSchema = z.discriminatedUnion("type", [
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 export type ServerEvent =
   | { type: "ready"; interview: InterviewDetail }
+  | { type: "pause-state"; interview: InterviewDetail; requestId: string }
   | { type: "status"; status: LiveStatus }
   | { type: "partial"; text: string }
   | { type: "message"; message: InterviewMessage }
@@ -137,6 +159,7 @@ export type ServerEvent =
       type: "error";
       message: string;
       scope: "voice" | "speech" | "llm" | "session";
+      requestId?: string;
     };
 
 // Prefix speaker audio with its response ID so cancelled replies cannot play late.

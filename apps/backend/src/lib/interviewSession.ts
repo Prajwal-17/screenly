@@ -52,7 +52,12 @@ export class InterviewSession {
     saving?: Promise<void>;
   } | null = null;
   private deadline: ReturnType<typeof setTimeout> | null = null;
-  private clockTask: Promise<void> | null = null;
+  private clockTask: Promise<void> = Promise.resolve();
+  private paused = false;
+  private pauseOutput: (ServerEvent | Uint8Array)[] = [];
+  private pauseBytes = 0;
+  private pendingTurns: ListenV2TurnInfo[] = [];
+  private pendingReply = false;
   private clockStarted = false;
   private awaitingPlaybackStart = new Set<number>();
   private connectionId = crypto.randomUUID();
@@ -63,15 +68,22 @@ export class InterviewSession {
 
   constructor(
     readonly id: string,
-    private send: (event: ServerEvent | Uint8Array) => void,
+    private emit: (event: ServerEvent | Uint8Array) => void,
     private deps: SessionDependencies,
   ) {}
   async ready() {
     const interview = await this.deps.store.get(this.id);
-    if (interview && !this.closed) this.send({ type: "ready", interview });
+    if (interview && !this.closed) {
+      this.paused = interview.pausedAt != null;
+      this.send({ type: "ready", interview });
+    }
   }
   async handle(event: ClientEvent) {
     if (this.closed || this.finishing) return;
+    if (event.type === "pause") {
+      await this.setPaused(event.paused, event.requestId);
+      return;
+    }
     if (event.type === "speech-end") {
       if (this.voice) this.stt?.endSpeech();
       return;
@@ -95,6 +107,7 @@ export class InterviewSession {
       return;
     }
     if (event.type === "speak") {
+      if (this.paused) return;
       await this.speakLatest();
       return;
     }
@@ -104,7 +117,13 @@ export class InterviewSession {
     }
   }
   audio(data: Uint8Array) {
-    if (!this.closed && this.voice && !this.finishing && this.stt)
+    if (
+      !this.closed &&
+      this.voice &&
+      !this.paused &&
+      !this.finishing &&
+      this.stt
+    )
       this.deps.background(this.stt.sendAudio(data));
   }
   private async start() {
@@ -130,7 +149,11 @@ export class InterviewSession {
         }
       }
       if (this.closed || this.finishing) return;
-      const interview = await this.deps.store.start(this.id);
+      let interview = await this.deps.store.start(this.id);
+      // Clicking Resume interview after a reconnect explicitly resumes its saved budget.
+      if (interview.pausedAt != null)
+        interview = await this.deps.store.setPaused(this.id, false);
+      this.paused = false;
       this.active = interview.status === "active";
       await this.updateClock();
       if (this.closed || this.finishing) return;
@@ -147,46 +170,100 @@ export class InterviewSession {
       this.starting = false;
     }
   }
-  private async updateClock(begin = false): Promise<void> {
-    if (this.clockTask) {
-      await this.clockTask;
-      return this.updateClock(begin);
-    }
-    const task = (async () => {
+  private send(event: ServerEvent | Uint8Array) {
+    const control =
+      !(event instanceof Uint8Array) &&
+      ["ready", "pause-state", "error", "finished"].includes(event.type);
+    if (this.paused && !this.finishing && !control) {
+      this.pauseBytes +=
+        event instanceof Uint8Array
+          ? event.byteLength
+          : JSON.stringify(event).length * 2;
+      // Only the already-requested reply may finish while paused. Keep its
+      // output for exact resume, with a hard bound on retained provider audio.
+      if (this.pauseBytes > 8 * 1024 * 1024) {
+        this.pauseOutput = [];
+        this.pauseBytes = 0;
+        this.emit({
+          type: "error",
+          scope: "speech",
+          message:
+            "The paused question is too long to keep. Resume and replay it to continue.",
+        });
+        this.deps.background(this.interrupt());
+        return;
+      }
+      this.pauseOutput.push(event);
+    } else this.emit(event);
+  }
+  private queueClock(work: () => Promise<void>) {
+    const task = this.clockTask.then(work);
+    this.clockTask = task.catch(() => {});
+    return task;
+  }
+  private updateClock(begin = false): Promise<void> {
+    return this.queueClock(async () => {
       const interview = begin
         ? await this.deps.store.startClock(this.id)
         : await this.deps.store.get(this.id);
-      if (
-        !interview ||
-        interview.status !== "active" ||
-        interview.startedAt == null ||
-        this.finishing
-      )
-        return;
-      this.clockStarted = true;
-      this.awaitingPlaybackStart.clear();
-      const deadline = interview.startedAt + interview.duration * 60000;
-      await this.deps.scheduleDeadline(deadline);
-      // Keep the durable deadline after disconnect, but do not recreate a local timer.
-      if (this.closed || this.finishing) return;
-      if (!this.deadline) {
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) {
-          this.deps.background(this.finish());
-          return;
-        }
-        this.deadline = setTimeout(
-          () => this.deps.background(this.finish()),
-          remaining,
-        );
-      }
+      if (!interview || interview.status !== "active" || this.finishing) return;
+      await this.applyClock(interview);
       if (begin) this.send({ type: "ready", interview });
-    })();
-    this.clockTask = task;
+    });
+  }
+  private async applyClock(interview: InterviewDetail) {
+    if (this.deadline) clearTimeout(this.deadline);
+    this.deadline = null;
+    this.paused = interview.pausedAt != null;
+    if (interview.startedAt == null || this.paused) {
+      if (this.paused) await this.deps.cancelDeadline();
+      return;
+    }
+    this.clockStarted = true;
+    this.awaitingPlaybackStart.clear();
+    const deadline =
+      interview.startedAt +
+      interview.duration * 60000 +
+      (interview.pausedMs ?? 0);
+    await this.deps.scheduleDeadline(deadline);
+    if (this.closed || this.finishing) return;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) this.deps.background(this.finish());
+    else
+      this.deadline = setTimeout(
+        () => this.deps.background(this.finish()),
+        remaining,
+      );
+  }
+  private async setPaused(paused: boolean, requestId: string) {
     try {
-      await task;
-    } finally {
-      if (this.clockTask === task) this.clockTask = null;
+      await this.queueClock(async () => {
+        if (!this.active || this.closed || this.finishing) return;
+        const interview = await this.deps.store.setPaused(this.id, paused);
+        await this.applyClock(interview);
+        this.send({ type: "pause-state", interview, requestId });
+        if (paused) this.stt?.endSpeech();
+        else {
+          const output = this.pauseOutput;
+          this.pauseOutput = [];
+          this.pauseBytes = 0;
+          for (const event of output) this.emit(event);
+          const turns = this.pendingTurns;
+          this.pendingTurns = [];
+          const reply = this.pendingReply;
+          this.pendingReply = false;
+          for (const turn of turns) this.deps.background(this.turn(turn));
+          if (reply && !turns.length && !this.current)
+            this.deps.background(this.reply());
+        }
+      });
+    } catch {
+      this.send({
+        type: "error",
+        scope: "session",
+        requestId,
+        message: "Could not update the interview pause. Please try again.",
+      });
     }
   }
   private sendAudio(responseId: number, audio: Uint8Array) {
@@ -204,6 +281,15 @@ export class InterviewSession {
       event.turn_index <= this.finalizedTurn
     )
       return Promise.resolve();
+    if (this.paused) {
+      if (
+        event.event === "EndOfTurn" &&
+        event.transcript.trim() &&
+        !this.pendingTurns.some((turn) => turn.turn_index === event.turn_index)
+      )
+        this.pendingTurns.push(event);
+      return Promise.resolve();
+    }
     this.latestTurn = event.turn_index;
     // Cancel playback and forward interim words in the same event, without a
     // D1 round trip. Only finalized turns enter the durable write queue.
@@ -231,6 +317,10 @@ export class InterviewSession {
         this.send({ type: "message", message });
         // A slower final write must not erase a newer turn's live words.
         if (this.finishing || this.latestTurn !== event.turn_index) return;
+        if (this.paused) {
+          this.pendingReply = true;
+          return;
+        }
         this.send({ type: "status", status: "thinking" });
         this.send({ type: "partial", text: "" });
         this.deps.background(
@@ -308,6 +398,10 @@ export class InterviewSession {
   }
   private async reply(interview?: InterviewDetail) {
     if (this.closed || this.finishing || this.current) return;
+    if (this.paused) {
+      this.pendingReply = true;
+      return;
+    }
     const current = {
       id: ++this.responseId,
       text: "",
@@ -486,6 +580,23 @@ export class InterviewSession {
     this.finishTask = (async () => {
       await this.clockTask;
       await this.turnTask;
+      // Pause may receive the final transcript for speech already uploaded.
+      // Ending must retain those answers without starting another reply.
+      if (this.pendingTurns.length) {
+        await this.interrupt();
+        for (const turn of this.pendingTurns) {
+          if (turn.turn_index <= this.finalizedTurn) continue;
+          const message = await this.deps.store.addMessage(
+            this.id,
+            "user",
+            turn.transcript,
+            `stt:${this.connectionId}:${turn.turn_index}`,
+          );
+          this.finalizedTurn = turn.turn_index;
+          if (message) this.send({ type: "message", message });
+        }
+        this.pendingTurns = [];
+      }
       const interview = await this.deps.store.get(this.id);
       if (!interview || interview.status !== "active") return;
       await this.interrupt();
@@ -510,6 +621,8 @@ export class InterviewSession {
   async close() {
     if (this.closed) return;
     this.closed = true;
+    this.pauseOutput = [];
+    this.pendingTurns = [];
     await this.interrupt();
     await this.turnTask;
     if (this.deadline) clearTimeout(this.deadline);

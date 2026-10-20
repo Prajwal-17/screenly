@@ -63,13 +63,10 @@ test("Porcelain studio preserves voice playback, audio controls, transcript, and
     await expect(page.getByRole("log")).toBeVisible();
     await expect(question).toContainText("How would you test a component");
     await page
-      .getByRole("button", {
-        name: "Interviewer playback speed, 1×",
-        exact: true,
-      })
+      .getByRole("button", { name: "Audio settings", exact: true })
       .click();
     // The modal menu hides its background from the accessibility tree.
-    const speed = page.locator('[data-control="speed"]');
+    const speed = page.locator('[data-control="audio"]');
     await expect(speed).toHaveAttribute("aria-expanded", "true");
     await expect
       .poll(() =>
@@ -79,25 +76,33 @@ test("Porcelain studio preserves voice playback, audio controls, transcript, and
           .evaluate((node) => getComputedStyle(node).transform),
       )
       .not.toBe("none");
-    await page.getByRole("menuitem", { name: "1.25×", exact: true }).click();
+    await page
+      .getByRole("menuitem", {
+        name: "Interviewer playback speed, 1×",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("menuitemradio", { name: "1.25×", exact: true })
+      .click();
     await expect(
       page.getByRole("button", {
-        name: "Interviewer playback speed, 1.25×",
+        name: "Audio settings",
         exact: true,
       }),
     ).toBeVisible();
     const controls = page.getByRole("group", { name: "Interview controls" });
-    await expect(controls.getByRole("button")).toHaveCount(3);
+    await expect(controls.getByRole("button")).toHaveCount(4);
     await expect(
       page.getByRole("button", {
-        name: /Replay question|Pause audio|Resume audio|Interrupt/,
+        name: /Pause audio|Resume audio|Interrupt/,
       }),
     ).toHaveCount(0);
     const mute = controls.getByRole("button", { name: "Mute", exact: true });
     const dockBefore = await controls.boundingBox();
     await mute.hover();
     await expect(
-      page.getByRole("tooltip", { name: "Mute microphone", exact: true }),
+      page.getByRole("tooltip", { name: /^Mute microphone/ }),
     ).toBeVisible();
     await page.mouse.down();
     await expect
@@ -244,7 +249,7 @@ test("Porcelain studio preserves voice playback, audio controls, transcript, and
       "false",
     );
     const reducedSpeed = controls.getByRole("button", {
-      name: "Interviewer playback speed, 1.25×",
+      name: "Audio settings",
       exact: true,
     });
     await reducedSpeed.click();

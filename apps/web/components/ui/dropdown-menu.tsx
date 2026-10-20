@@ -3,9 +3,33 @@
 import type { ComponentProps } from "react";
 import { DropdownMenu as Primitive } from "radix-ui";
 import { cn } from "@/lib/utils";
+import { Check } from "lucide-react";
 
 export const DropdownMenu = Primitive.Root;
 export const DropdownMenuTrigger = Primitive.Trigger;
+export const DropdownMenuRadioGroup = Primitive.RadioGroup;
+export function DropdownMenuRadioItem({
+  children,
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.RadioItem>) {
+  return (
+    <Primitive.RadioItem
+      className={cn(
+        "relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md py-2 pr-2.5 pl-8 text-[13px] outline-none select-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      <span className="absolute left-2.5 flex size-4 items-center justify-center">
+        <Primitive.ItemIndicator>
+          <Check className="size-3.5" />
+        </Primitive.ItemIndicator>
+      </span>
+      {children}
+    </Primitive.RadioItem>
+  );
+}
 export function DropdownMenuContent({
   className,
   sideOffset = 8,

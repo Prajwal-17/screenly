@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import {
   feedbackSchema,
+  interviewElapsedMs,
   type InterviewDetail,
   type InterviewMessage,
 } from "@repo/shared";
@@ -50,8 +51,7 @@ export class LLMService {
     signal: AbortSignal,
   ): AsyncGenerator<string> {
     const remaining =
-      interview.duration -
-      (Date.now() - (interview.startedAt ?? Date.now())) / 60000;
+      interview.duration - interviewElapsedMs(interview) / 60000;
     const stream = await this.client.chat.completions.create(
       {
         model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,

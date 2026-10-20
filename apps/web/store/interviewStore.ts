@@ -20,6 +20,9 @@ type State = {
   starting: boolean;
   level: number;
   paused: boolean;
+  pausePending: boolean;
+  microphoneId: string;
+  speakerId: string;
   playbackRate: number;
 };
 export const initialState: State = {
@@ -37,6 +40,9 @@ export const initialState: State = {
   starting: false,
   level: 0,
   paused: false,
+  pausePending: false,
+  microphoneId: "default",
+  speakerId: "default",
   playbackRate: 1,
 };
 export const useInterviewStore = create<State>(() => initialState);
@@ -59,6 +65,9 @@ export function useInterviewView() {
       micActive: state.micActive,
       starting: state.starting,
       paused: state.paused,
+      pausePending: state.pausePending,
+      microphoneId: state.microphoneId,
+      speakerId: state.speakerId,
       playbackRate: state.playbackRate,
     })),
   );

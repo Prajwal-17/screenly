@@ -6,6 +6,10 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.buffer = new Float32Array(512);
     this.index = 0;
     this.energy = 0;
+    this.port.onmessage = () => {
+      this.index = 0;
+      this.energy = 0;
+    };
   }
   process(inputs) {
     const input = inputs[0]?.[0];

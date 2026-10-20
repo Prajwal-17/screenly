@@ -127,6 +127,8 @@ export const interviewSession = sqliteTable(
     status: text("status").$type<InterviewStatus>().notNull().default("draft"),
     startedAt: integer("started_at"),
     endedAt: integer("ended_at"),
+    pausedAt: integer("paused_at"),
+    pausedMs: integer("paused_ms").notNull().default(0),
     feedbackStatus: text("feedback_status")
       .$type<FeedbackStatus>()
       .notNull()

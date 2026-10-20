@@ -269,3 +269,27 @@ test.skipIf(!env.LIVE_PROFILE_URL)(
   },
   25000,
 );
+
+test("a stale deadline alarm cannot complete a persisted paused interview", async () => {
+  const { interview } = await fixture();
+  await interviews.start(interview.id);
+  await interviews.startClock(interview.id);
+  await interviews.setPaused(interview.id, true);
+  const room = env.INTERVIEWS.getByName(interview.id);
+  await runInDurableObject(room, async (_instance, state) => {
+    await state.storage.put({
+      interviewId: interview.id,
+      deadline: Date.now() - 1,
+    });
+    await state.storage.setAlarm(Date.now() + 60000);
+  });
+  await runDurableObjectAlarm(room);
+  expect((await interviews.get(interview.id))?.status).toBe("active");
+  expect((await interviews.get(interview.id))?.pausedAt).not.toBeNull();
+  expect(
+    await runInDurableObject(room, (_instance, state) =>
+      state.storage.get("deadline"),
+    ),
+  ).toBeUndefined();
+  await room.closeSession();
+});

@@ -35,6 +35,8 @@ function serialize(row: Row): Interview {
     createdAt: row.createdAt.getTime(),
     startedAt: row.startedAt,
     endedAt: row.endedAt,
+    pausedAt: row.pausedAt,
+    pausedMs: row.pausedMs,
     feedbackStatus: row.feedbackStatus,
     feedback: normalizeStoredFeedback(row.feedback),
     feedbackModel: row.feedbackModel,
@@ -122,6 +124,32 @@ export function createInterviews(db: Database) {
             eq(interviewSession.id, id),
             eq(interviewSession.status, "active"),
             isNull(interviewSession.startedAt),
+            isNull(interviewSession.pausedAt),
+          ),
+        )
+        .run();
+      return (await this.get(id))!;
+    },
+    async setPaused(id: string, paused: boolean) {
+      const now = Date.now();
+      await db
+        .update(interviewSession)
+        .set(
+          paused
+            ? {
+                pausedAt: sql`coalesce(${interviewSession.pausedAt}, ${now})`,
+                updatedAt: new Date(now),
+              }
+            : {
+                pausedMs: sql`${interviewSession.pausedMs} + case when ${interviewSession.pausedAt} is not null and ${interviewSession.startedAt} is not null then max(0, ${now} - ${interviewSession.pausedAt}) else 0 end`,
+                pausedAt: null,
+                updatedAt: new Date(now),
+              },
+        )
+        .where(
+          and(
+            eq(interviewSession.id, id),
+            eq(interviewSession.status, "active"),
           ),
         )
         .run();
@@ -171,11 +199,14 @@ export function createInterviews(db: Database) {
         .get();
     },
     async finish(id: string, generateFeedback = true) {
+      const now = Date.now();
       await db
         .update(interviewSession)
         .set({
           status: "completed",
-          endedAt: Date.now(),
+          endedAt: now,
+          pausedMs: sql`${interviewSession.pausedMs} + case when ${interviewSession.pausedAt} is not null and ${interviewSession.startedAt} is not null then max(0, ${now} - ${interviewSession.pausedAt}) else 0 end`,
+          pausedAt: null,
           feedbackStatus: generateFeedback ? "pending" : "skipped",
           updatedAt: new Date(),
         })

@@ -1,3 +1,4 @@
+import { interviewElapsedMs } from "@repo/shared";
 import type {
   Capabilities,
   Interview,
@@ -62,12 +63,7 @@ export function formatDate(timestamp: number) {
   }).format(timestamp);
 }
 export function elapsed(interview: Interview, now = Date.now()) {
-  return interview.startedAt
-    ? Math.max(
-        0,
-        Math.floor(((interview.endedAt ?? now) - interview.startedAt) / 1000),
-      )
-    : 0;
+  return Math.floor(interviewElapsedMs(interview, now) / 1000);
 }
 export function clock(seconds: number) {
   return `${Math.floor(seconds / 60)

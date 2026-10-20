@@ -125,11 +125,22 @@ export class AudioPlayer {
   }
 
   async setPaused(paused: boolean) {
+    if (this.paused === paused) return;
     this.observePlayback();
     this.paused = paused;
     if (!this.ctx || this.ctx.state === "closed") return;
     if (paused) await this.ctx.suspend();
     else await this.ctx.resume();
+  }
+
+  async setOutputDevice(deviceId: string) {
+    const context = this.ctx as
+      (AudioContext & { setSinkId?: (id: string) => Promise<void> }) | null;
+    if (!context?.setSinkId)
+      throw new Error(
+        "Change your speaker in your browser or system settings.",
+      );
+    await context.setSinkId(deviceId === "default" ? "" : deviceId);
   }
 
   getSignal() {

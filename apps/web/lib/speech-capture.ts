@@ -18,6 +18,7 @@ export class SpeechCapture {
   private stream: MediaStream | null = null;
   private closed = false;
   private enabled = true;
+  private switching = false;
   private epoch = 0;
   private pending = 0;
   private lastLevel = 0;
@@ -30,13 +31,14 @@ export class SpeechCapture {
       error: (error: Error) => void;
     },
   ) {}
-  async start() {
+  async start(deviceId = "default") {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        ...(deviceId === "default" ? {} : { deviceId: { exact: deviceId } }),
       },
       video: false,
     });
@@ -76,7 +78,7 @@ export class SpeechCapture {
         if (data.epoch !== this.epoch) return;
         if (data.type === "processed")
           this.pending = Math.max(0, this.pending - 1);
-        if (!this.enabled) return;
+        if (!this.enabled || this.switching) return;
         if (data.type === "audio") this.handlers.audio(data.samples);
         if (data.type === "speech-end") this.handlers.end();
       };
@@ -90,7 +92,7 @@ export class SpeechCapture {
       this.worklet.port.onmessage = ({
         data,
       }: MessageEvent<{ samples: Float32Array; level: number }>) => {
-        if (this.closed || !this.enabled) return;
+        if (this.closed || !this.enabled || this.switching) return;
         // Do not build seconds of inference lag on an overloaded device.
         if (++this.pending > 32) return this.fail();
         worker.postMessage(
@@ -123,10 +125,59 @@ export class SpeechCapture {
     this.pending = 0;
     this.epoch++;
     this.worker?.postMessage({ type: "reset", epoch: this.epoch });
+    this.worklet?.port.postMessage({ type: "reset" });
     this.stream?.getAudioTracks().forEach((track) => {
       track.enabled = enabled;
     });
     this.handlers.level(0);
+  }
+  async setDevice(deviceId: string) {
+    if (this.closed || !this.ctx || !this.worklet || this.switching) return;
+    this.switching = true;
+    this.handlers.end();
+    this.pending = 0;
+    this.epoch++;
+    this.worker?.postMessage({ type: "reset", epoch: this.epoch });
+    const previous = this.stream;
+    previous?.getAudioTracks().forEach((track) => {
+      track.enabled = false;
+    });
+    let replacement: MediaStream | null = null;
+    try {
+      replacement = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          ...(deviceId === "default" ? {} : { deviceId: { exact: deviceId } }),
+        },
+        video: false,
+      });
+      if (this.closed) {
+        replacement.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      const source = this.ctx.createMediaStreamSource(replacement);
+      this.worklet.port.postMessage({ type: "reset" });
+      source.connect(this.worklet);
+      this.source?.disconnect();
+      this.source = source;
+      this.stream = replacement;
+      replacement.getAudioTracks().forEach((track) => {
+        track.enabled = this.enabled;
+      });
+      previous?.getTracks().forEach((track) => track.stop());
+    } catch (error) {
+      replacement?.getTracks().forEach((track) => track.stop());
+      throw error;
+    } finally {
+      if (!this.closed)
+        this.stream?.getAudioTracks().forEach((track) => {
+          track.enabled = this.enabled;
+        });
+      this.switching = false;
+    }
   }
   private fail() {
     this.close();

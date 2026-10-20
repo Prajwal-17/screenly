@@ -169,7 +169,12 @@ export class InterviewRoom extends DurableObject<Env> {
     const id = await this.ctx.storage.get<string>("interviewId");
     if (!id) return;
     const deadline = await this.ctx.storage.get<number>("deadline");
-    if (deadline && deadline <= Date.now()) await this.finish(id);
+    if (deadline && deadline <= Date.now()) {
+      const interview = await this.store().get(id);
+      if (interview?.pausedAt != null)
+        await this.ctx.storage.delete("deadline");
+      else await this.finish(id);
+    }
     if (await this.ctx.storage.get<boolean>("feedbackPending")) {
       await generateFeedback(id, this.store(), this.config());
       await this.ctx.storage.delete("feedbackPending");

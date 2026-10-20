@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 import { db } from "./runtime";
 import { user } from "../src/db/schema";
 import { interviews } from "./runtime";
@@ -7,7 +7,7 @@ import {
   type SessionDependencies,
 } from "../src/lib/interviewSession";
 import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
-import type { ServerEvent } from "@repo/shared";
+import { interviewElapsedMs, type ServerEvent } from "@repo/shared";
 const pendingTasks = new Set<Promise<unknown>>();
 function background(task: Promise<unknown>) {
   pendingTasks.add(task);
@@ -351,6 +351,126 @@ describe("interview persistence and orchestration", () => {
       "interrupted",
     );
     await f.session.close();
+  });
+  test("whole-session pause freezes the persisted budget and output, then resumes buffered speech and answers", async () => {
+    let now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const deadlines: number[] = [];
+    let canceled = 0;
+    const f = await fixture(
+      async function* () {
+        yield "Explain a cache. ";
+        await gate;
+        yield "Include invalidation.";
+      },
+      {
+        speechEnabled: true,
+        scheduleDeadline: async (deadline) => {
+          deadlines.push(deadline);
+        },
+        cancelDeadline: async () => {
+          canceled++;
+        },
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => audio(new Uint8Array([1, 0, 2, 0])),
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
+    try {
+      const opening = f.session.handle({ type: "start" });
+      await expect.poll(() => f.audioFrames.length).toBe(1);
+      await f.session.handle({ type: "playback-started", responseId: 1 });
+      const startedAt = (await interviews.get(f.interview.id))!.startedAt!;
+      now += 1500;
+      const pause = () =>
+        f.session.handle({
+          type: "pause",
+          paused: true,
+          requestId: crypto.randomUUID(),
+        });
+      await pause();
+      const pausedAt = (await interviews.get(f.interview.id))!.pausedAt;
+      const events = f.events.length;
+      const audio = f.audioFrames.length;
+      release();
+      await opening;
+      expect(f.events).toHaveLength(events);
+      expect(f.audioFrames).toHaveLength(audio);
+      now += 120000;
+      await pause(); // Repeated pause cannot move the frozen point.
+      const paused = (await interviews.get(f.interview.id))!;
+      expect(paused.pausedAt).toBe(pausedAt);
+      expect(interviewElapsedMs(paused, now)).toBe(1500);
+      f.emitTurn({
+        event: "EndOfTurn",
+        transcript: "I would invalidate on writes.",
+        turn_index: 0,
+      });
+      await drain();
+      expect(
+        (await interviews.get(f.interview.id))!.messages.filter(
+          (message) => message.role === "user",
+        ),
+      ).toHaveLength(0);
+      await f.session.handle({
+        type: "pause",
+        paused: false,
+        requestId: crypto.randomUUID(),
+      });
+      await drain();
+      const resumed = (await interviews.get(f.interview.id))!;
+      expect(resumed.pausedAt).toBeNull();
+      expect(resumed.pausedMs).toBe(120000);
+      expect(resumed.startedAt).toBe(startedAt);
+      expect(interviewElapsedMs(resumed, now)).toBe(1500);
+      expect(deadlines.at(-1)).toBe(
+        startedAt + settings.duration * 60000 + 120000,
+      );
+      expect(canceled).toBeGreaterThan(0);
+      expect(f.events).toContainEqual(
+        expect.objectContaining({
+          type: "delta",
+          text: "Include invalidation.",
+        }),
+      );
+      expect(f.audioFrames.length).toBeGreaterThan(audio);
+      expect(
+        resumed.messages.some(
+          (message) => message.content === "I would invalidate on writes.",
+        ),
+      ).toBe(true);
+      now += 500;
+      await f.session.handle({
+        type: "pause",
+        paused: true,
+        requestId: crypto.randomUUID(),
+      });
+      now += 10000;
+      f.emitTurn({
+        event: "EndOfTurn",
+        transcript: "I also need to handle concurrent writes.",
+        turn_index: 1,
+      });
+      await drain();
+      await f.session.finish(false);
+      expect(
+        (await interviews.get(f.interview.id))!.messages.at(-1)?.content,
+      ).toBe("I also need to handle concurrent writes.");
+      expect(
+        interviewElapsedMs((await interviews.get(f.interview.id))!, now),
+      ).toBe(2000);
+    } finally {
+      release();
+      await f.session.close();
+      clock.mockRestore();
+    }
   });
   test("the clock waits for opening audio playback and acknowledgements cannot extend it", async () => {
     let release!: () => void;

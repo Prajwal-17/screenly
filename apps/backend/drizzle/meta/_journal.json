@@ -43,6 +43,13 @@
       "when": 1792401900179,
       "tag": "0005_whole_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792523653892,
+      "tag": "0006_yummy_spencer_smythe",
+      "breakpoints": true
     }
   ]
 }

@@ -40,11 +40,13 @@ export function useInterviewExitGuard({
   id,
   enabled,
   timerStarted,
+  timerPaused = false,
   endInterview,
 }: {
   id: string;
   enabled: boolean;
   timerStarted: boolean;
+  timerPaused?: boolean;
   endInterview: () => Promise<unknown>;
 }) {
   const router = useRouter();
@@ -244,9 +246,11 @@ export function useInterviewExitGuard({
           <AlertDialogDescription>
             Your saved conversation stays available, but words still being
             transcribed may be lost.{" "}
-            {timerStarted
-              ? "If you leave for now, the timer keeps running."
-              : "Leaving for now does not end this session."}{" "}
+            {timerPaused
+              ? "If you leave for now, the interview stays paused."
+              : timerStarted
+                ? "If you leave for now, the timer keeps running."
+                : "Leaving for now does not end this session."}{" "}
             End the interview to stop it and generate feedback.
           </AlertDialogDescription>
         </AlertDialogHeader>

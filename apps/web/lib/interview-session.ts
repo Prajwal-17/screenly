@@ -8,6 +8,9 @@ export class Session {
   private socket: WebSocket | null = null;
   private disposed = false;
   private captureDevice: SpeechCapture | null = null;
+  private pauseRequest: string | null = null;
+  private pauseTimeout: ReturnType<typeof setTimeout> | null = null;
+  private pauseRollback: (() => void) | null = null;
   private responseId = 0;
   private replayRequested = false;
   private playbackStartResponseId: number | null = null;
@@ -111,11 +114,29 @@ export class Session {
     };
   }
   private event(event: ServerEvent) {
+    if (event.type === "pause-state") {
+      if (event.requestId !== this.pauseRequest) return;
+      this.clearPauseRequest();
+      useInterviewStore.setState({
+        interview: event.interview,
+        messages: event.interview.messages,
+        paused: event.interview.pausedAt != null,
+        pausePending: false,
+      });
+      this.applyPause(event.interview.pausedAt != null);
+      return;
+    }
     if (event.type === "ready") {
       useInterviewStore.setState({
         interview: event.interview,
         messages: event.interview.messages,
       });
+      if (!this.pauseRequest) {
+        useInterviewStore.setState({
+          paused: event.interview.pausedAt != null,
+        });
+        this.applyPause(event.interview.pausedAt != null);
+      }
       if (event.interview.status === "completed")
         this.finished(this.id, event.interview.feedbackStatus !== "skipped");
     }
@@ -217,6 +238,8 @@ export class Session {
       useInterviewStore.setState({ streaming: "" });
     }
     if (event.type === "error") {
+      if (event.requestId && event.requestId === this.pauseRequest)
+        this.rollbackPause();
       useInterviewStore.setState({
         error: event.message,
         errorScope: event.scope,
@@ -240,7 +263,7 @@ export class Session {
     useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
       await this.player.setPaused(false);
-      useInterviewStore.setState({ paused: false });
+      useInterviewStore.setState({ paused: false, pausePending: false });
       await this.player.unlock();
       if (this.disposed) return;
       try {
@@ -296,7 +319,7 @@ export class Session {
       },
     });
     this.captureDevice = device;
-    await device.start();
+    await device.start(useInterviewStore.getState().microphoneId);
     if (!this.disposed && this.captureDevice === device)
       useInterviewStore.setState({ micActive: true, muted: false });
   }
@@ -311,6 +334,7 @@ export class Session {
     );
   }
   private stopCapture() {
+    this.clearPauseRequest();
     this.captureDevice?.close();
     this.captureDevice = null;
     if (!this.disposed)
@@ -319,6 +343,7 @@ export class Session {
         level: 0,
         muted: false,
         paused: false,
+        pausePending: false,
       });
   }
   async speakLatest() {
@@ -349,19 +374,93 @@ export class Session {
     this.captureDevice?.setEnabled(!muted && !paused);
     useInterviewStore.setState({ muted });
   }
+  private applyPause(paused: boolean) {
+    this.captureDevice?.setEnabled(
+      !paused && !useInterviewStore.getState().muted,
+    );
+    void this.player.setPaused(paused).catch(() => {
+      if (!this.disposed)
+        useInterviewStore.setState({
+          error: "Audio could not resume. Retry speech to continue.",
+          errorScope: "speech",
+        });
+    });
+  }
+  private clearPauseRequest() {
+    if (this.pauseTimeout) clearTimeout(this.pauseTimeout);
+    this.pauseTimeout = null;
+    this.pauseRequest = null;
+    this.pauseRollback = null;
+  }
+  private rollbackPause() {
+    const rollback = this.pauseRollback;
+    this.clearPauseRequest();
+    rollback?.();
+  }
   async pauseAudio() {
-    const { paused: wasPaused, muted } = useInterviewStore.getState();
-    const paused = !wasPaused;
-    useInterviewStore.setState({ paused, level: 0 });
-    this.captureDevice?.setEnabled(!paused && !muted);
+    const state = useInterviewStore.getState();
+    if (
+      this.disposed ||
+      this.pauseRequest ||
+      !state.connected ||
+      state.interview?.status !== "active"
+    )
+      return;
+    const paused = !state.paused;
+    const requestId = crypto.randomUUID();
+    const before = state.interview;
+    const now = Date.now();
+    this.pauseRequest = requestId;
+    this.pauseRollback = () => {
+      useInterviewStore.setState((current) => ({
+        paused: state.paused,
+        pausePending: false,
+        interview: current.interview
+          ? {
+              ...current.interview,
+              pausedAt: before.pausedAt,
+              pausedMs: before.pausedMs,
+            }
+          : null,
+      }));
+      this.applyPause(state.paused);
+    };
+    useInterviewStore.setState({
+      paused: true,
+      pausePending: true,
+      level: 0,
+      interview: paused ? { ...before, pausedAt: now } : before,
+    });
+    // Suspend immediately; resume capture/playback only after the server has
+    // confirmed the new deadline, so speech cannot arrive at a paused session.
+    if (paused) this.applyPause(true);
     try {
-      await this.player.setPaused(paused);
+      this.send({ type: "pause", paused, requestId });
+      this.pauseTimeout = setTimeout(() => {
+        this.rollbackPause();
+        useInterviewStore.setState({
+          error:
+            "Could not confirm the interview pause. Reconnect to check its saved state.",
+          errorScope: "session",
+        });
+      }, 8000);
     } catch {
+      this.rollbackPause();
       useInterviewStore.setState({
-        error: "Audio could not resume. Retry speech to continue.",
-        errorScope: "speech",
+        error: "Reconnect before pausing the interview.",
+        errorScope: "session",
       });
     }
+  }
+  async setMicrophone(deviceId: string) {
+    if (!this.captureDevice)
+      throw new Error("Reconnect your microphone first.");
+    await this.captureDevice.setDevice(deviceId);
+    if (!this.disposed) useInterviewStore.setState({ microphoneId: deviceId });
+  }
+  async setSpeaker(deviceId: string) {
+    await this.player.setOutputDevice(deviceId);
+    if (!this.disposed) useInterviewStore.setState({ speakerId: deviceId });
   }
   setPlaybackRate(rate: number) {
     this.player.setPlaybackRate(rate);

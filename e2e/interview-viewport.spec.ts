@@ -49,6 +49,9 @@ test("the immersive interview fits wide, narrow, short, and rotated windows with
     await expect(
       page.getByText("Listening to you", { exact: true }),
     ).toBeVisible({ timeout: 15000 });
+    // Wait for the authoritative first-playback clock update before injecting
+    // the long layout fixture, so a late ready snapshot cannot replace it.
+    await expect(page.getByRole("timer")).not.toHaveText("00:00/ 20:00");
     await page.screenshot({
       path: ".impeccable/review/viewport-normal.png",
       animations: "disabled",

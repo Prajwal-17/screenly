@@ -2,20 +2,12 @@
 
 import {
   useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   type ReactNode,
   type RefObject,
 } from "react";
-import {
-  AudioLines,
-  ChevronDown,
-  Check,
-  Gauge,
-  Mic,
-  MicOff,
-} from "lucide-react";
+import { AudioLines, RotateCcw, Play, Pause, Mic, MicOff } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { InterviewDetail } from "@repo/shared";
 import { Button } from "@/components/ui/button";
@@ -26,20 +18,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { InterviewAudioMenu } from "@/components/interview-audio-menu";
+import { useInterviewShortcuts } from "@/lib/interview-shortcuts";
 import { LiveTranscript } from "@/components/transcript";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { PorcelainOrb } from "@/components/porcelain-orb";
 import type { Session } from "@/lib/interview-session";
 import { clock, elapsed } from "@/lib/api";
-import { useInterviewStore, useInterviewView } from "@/store/interviewStore";
+import { useInterviewView } from "@/store/interviewStore";
 import styles from "./live-interview.module.css";
 
 export function LiveInterview({
@@ -49,6 +36,7 @@ export function LiveInterview({
   transcriptOpen,
   transcriptControl,
   closeTranscript,
+  toggleTranscript,
   notices,
   finishControl,
 }: {
@@ -58,17 +46,12 @@ export function LiveInterview({
   transcriptOpen: boolean;
   transcriptControl: ReactNode;
   closeTranscript: () => void;
+  toggleTranscript: () => void;
   notices: ReactNode;
   finishControl: ReactNode;
 }) {
   const state = useInterviewView();
   const reducedMotion = useReducedMotion();
-  useEffect(() => {
-    // A session left paused before the simplified dock mounted must remain usable.
-    if (useInterviewStore.getState().paused) {
-      void controller.current?.pauseAudio();
-    }
-  }, [controller, state.paused]);
   const conversation = useRef<HTMLDivElement>(null);
   const questionSurface = useRef<HTMLDivElement>(null);
   const candidateText = useRef<HTMLParagraphElement>(null);
@@ -93,13 +76,31 @@ export function LiveInterview({
   const answer =
     state.partial || (state.caption?.role === "user" ? state.caption.text : "");
   const finishing = state.status === "finishing";
+  const canReplay =
+    state.connected &&
+    !finishing &&
+    !state.paused &&
+    state.messages.some((message) => message.role === "assistant");
+  useInterviewShortcuts({
+    mute: () => {
+      if (state.micActive && !finishing) controller.current?.mute();
+    },
+    replay: () => {
+      if (canReplay) void controller.current?.speakLatest();
+    },
+    transcript: toggleTranscript,
+    pause: () => {
+      if (!finishing && !state.pausePending)
+        void controller.current?.pauseAudio();
+    },
+  });
   const speaking = state.status === "speaking" && !state.paused;
   const status = finishing
     ? "Saving interview"
     : state.error
       ? "Needs attention"
       : state.paused
-        ? "Audio paused"
+        ? "Interview paused"
         : state.muted
           ? "Microphone muted"
           : state.status === "thinking"
@@ -114,7 +115,7 @@ export function LiveInterview({
     : state.error
       ? "Use the recovery action above to continue."
       : state.paused
-        ? "Your microphone and interviewer audio are paused."
+        ? "Your timer, microphone, and interviewer are paused."
         : state.muted
           ? "Unmute your microphone when you’re ready to answer."
           : state.status === "thinking"
@@ -211,7 +212,9 @@ export function LiveInterview({
               role="status"
               data-candidate={!!answer && state.status === "listening"}
             >
-              {state.muted || state.paused ? (
+              {state.paused ? (
+                <Pause aria-hidden="true" />
+              ) : state.muted ? (
                 <MicOff aria-hidden="true" />
               ) : state.status === "listening" ? (
                 <Mic aria-hidden="true" />
@@ -259,6 +262,21 @@ export function LiveInterview({
               )}
             </div>
             <p className={styles.hint}>{hint}</p>
+            {state.paused && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={state.pausePending || !state.connected}
+                onClick={() => void controller.current?.pauseAudio()}
+                aria-keyshortcuts="Space"
+              >
+                <Play />
+                Resume interview
+                <kbd className="ml-1 hidden text-xs text-muted-foreground sm:inline">
+                  Space
+                </kbd>
+              </Button>
+            )}
             {answer && (
               <div
                 className={styles.answer}
@@ -310,6 +328,7 @@ export function LiveInterview({
                     disabled={!state.micActive || finishing}
                     onClick={() => controller.current?.mute()}
                     aria-label={state.muted ? "Unmute" : "Mute"}
+                    aria-keyshortcuts="M"
                     aria-pressed={state.muted}
                   >
                     <span className={styles.micIcon} aria-hidden="true">
@@ -334,59 +353,32 @@ export function LiveInterview({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {state.muted ? "Unmute microphone" : "Mute microphone"}
+                  {state.muted ? "Unmute microphone" : "Mute microphone"}{" "}
+                  <kbd>M</kbd>
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
-                <DropdownMenu>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="secondary"
-                        className={styles.speed}
-                        data-control="speed"
-                        disabled={finishing}
-                        aria-label={`Interviewer playback speed, ${state.playbackRate}×`}
-                      >
-                        <Gauge aria-hidden="true" />
-                        <motion.span
-                          key={state.playbackRate}
-                          initial={{ opacity: 0.4 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.14 }}
-                        >
-                          {state.playbackRate}×
-                        </motion.span>
-                        <ChevronDown aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <DropdownMenuContent
-                    side="top"
-                    align="center"
-                    className="min-w-44"
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    className={styles.replay}
+                    data-control="replay"
+                    disabled={!canReplay}
+                    onClick={() => void controller.current?.speakLatest()}
+                    aria-label="Replay question"
+                    aria-keyshortcuts="R"
                   >
-                    <DropdownMenuLabel>Interviewer speed</DropdownMenuLabel>
-                    {[1, 1.25, 1.5, 2].map((rate) => (
-                      <DropdownMenuItem
-                        key={rate}
-                        onSelect={() =>
-                          controller.current?.setPlaybackRate(rate)
-                        }
-                        aria-label={`${rate}×${rate === 1 ? " Normal" : ""}`}
-                      >
-                        <span className="flex-1">
-                          {rate}×{rate === 1 ? " · Normal" : ""}
-                        </span>
-                        {state.playbackRate === rate && (
-                          <Check aria-hidden="true" />
-                        )}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <TooltipContent>Playback speed</TooltipContent>
+                    <RotateCcw aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Replay question <kbd>R</kbd>
+                </TooltipContent>
               </Tooltip>
+              <InterviewAudioMenu
+                controller={controller}
+                disabled={finishing || !state.connected}
+              />
               {finishControl}
             </div>
           </footer>
