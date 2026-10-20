@@ -43,6 +43,15 @@ describe("shared contracts", () => {
     expect(
       clientEventSchema.safeParse({ type: "played", responseId: 1 }).success,
     ).toBe(true);
+    expect(
+      clientEventSchema.parse({ type: "playback-started", responseId: 1 }),
+    ).toEqual({ type: "playback-started", responseId: 1 });
+    for (const responseId of [-1, 0.5, "1", undefined]) {
+      expect(
+        clientEventSchema.safeParse({ type: "playback-started", responseId })
+          .success,
+      ).toBe(false);
+    }
   });
   test("audio preserves the reply ID and PCM samples", () => {
     const pcm = new Int16Array([-32768, 0, 32767]);

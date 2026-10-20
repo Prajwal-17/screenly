@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type {
   InterviewDetail,
   InterviewMessage,
@@ -18,6 +19,8 @@ type State = {
   micActive: boolean;
   starting: boolean;
   level: number;
+  paused: boolean;
+  playbackRate: number;
 };
 export const initialState: State = {
   interview: null,
@@ -33,5 +36,30 @@ export const initialState: State = {
   micActive: false,
   starting: false,
   level: 0,
+  paused: false,
+  playbackRate: 1,
 };
 export const useInterviewStore = create<State>(() => initialState);
+
+// Audio metering is read directly by the orb; it must not reconcile the page
+// and its transcript on every microphone chunk.
+export function useInterviewView() {
+  return useInterviewStore(
+    useShallow((state) => ({
+      interview: state.interview,
+      messages: state.messages,
+      status: state.status,
+      streaming: state.streaming,
+      caption: state.caption,
+      partial: state.partial,
+      error: state.error,
+      errorScope: state.errorScope,
+      connected: state.connected,
+      muted: state.muted,
+      micActive: state.micActive,
+      starting: state.starting,
+      paused: state.paused,
+      playbackRate: state.playbackRate,
+    })),
+  );
+}

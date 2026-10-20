@@ -109,6 +109,10 @@ export const clientEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("speak") }),
   z.object({
+    type: z.literal("playback-started"),
+    responseId: z.number().int().nonnegative(),
+  }),
+  z.object({
     type: z.literal("played"),
     responseId: z.number().int().nonnegative(),
   }),

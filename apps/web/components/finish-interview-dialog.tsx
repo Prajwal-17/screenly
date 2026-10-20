@@ -2,6 +2,11 @@
 
 import type { ReactElement } from "react";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -17,14 +22,18 @@ export function FinishInterviewDialog({
   trigger,
   pending,
   onFinish,
+  tooltip,
 }: {
   trigger: ReactElement;
   pending: boolean;
   onFinish: (generateFeedback: boolean) => void;
+  tooltip?: string;
 }) {
-  return (
+  const dialog = (
     <AlertDialog>
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      <AlertDialogTrigger asChild>
+        {tooltip ? <TooltipTrigger asChild>{trigger}</TooltipTrigger> : trigger}
+      </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Finish interview?</AlertDialogTitle>
@@ -49,5 +58,13 @@ export function FinishInterviewDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+  return tooltip ? (
+    <Tooltip>
+      {dialog}
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  ) : (
+    dialog
   );
 }

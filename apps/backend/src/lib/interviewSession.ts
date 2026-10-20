@@ -26,6 +26,7 @@ export type SessionDependencies = {
   stt: (
     turn: (event: ListenV2TurnInfo) => void,
     error: (error: Error) => void,
+    topics: InterviewDetail["topics"],
   ) => Pick<STTService, "connect" | "sendAudio" | "close">;
   tts: (
     audio: (data: Uint8Array) => void,
@@ -36,6 +37,7 @@ export class InterviewSession {
   private finishing = false;
   private finishTask: Promise<void> | null = null;
   private voice = false;
+  private active = false;
   private starting = false;
   private stt: ReturnType<SessionDependencies["stt"]> | null = null;
   private tts: ReturnType<SessionDependencies["tts"]> | null = null;
@@ -50,7 +52,14 @@ export class InterviewSession {
     saving?: Promise<void>;
   } | null = null;
   private deadline: ReturnType<typeof setTimeout> | null = null;
-  private readonly connectionId = crypto.randomUUID();
+  private clockTask: Promise<void> | null = null;
+  private clockStarted = false;
+  private awaitingPlaybackStart = new Set<number>();
+  private connectionId = crypto.randomUUID();
+  private latestTurn = -1;
+  private finalizedTurn = -1;
+  private turnTask: Promise<void> = Promise.resolve();
+  private interruptionTask: Promise<void> = Promise.resolve();
 
   constructor(
     readonly id: string,
@@ -75,6 +84,12 @@ export class InterviewSession {
       if (this.playback?.id === event.responseId) this.playback = null;
       return;
     }
+    if (event.type === "playback-started") {
+      // A speech connection or text delta is not proof that audio was heard.
+      if (!this.awaitingPlaybackStart.delete(event.responseId)) return;
+      await this.updateClock(true);
+      return;
+    }
     if (event.type === "speak") {
       await this.speakLatest();
       return;
@@ -92,11 +107,15 @@ export class InterviewSession {
     if (this.starting) return;
     this.starting = true;
     try {
-      if ((await this.deps.store.get(this.id))?.status === "completed") return;
+      const saved = await this.deps.store.get(this.id);
+      if (!saved || saved.status === "completed") return;
       if (!this.stt) {
+        this.connectionId = crypto.randomUUID();
+        this.latestTurn = this.finalizedTurn = -1;
         this.stt = this.deps.stt(
           (event) => this.deps.background(this.turn(event)),
           (error) => this.voiceError(error),
+          saved.topics,
         );
         try {
           await this.stt.connect();
@@ -108,20 +127,9 @@ export class InterviewSession {
       }
       if (this.closed || this.finishing) return;
       const interview = await this.deps.store.start(this.id);
-      await this.deps.scheduleDeadline(
-        interview.startedAt! + interview.duration * 60000,
-      );
-      if (!this.deadline) {
-        const remaining =
-          interview.duration * 60000 - (Date.now() - interview.startedAt!);
-        if (remaining <= 0) {
-          await this.finish();
-          return;
-        }
-        this.deadline = setTimeout(() => {
-          this.deps.background(this.finish());
-        }, remaining);
-      }
+      this.active = interview.status === "active";
+      await this.updateClock();
+      if (this.closed || this.finishing) return;
       this.send({ type: "ready", interview });
       if (
         !interview.messages.length ||
@@ -135,34 +143,108 @@ export class InterviewSession {
       this.starting = false;
     }
   }
-  private async turn(event: ListenV2TurnInfo) {
+  private async updateClock(begin = false): Promise<void> {
+    if (this.clockTask) {
+      await this.clockTask;
+      return this.updateClock(begin);
+    }
+    const task = (async () => {
+      const interview = begin
+        ? await this.deps.store.startClock(this.id)
+        : await this.deps.store.get(this.id);
+      if (
+        !interview ||
+        interview.status !== "active" ||
+        interview.startedAt == null ||
+        this.finishing
+      )
+        return;
+      this.clockStarted = true;
+      this.awaitingPlaybackStart.clear();
+      const deadline = interview.startedAt + interview.duration * 60000;
+      await this.deps.scheduleDeadline(deadline);
+      // Keep the durable deadline after disconnect, but do not recreate a local timer.
+      if (this.closed || this.finishing) return;
+      if (!this.deadline) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          this.deps.background(this.finish());
+          return;
+        }
+        this.deadline = setTimeout(
+          () => this.deps.background(this.finish()),
+          remaining,
+        );
+      }
+      if (begin) this.send({ type: "ready", interview });
+    })();
+    this.clockTask = task;
+    try {
+      await task;
+    } finally {
+      if (this.clockTask === task) this.clockTask = null;
+    }
+  }
+  private sendAudio(responseId: number, audio: Uint8Array) {
+    if (audio.byteLength < 2) return;
+    if (!this.clockStarted) this.awaitingPlaybackStart.add(responseId);
+    this.send(packAudio(responseId, audio));
+  }
+  private turn(event: ListenV2TurnInfo): Promise<void> {
     if (
       this.closed ||
       this.finishing ||
       !this.voice ||
-      (await this.deps.store.get(this.id))?.status !== "active"
+      !this.active ||
+      event.turn_index < this.latestTurn ||
+      event.turn_index <= this.finalizedTurn
     )
-      return;
-    if (event.event === "StartOfTurn") await this.interrupt();
+      return Promise.resolve();
+    this.latestTurn = event.turn_index;
+    // Cancel playback and forward interim words in the same event, without a
+    // D1 round trip. Only finalized turns enter the durable write queue.
+    const interrupted =
+      event.event === "StartOfTurn" || event.event === "EndOfTurn"
+        ? this.interrupt()
+        : Promise.resolve();
     this.send({ type: "partial", text: event.transcript });
     if (event.event === "EndOfTurn" && event.transcript.trim()) {
+      this.finalizedTurn = event.turn_index;
       const key = `stt:${this.connectionId}:${event.turn_index}`;
-      if (await this.deps.store.hasMessageSource(this.id, key)) return;
-      await this.interrupt();
-      const message = await this.deps.store.addMessage(
-        this.id,
-        "user",
-        event.transcript,
-        key,
-      );
-      if (!message) return;
-      this.send({ type: "status", status: "thinking" });
-      this.send({ type: "partial", text: "" });
-      this.send({ type: "message", message });
-      this.deps.background(this.reply());
+      const previous = this.turnTask;
+      const task = (async () => {
+        await previous;
+        await interrupted;
+        const interview = await this.deps.store.get(this.id);
+        if (interview?.status !== "active") return;
+        const message = await this.deps.store.addMessage(
+          this.id,
+          "user",
+          event.transcript,
+          key,
+        );
+        if (!message || this.closed) return;
+        this.send({ type: "message", message });
+        // A slower final write must not erase a newer turn's live words.
+        if (this.finishing || this.latestTurn !== event.turn_index) return;
+        this.send({ type: "status", status: "thinking" });
+        this.send({ type: "partial", text: "" });
+        this.deps.background(
+          this.reply({
+            ...interview,
+            messages: [...interview.messages, message],
+          }),
+        );
+      })();
+      // Report this failure to the connection, while allowing a later retry to
+      // use the queue rather than inheriting a permanently rejected promise.
+      this.turnTask = task.catch(() => {});
+      return task;
     }
+    return interrupted;
   }
-  async interrupt() {
+  interrupt(): Promise<void> {
+    this.awaitingPlaybackStart.clear();
     const playback = this.playback;
     this.playback = null;
     const current = this.current;
@@ -176,18 +258,29 @@ export class InterviewSession {
     }
     if (playback) {
       this.send({ type: "interrupted", responseId: playback.id });
-      const message = playback.messageId
-        ? await this.deps.store.interruptMessage(playback.messageId)
-        : undefined;
-      if (message && !this.closed) this.send({ type: "message", message });
     }
-    if (current) {
-      await this.persist(current, "interrupted");
-      if (current.savedId) {
-        const message = await this.deps.store.interruptMessage(current.savedId);
+    if (!current && !playback) return this.interruptionTask;
+    const previous = this.interruptionTask;
+    const task = (async () => {
+      await previous;
+      if (playback?.messageId) {
+        const message = await this.deps.store.interruptMessage(
+          playback.messageId,
+        );
         if (message && !this.closed) this.send({ type: "message", message });
       }
-    }
+      if (current) {
+        await this.persist(current, "interrupted");
+        if (current.savedId) {
+          const message = await this.deps.store.interruptMessage(
+            current.savedId,
+          );
+          if (message && !this.closed) this.send({ type: "message", message });
+        }
+      }
+    })();
+    this.interruptionTask = task.catch(() => {});
+    return task;
   }
   private persist(
     current: NonNullable<InterviewSession["current"]>,
@@ -209,7 +302,7 @@ export class InterviewSession {
     })();
     return current.saving;
   }
-  private async reply() {
+  private async reply(interview?: InterviewDetail) {
     if (this.closed || this.finishing || this.current) return;
     const current = {
       id: ++this.responseId,
@@ -227,11 +320,13 @@ export class InterviewSession {
             this.current === current &&
             !current.controller.signal.aborted
           )
-            this.send(packAudio(current.id, audio));
+            this.sendAudio(current.id, audio);
         })
       : null;
     this.tts = speech;
     let speechFailed = false;
+    let speechConnected = false;
+    const pendingSpeech: string[] = [];
     const speechReady = speech
       ?.connect()
       .then(() => {
@@ -240,6 +335,9 @@ export class InterviewSession {
           return false;
         }
         this.send({ type: "audio-start", responseId: current.id });
+        speechConnected = true;
+        for (const text of pendingSpeech) speech.sendText(text);
+        pendingSpeech.length = 0;
         return true;
       })
       .catch((error) => {
@@ -249,27 +347,32 @@ export class InterviewSession {
       });
     try {
       for await (const text of this.deps.reply(
-        (await this.deps.store.get(this.id))!,
+        interview ?? (await this.deps.store.get(this.id))!,
         current.controller.signal,
       )) {
         if (current.controller.signal.aborted || this.closed) return;
         current.text += text;
         this.send({ type: "delta", responseId: current.id, text });
-        if (speech && (await speechReady)) speech.sendText(text);
+        if (speechConnected) speech?.sendText(text);
+        else if (speech && !speechFailed) pendingSpeech.push(text);
       }
       if (current.controller.signal.aborted || this.closed) return;
       if (!current.text.trim())
         throw new Error("The interviewer returned an empty response.");
-      await this.persist(current, "complete");
-      if (speech && (await speechReady)) {
+      const saving = this.persist(current, "complete");
+      const flushing = speechReady?.then(async (ready) => {
+        if (!ready) return false;
         try {
-          await speech.flush();
-          if (current.savedId && !current.controller.signal.aborted)
-            this.playback = { id: current.id, messageId: current.savedId };
+          await speech!.flush();
+          return true;
         } catch (error) {
           if (!current.controller.signal.aborted) this.speechError(error);
+          return false;
         }
-      }
+      });
+      const [, spoken] = await Promise.all([saving, flushing]);
+      if (spoken && current.savedId && !current.controller.signal.aborted)
+        this.playback = { id: current.id, messageId: current.savedId };
     } catch {
       if (!current.controller.signal.aborted && !this.closed) {
         await this.persist(current, "interrupted");
@@ -329,7 +432,7 @@ export class InterviewSession {
         this.current === current &&
         !current.controller.signal.aborted
       )
-        this.send(packAudio(current.id, audio));
+        this.sendAudio(current.id, audio);
     });
     this.tts = speech;
     try {
@@ -372,9 +475,13 @@ export class InterviewSession {
   finish(generateFeedback = true): Promise<void> {
     if (this.finishTask) return this.finishTask;
     if (this.closed) return Promise.resolve();
+    const wasActive = this.active;
     this.finishing = true;
+    this.active = false;
     let completed = false;
     this.finishTask = (async () => {
+      await this.clockTask;
+      await this.turnTask;
       const interview = await this.deps.store.get(this.id);
       if (!interview || interview.status !== "active") return;
       await this.interrupt();
@@ -389,6 +496,7 @@ export class InterviewSession {
       completed = true;
     })().finally(() => {
       if (!completed) {
+        this.active = wasActive;
         this.finishing = false;
         this.finishTask = null;
       }
@@ -399,6 +507,7 @@ export class InterviewSession {
     if (this.closed) return;
     this.closed = true;
     await this.interrupt();
+    await this.turnTask;
     if (this.deadline) clearTimeout(this.deadline);
     this.stt?.close();
     this.tts?.close();

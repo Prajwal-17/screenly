@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "check": "bun run check-types && bun run lint && bun run test && bun run build",
     "test:e2e:local": "SCREENLY_E2E_PORT_OFFSET=200 playwright test --config playwright.local.config.ts",
-    "deploy:backend": "bun run --cwd apps/backend deploy"
+    "deploy:backend": "bun run --cwd apps/backend deploy",
+    "test:audio": "bun test e2e/speech-tempo.test.ts && playwright test --config playwright.audio.config.ts"
   },
   "devDependencies": {
     "fflate": "^0.8.3",

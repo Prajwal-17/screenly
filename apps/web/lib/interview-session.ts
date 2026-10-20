@@ -13,6 +13,7 @@ export class Session {
   private worklet: AudioWorkletNode | null = null;
   private responseId = 0;
   private replayRequested = false;
+  private playbackStartResponseId: number | null = null;
   private cancelled = new Set<number>();
   private player = new AudioPlayer();
   constructor(
@@ -29,6 +30,7 @@ export class Session {
     )
       return;
     this.responseId = 0;
+    this.playbackStartResponseId = null;
     this.cancelled.clear();
     useInterviewStore.setState({
       status: "connecting",
@@ -36,6 +38,7 @@ export class Session {
       streaming: "",
       partial: "",
       caption: null,
+      paused: false,
     });
     const url = new URL(`${API_URL}/api/interviews/${this.id}/ws`);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -55,8 +58,31 @@ export class Session {
           frame.responseId === this.responseId &&
           !this.cancelled.has(frame.responseId)
         ) {
-          this.player.playPcm16(frame.audio);
-          useInterviewStore.setState({ status: "speaking" });
+          const acknowledgeStart =
+            useInterviewStore.getState().interview?.startedAt == null &&
+            this.playbackStartResponseId !== frame.responseId;
+          if (acknowledgeStart) this.playbackStartResponseId = frame.responseId;
+          this.player.playPcm16(
+            frame.audio,
+            24000,
+            acknowledgeStart
+              ? () => {
+                  if (
+                    this.disposed ||
+                    this.cancelled.has(frame.responseId) ||
+                    this.socket !== socket ||
+                    socket.readyState !== WebSocket.OPEN
+                  )
+                    return;
+                  this.send({
+                    type: "playback-started",
+                    responseId: frame.responseId,
+                  });
+                }
+              : undefined,
+          );
+          if (useInterviewStore.getState().status !== "speaking")
+            useInterviewStore.setState({ status: "speaking" });
         }
         return;
       }
@@ -98,7 +124,8 @@ export class Session {
     }
     if (
       event.type === "status" &&
-      !(event.status === "listening" && this.player.busy)
+      !(event.status === "listening" && this.player.busy) &&
+      useInterviewStore.getState().status !== event.status
     )
       useInterviewStore.setState({ status: event.status });
     if (event.type === "partial")
@@ -215,6 +242,8 @@ export class Session {
     if (useInterviewStore.getState().starting) return;
     useInterviewStore.setState({ starting: true, error: "", errorScope: null });
     try {
+      await this.player.setPaused(false);
+      useInterviewStore.setState({ paused: false });
       await this.player.unlock();
       if (this.disposed) return;
       try {
@@ -274,7 +303,8 @@ export class Session {
       e: MessageEvent<{ type: string; samples: Int16Array; level: number }>,
     ) => {
       if (this.disposed) return;
-      const muted = useInterviewStore.getState().muted;
+      const { muted: micMuted, paused } = useInterviewStore.getState();
+      const muted = micMuted || paused;
       useInterviewStore.setState({ level: muted ? 0 : e.data.level });
       // Keep the stream clock running while muted without sending microphone content.
       if (
@@ -301,7 +331,12 @@ export class Session {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     if (!this.disposed)
-      useInterviewStore.setState({ micActive: false, level: 0, muted: false });
+      useInterviewStore.setState({
+        micActive: false,
+        level: 0,
+        muted: false,
+        paused: false,
+      });
   }
   async speakLatest() {
     try {
@@ -326,11 +361,54 @@ export class Session {
     }
   }
   mute() {
-    const muted = !useInterviewStore.getState().muted;
+    const { muted: wasMuted, paused } = useInterviewStore.getState();
+    const muted = !wasMuted;
     this.stream?.getAudioTracks().forEach((t) => {
-      t.enabled = !muted;
+      t.enabled = !muted && !paused;
     });
     useInterviewStore.setState({ muted });
+  }
+  async pauseAudio() {
+    const { paused: wasPaused, muted } = useInterviewStore.getState();
+    const paused = !wasPaused;
+    useInterviewStore.setState({ paused, level: 0 });
+    this.stream?.getAudioTracks().forEach((track) => {
+      track.enabled = !paused && !muted;
+    });
+    try {
+      await this.player.setPaused(paused);
+    } catch {
+      useInterviewStore.setState({
+        error: "Audio could not resume. Retry speech to continue.",
+        errorScope: "speech",
+      });
+    }
+  }
+  setPlaybackRate(rate: number) {
+    this.player.setPlaybackRate(rate);
+    useInterviewStore.setState({ playbackRate: rate });
+  }
+  getVoiceSignal() {
+    const state = useInterviewStore.getState();
+    const candidate =
+      state.status === "listening" && !state.muted && !state.paused;
+    const inactive =
+      state.paused ||
+      !!state.error ||
+      !["speaking", "listening"].includes(state.status) ||
+      (state.status === "listening" && (!state.micActive || state.muted));
+    const signal =
+      state.status === "speaking"
+        ? this.player.getSignal()
+        : {
+            level:
+              candidate && state.level > 0.003
+                ? Math.min(1, state.level * 5)
+                : 0,
+            low: 0,
+            high: 0,
+          };
+    return { ...signal, candidate, inactive };
   }
   finish(generateFeedback = true) {
     this.send({ type: "finish", generateFeedback });

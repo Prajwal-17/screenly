@@ -45,12 +45,16 @@ export function Workspace({
   actions,
   voice = false,
   interviewActive = false,
+  immersive = false,
+  beforeNavigate,
 }: {
   children: React.ReactNode;
   title?: string;
   actions?: React.ReactNode;
   voice?: boolean;
   interviewActive?: boolean;
+  immersive?: boolean;
+  beforeNavigate?: () => Promise<boolean>;
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
@@ -73,9 +77,17 @@ export function Workspace({
   const focusMode = voice && interviewActive;
   const collapsed = focusMode ? !focusExpanded : sidebarCollapsed;
   const toggleSidebar = useCallback(() => {
-    if (focusMode) setFocusExpanded((value) => !value);
+    if (immersive) setNavigationOpen(!navigationOpen);
+    else if (focusMode) setFocusExpanded((value) => !value);
     else setSidebarCollapsed(!sidebarCollapsed);
-  }, [focusMode, setSidebarCollapsed, sidebarCollapsed]);
+  }, [
+    immersive,
+    navigationOpen,
+    setNavigationOpen,
+    focusMode,
+    setSidebarCollapsed,
+    sidebarCollapsed,
+  ]);
   useEffect(() => {
     if (signingOut || !session || profile.isPending || needsOnboarding) return;
     const shortcut = (event: KeyboardEvent) => {
@@ -112,6 +124,7 @@ export function Workspace({
   }, [router]);
   async function signOut() {
     if (signingOut) return;
+    if (beforeNavigate && !(await beforeNavigate())) return;
     setSigningOut(true);
     setSignOutError("");
     setNavigationOpen(false);
@@ -179,9 +192,43 @@ export function Workspace({
         </div>
       </div>
     );
+  const navigation = (
+    <Sheet
+      showHeader={false}
+      open={navigationOpen}
+      onOpenChange={setNavigationOpen}
+      side="left"
+      title="Navigation"
+      description="Your Screenly workspace"
+      className="w-[min(280px,85vw)] bg-sidebar"
+      trigger={
+        <Button
+          variant="ghost"
+          size="icon"
+          className={
+            immersive
+              ? "absolute top-2 left-3 z-20 sm:left-6"
+              : "-ml-2 md:hidden"
+          }
+          aria-label="Open navigation"
+          aria-keyshortcuts="Control+B Meta+B"
+        >
+          <Menu />
+        </Button>
+      }
+    >
+      <WorkspaceSidebar
+        name={profile.data?.details.name || session.user.name}
+        email={session.user.email}
+        onNavigate={() => setNavigationOpen(false)}
+        onSignOut={signOut}
+        signOutError={signOutError}
+      />
+    </Sheet>
+  );
   return (
     <motion.div
-      className="min-h-dvh"
+      className={immersive ? "h-dvh overflow-hidden" : "min-h-dvh"}
       initial={false}
       style={
         { "--sidebar-width": collapsed ? "64px" : "256px" } as CSSProperties
@@ -200,7 +247,10 @@ export function Workspace({
       </a>
       <aside
         id="workspace-sidebar"
-        className="fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col overflow-hidden border-r bg-sidebar md:flex"
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col overflow-hidden border-r bg-sidebar",
+          !immersive && "md:flex",
+        )}
         aria-label="Screenly workspace"
         data-state={collapsed ? "collapsed" : "expanded"}
         data-focus-mode={focusMode}
@@ -213,85 +263,77 @@ export function Workspace({
           signOutError={signOutError}
         />
       </aside>
-      <div className="min-w-0 md:ml-[var(--sidebar-width)]">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-2 text-xs">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="-ml-2 mr-1 hidden md:inline-flex"
-              onClick={toggleSidebar}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-keyshortcuts="Control+B Meta+B"
-              title={`${collapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
-              aria-expanded={!collapsed}
-              aria-controls="workspace-sidebar"
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="size-[18px]" strokeWidth={1.7} />
-              ) : (
-                <PanelLeftClose className="size-[18px]" strokeWidth={1.7} />
-              )}
-            </Button>
-            <Sheet
-              showHeader={false}
-              open={navigationOpen}
-              onOpenChange={setNavigationOpen}
-              side="left"
-              title="Navigation"
-              description="Your Screenly workspace"
-              className="w-[min(280px,85vw)] bg-sidebar"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="-ml-2 md:hidden"
-                  aria-label="Open navigation"
-                  aria-keyshortcuts="Control+B Meta+B"
-                >
-                  <Menu />
-                </Button>
-              }
-            >
-              <WorkspaceSidebar
-                name={profile.data?.details.name || session.user.name}
-                email={session.user.email}
-                onNavigate={() => setNavigationOpen(false)}
-                onSignOut={signOut}
-                signOutError={signOutError}
-              />
-            </Sheet>
-            <h1
-              id="workspace-title"
-              className="truncate text-sm leading-normal font-medium tracking-normal"
-            >
-              {context}
-            </h1>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">{actions}</div>
-        </header>
+      <div
+        className={cn(
+          "min-w-0",
+          immersive ? "relative h-full" : "md:ml-[var(--sidebar-width)]",
+        )}
+      >
+        {immersive && navigation}
+        {!immersive && (
+          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-2 text-xs">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="-ml-2 mr-1 hidden md:inline-flex"
+                onClick={toggleSidebar}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-keyshortcuts="Control+B Meta+B"
+                title={`${collapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
+                aria-expanded={!collapsed}
+                aria-controls="workspace-sidebar"
+              >
+                {collapsed ? (
+                  <PanelLeftOpen className="size-[18px]" strokeWidth={1.7} />
+                ) : (
+                  <PanelLeftClose className="size-[18px]" strokeWidth={1.7} />
+                )}
+              </Button>
+              {navigation}
+              <h1
+                id="workspace-title"
+                className="truncate text-sm leading-normal font-medium tracking-normal"
+              >
+                {context}
+              </h1>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">{actions}</div>
+          </header>
+        )}
         <main
           id="workspace-content"
           aria-labelledby="workspace-title"
           tabIndex={-1}
           className={cn(
             "min-w-0 outline-none",
-            voice
-              ? "px-4 pb-4 sm:px-8"
-              : "px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10",
+            immersive
+              ? "h-full min-h-0 px-3 sm:px-6 lg:px-8"
+              : voice
+                ? "px-4 pb-4 sm:px-8"
+                : "px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10",
           )}
         >
+          {immersive && (
+            <h1 id="workspace-title" className="sr-only">
+              {context}
+            </h1>
+          )}
           <div
             className={cn(
               "mx-auto",
-              voice ? "max-w-[1280px]" : "max-w-[1160px]",
+              immersive
+                ? "h-full min-h-0"
+                : voice
+                  ? "max-w-[1280px]"
+                  : "max-w-[1160px]",
             )}
           >
             {children}
           </div>
         </main>
       </div>
-      <WorkspaceSearch />
+      <WorkspaceSearch beforeNavigate={beforeNavigate} />
     </motion.div>
   );
 }

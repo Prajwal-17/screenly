@@ -61,3 +61,7 @@ playwright-report/
 !.dev.vars.example
 .e2e-workers*/
 .local-e2e-workers*/
+
+# Bundled audio worklet, generated before web dev/build.
+/apps/web/public/audio/playback-processor.js
+/apps/web/public/audio/soundtouch-LICENSE.txt

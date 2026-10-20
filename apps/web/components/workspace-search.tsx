@@ -8,7 +8,11 @@ import { workspaceDestinations } from "@/lib/workspace-navigation";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
 
-export function WorkspaceSearch() {
+export function WorkspaceSearch({
+  beforeNavigate,
+}: {
+  beforeNavigate?: () => Promise<boolean>;
+}) {
   const { searchOpen, setSearchOpen, setNavigationOpen } = useUIStore();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -20,7 +24,8 @@ export function WorkspaceSearch() {
       .toLowerCase()
       .includes(query.toLowerCase().trim()),
   );
-  const go = (href: string) => {
+  const go = async (href: string) => {
+    if (beforeNavigate && !(await beforeNavigate())) return;
     setSearchOpen(false);
     setNavigationOpen(false);
     setQuery("");
@@ -81,14 +86,14 @@ export function WorkspaceSearch() {
         <input
           ref={input}
           role="combobox"
-          aria-label="Search workspace pages"
+          aria-label="Search workspace"
           aria-expanded="true"
           aria-controls="workspace-search-results"
           aria-activedescendant={
             results[active] ? `workspace-result-${active}` : undefined
           }
           autoComplete="off"
-          placeholder="Search pages…"
+          placeholder="Search workspace…"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);

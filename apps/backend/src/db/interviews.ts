@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type {
   Feedback,
   Interview,
@@ -103,11 +103,25 @@ export function createInterviews(db: Database) {
     async start(id: string) {
       await db
         .update(interviewSession)
-        .set({ status: "active", startedAt: Date.now(), updatedAt: new Date() })
+        .set({ status: "active", updatedAt: new Date() })
         .where(
           and(
             eq(interviewSession.id, id),
             eq(interviewSession.status, "draft"),
+          ),
+        )
+        .run();
+      return (await this.get(id))!;
+    },
+    async startClock(id: string) {
+      await db
+        .update(interviewSession)
+        .set({ startedAt: Date.now(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(interviewSession.id, id),
+            eq(interviewSession.status, "active"),
+            isNull(interviewSession.startedAt),
           ),
         )
         .run();

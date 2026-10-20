@@ -88,10 +88,399 @@ async function fixture(
     events,
     audioFrames,
     turn,
+    emitTurn: (
+      event: Pick<ListenV2TurnInfo, "event" | "transcript" | "turn_index">,
+    ) => onTurn(event as ListenV2TurnInfo),
     reports: () => reports,
   };
 }
 describe("interview persistence and orchestration", () => {
+  test("speech completes without waiting for the finalized question's database write", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let flushed = false;
+    const f = await fixture(
+      async function* () {
+        yield "Explain React hooks.";
+      },
+      {
+        speechEnabled: true,
+        store: {
+          ...interviews,
+          addMessage: async (...args) => {
+            await gate;
+            return interviews.addMessage(...args);
+          },
+        },
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => audio(new Uint8Array([1, 0])),
+          flush: async () => {
+            flushed = true;
+          },
+          close: () => {},
+        }),
+      },
+    );
+    const opening = f.session.handle({ type: "start" });
+    await expect.poll(() => flushed).toBe(true);
+    expect(f.audioFrames).toHaveLength(1);
+    expect(f.events.some((event) => event.type === "message")).toBe(false);
+    release();
+    await opening;
+    expect((await interviews.get(f.interview.id))!.messages).toHaveLength(1);
+    await f.session.close();
+  });
+  test("barge-in words arrive before interruption persistence and the final answer retains order", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = await fixture(
+      async function* () {
+        yield "Explain React hooks.";
+      },
+      {
+        speechEnabled: true,
+        store: {
+          ...interviews,
+          interruptMessage: async (id) => {
+            await gate;
+            return interviews.interruptMessage(id);
+          },
+        },
+      },
+    );
+    await f.session.handle({ type: "start" });
+    f.emitTurn({
+      event: "StartOfTurn",
+      transcript: "I use hooks.",
+      turn_index: 0,
+    });
+    expect(f.events.at(-1)).toEqual({ type: "partial", text: "I use hooks." });
+    const final = f.turn("I use hooks.");
+    const finishing = f.session.finish(false);
+    release();
+    await Promise.all([final, finishing]);
+    const saved = (await interviews.get(f.interview.id))!;
+    expect(saved.status).toBe("completed");
+    expect(
+      saved.messages.map((message) => [
+        message.role,
+        message.status,
+        message.content,
+      ]),
+    ).toEqual([
+      ["assistant", "interrupted", "Explain React hooks."],
+      ["user", "complete", "I use hooks."],
+    ]);
+    await f.session.close();
+  });
+  test("interim transcripts arrive synchronously without database reads and stale turns stay closed", async () => {
+    let reads = 0;
+    const f = await fixture(
+      async function* () {
+        yield "Explain React hooks.";
+      },
+      {
+        store: {
+          ...interviews,
+          get: async (id) => {
+            reads++;
+            return interviews.get(id);
+          },
+        },
+      },
+    );
+    await f.session.handle({ type: "start" });
+    reads = 0;
+    f.emitTurn({
+      event: "StartOfTurn",
+      transcript: "I use React",
+      turn_index: 0,
+    });
+    f.emitTurn({
+      event: "Update",
+      transcript: "I use React hooks.",
+      turn_index: 0,
+    });
+    expect(f.events.at(-1)).toEqual({
+      type: "partial",
+      text: "I use React hooks.",
+    });
+    expect(reads).toBe(0);
+    await drain();
+    await f.turn("I use React hooks.");
+    expect(reads).toBe(1); // Final status/context read; insert deduplicates atomically.
+    const before = f.events.length;
+    reads = 0;
+    f.emitTurn({ event: "Update", transcript: "Old partial", turn_index: 0 });
+    await f.turn("Duplicate answer.");
+    expect(f.events).toHaveLength(before);
+    expect(reads).toBe(0);
+    await f.session.close();
+  });
+  test("a pending final write does not delay or clear the next turn's partial words", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let writing = false;
+    const f = await fixture(
+      async function* () {
+        yield "Explain React hooks.";
+      },
+      {
+        store: {
+          ...interviews,
+          addMessage: async (...args) => {
+            if (args[1] === "user" && args[2] === "First answer.") {
+              writing = true;
+              await gate;
+            }
+            return interviews.addMessage(...args);
+          },
+        },
+      },
+    );
+    await f.session.handle({ type: "start" });
+    const final = f.turn("First answer.");
+    await expect.poll(() => writing).toBe(true);
+    f.emitTurn({ event: "StartOfTurn", transcript: "Also", turn_index: 1 });
+    f.emitTurn({
+      event: "Update",
+      transcript: "Also consider cleanup.",
+      turn_index: 1,
+    });
+    expect(f.events.at(-1)).toEqual({
+      type: "partial",
+      text: "Also consider cleanup.",
+    });
+    release();
+    await final;
+    expect(f.events.filter((event) => event.type === "partial").at(-1)).toEqual(
+      { type: "partial", text: "Also consider cleanup." },
+    );
+    await f.turn("Also consider cleanup.", 1);
+    const messages = (await interviews.get(f.interview.id))!.messages;
+    expect(
+      messages
+        .filter((message) => message.role === "user")
+        .map((message) => message.content),
+    ).toEqual(["First answer.", "Also consider cleanup."]);
+    await f.session.close();
+  });
+  test("a slow speech handshake does not block text and preserves queued speech in order", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tokens = ["Explain ", "React ", "hooks."];
+    const spoken: string[] = [];
+    let flushes = 0;
+    const f = await fixture(
+      async function* () {
+        yield* tokens;
+      },
+      {
+        speechEnabled: true,
+        tts: () => ({
+          connect: () => gate,
+          sendText: (text) => {
+            spoken.push(text);
+          },
+          flush: async () => {
+            flushes++;
+          },
+          close: () => {},
+        }),
+      },
+    );
+    const opening = f.session.handle({ type: "start" });
+    await expect
+      .poll(() => f.events.filter((event) => event.type === "delta").length)
+      .toBe(3);
+    expect(spoken).toEqual([]);
+    expect(flushes).toBe(0);
+    release();
+    await opening;
+    expect(spoken).toEqual(tokens);
+    expect(flushes).toBe(1);
+    await f.session.close();
+  });
+  test("interrupting a pending speech handshake discards all queued text and audio", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spoken: string[] = [];
+    let flushes = 0;
+    const f = await fixture(
+      async function* () {
+        yield "An obsolete question.";
+      },
+      {
+        speechEnabled: true,
+        tts: (audio) => ({
+          connect: () => gate,
+          sendText: (text) => {
+            spoken.push(text);
+            audio(new Uint8Array([1, 0]));
+          },
+          flush: async () => {
+            flushes++;
+          },
+          close: () => {},
+        }),
+      },
+    );
+    const opening = f.session.handle({ type: "start" });
+    await expect
+      .poll(() => f.events.some((event) => event.type === "delta"))
+      .toBe(true);
+    await f.session.interrupt();
+    release();
+    await opening;
+    expect(spoken).toEqual([]);
+    expect(f.audioFrames).toEqual([]);
+    expect(flushes).toBe(0);
+    expect((await interviews.get(f.interview.id))!.messages[0]?.status).toBe(
+      "interrupted",
+    );
+    await f.session.close();
+  });
+  test("the clock waits for opening audio playback and acknowledgements cannot extend it", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const deadlines: number[] = [];
+    const f = await fixture(
+      async function* () {
+        yield "Explain an HTTP cache.";
+      },
+      {
+        speechEnabled: true,
+        scheduleDeadline: async (deadline) => {
+          deadlines.push(deadline);
+        },
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => {},
+          flush: async () => {
+            await gate;
+            audio(new Uint8Array([1, 0, 2, 0]));
+          },
+          close: () => {},
+        }),
+      },
+    );
+    const opening = f.session.handle({ type: "start" });
+    await expect
+      .poll(() => f.events.some((event) => event.type === "message"))
+      .toBe(true);
+    expect((await interviews.get(f.interview.id))?.status).toBe("active");
+    expect((await interviews.get(f.interview.id))?.startedAt).toBeNull();
+    expect(deadlines).toEqual([]);
+    await f.session.handle({ type: "playback-started", responseId: 1 });
+    expect((await interviews.get(f.interview.id))?.startedAt).toBeNull();
+    release();
+    await opening;
+    expect(f.audioFrames).toHaveLength(1);
+    expect((await interviews.get(f.interview.id))?.startedAt).toBeNull();
+    await f.session.handle({ type: "playback-started", responseId: 999 });
+    expect(deadlines).toEqual([]);
+    const beforePlayback = Date.now();
+    await f.session.handle({ type: "playback-started", responseId: 1 });
+    const startedAt = (await interviews.get(f.interview.id))!.startedAt!;
+    expect(startedAt).toBeGreaterThanOrEqual(beforePlayback);
+    expect(deadlines).toEqual([startedAt + settings.duration * 60000]);
+    expect(f.events).toContainEqual(
+      expect.objectContaining({
+        type: "ready",
+        interview: expect.objectContaining({ startedAt }),
+      }),
+    );
+    await f.session.handle({ type: "playback-started", responseId: 1 });
+    await f.session.handle({ type: "speak" });
+    await f.session.handle({ type: "playback-started", responseId: 2 });
+    expect((await interviews.get(f.interview.id))?.startedAt).toBe(startedAt);
+    expect(deadlines).toEqual([startedAt + settings.duration * 60000]);
+    await f.session.close();
+  });
+  test("failed opening speech does not consume time and retry starts the clock", async () => {
+    let fail = true;
+    const deadlines: number[] = [];
+    const f = await fixture(
+      async function* () {
+        yield "Explain a cache.";
+      },
+      {
+        speechEnabled: true,
+        scheduleDeadline: async (deadline) => {
+          deadlines.push(deadline);
+        },
+        tts: (audio) => ({
+          connect: async () => {
+            if (fail) throw new Error("Speech unavailable");
+          },
+          sendText: () => audio(new Uint8Array([1, 0, 2, 0])),
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
+    await f.session.handle({ type: "start" });
+    await f.session.handle({ type: "playback-started", responseId: 1 });
+    expect((await interviews.get(f.interview.id))?.startedAt).toBeNull();
+    expect(deadlines).toEqual([]);
+    fail = false;
+    await f.session.handle({ type: "speak" });
+    await f.session.handle({ type: "playback-started", responseId: 2 });
+    expect((await interviews.get(f.interview.id))?.startedAt).not.toBeNull();
+    expect(deadlines).toHaveLength(1);
+    await f.session.close();
+  });
+  test("finishing during clock persistence cancels the newly scheduled deadline", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let scheduled = false,
+      cancelled = false;
+    const f = await fixture(
+      async function* () {
+        yield "Explain a cache.";
+      },
+      {
+        speechEnabled: true,
+        scheduleDeadline: async () => {
+          scheduled = true;
+          await gate;
+        },
+        cancelDeadline: async () => {
+          cancelled = true;
+        },
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => audio(new Uint8Array([1, 0])),
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
+    await f.session.handle({ type: "start" });
+    const clock = f.session.handle({ type: "playback-started", responseId: 1 });
+    await expect.poll(() => scheduled).toBe(true);
+    const finishing = f.session.finish(false);
+    release();
+    await Promise.all([clock, finishing]);
+    expect(cancelled).toBe(true);
+    expect((await interviews.get(f.interview.id))?.status).toBe("completed");
+    await f.session.close();
+  });
   test("concurrent D1 writes retain a strictly ordered transcript", async () => {
     const interview = await interviews.create(userId, {
       ...settings,
@@ -135,12 +524,26 @@ describe("interview persistence and orchestration", () => {
     await f.session.close();
   });
   test("voice reconnect reopens transcription and preserves the timer and saved conversation", async () => {
-    const f = await fixture(async function* () {
-      yield "Explain a cache invalidation strategy.";
-    });
+    const f = await fixture(
+      async function* () {
+        yield "Explain a cache invalidation strategy.";
+      },
+      {
+        speechEnabled: true,
+        tts: (audio) => ({
+          connect: async () => {},
+          sendText: () => audio(new Uint8Array([1, 0])),
+          flush: async () => {},
+          close: () => {},
+        }),
+      },
+    );
     await f.session.handle({ type: "start" });
+    await f.session.handle({ type: "playback-started", responseId: 1 });
     await f.turn("I would invalidate on writes.");
+    await f.session.handle({ type: "played", responseId: 2 });
     const began = (await interviews.get(f.interview.id))!.startedAt;
+    expect(began).not.toBeNull();
     await f.session.close();
     let connected = false;
     let receivedAudio = 0;

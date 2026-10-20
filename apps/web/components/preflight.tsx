@@ -274,9 +274,9 @@ export function Preflight({
           </Button>
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
             <Clock3 className="size-3 shrink-0" aria-hidden="true" />
-            {interview.status === "active"
+            {interview.startedAt != null
               ? `${clock(Math.max(0, interview.duration * 60 - elapsed(interview)))} remaining`
-              : "Your timer starts when you begin."}
+              : "Your timer starts when the interviewer begins speaking."}
           </p>
           {secondaryAction && <div className="pt-2">{secondaryAction}</div>}
         </div>

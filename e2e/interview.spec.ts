@@ -2,6 +2,7 @@ import { signInForTest } from "./session-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { webURL, backendURL, voiceURL } from "./environment";
 import { contrast } from "./contrast";
+import { acceptDocumentExit } from "./navigation";
 async function capture(
   page: Page,
   options: { path: string; fullPage: boolean },
@@ -11,10 +12,11 @@ async function capture(
   await page.screenshot({ ...options, animations: "disabled" });
 }
 async function openTranscript(page: Page) {
-  await page
+  const trigger = page
     .getByRole("main")
-    .getByRole("button", { name: /^Transcript/ })
-    .click();
+    .getByRole("button", { name: /^Transcript/ });
+  if ((await trigger.getAttribute("aria-expanded")) === "false")
+    await trigger.click();
   await expect(
     page.getByRole("region", { name: "Conversation", exact: true }),
   ).toBeVisible();
@@ -37,6 +39,20 @@ async function navigateHistory(page: Page) {
       .getByRole("button", { name: "Open navigation", exact: true })
       .click();
   await page.getByRole("link", { name: "History", exact: true }).click();
+  const exit = page.getByRole("alertdialog", {
+    name: "Leave this interview?",
+    exact: true,
+  });
+  await expect
+    .poll(
+      async () => page.url().endsWith("/history") || (await exit.isVisible()),
+    )
+    .toBe(true);
+  if (await exit.isVisible()) {
+    await exit
+      .getByRole("button", { name: "Leave for now", exact: true })
+      .click();
+  }
 }
 async function trackSpeakerPlayback(page: Page) {
   await page.addInitScript(() => {
@@ -56,18 +72,37 @@ async function trackSpeakerPlayback(page: Page) {
     };
     target.formaPcmStarts = 0;
     target.formaPcmEnergy = 0;
-    const create = AudioContext.prototype.createBufferSource;
-    AudioContext.prototype.createBufferSource = function () {
-      const source = create.call(this);
-      const start = source.start.bind(source);
-      source.start = (...args: Parameters<AudioBufferSourceNode["start"]>) => {
-        target.formaPcmStarts++;
-        for (const sample of source.buffer?.getChannelData(0) ?? [])
-          target.formaPcmEnergy += sample * sample;
-        start(...args);
-      };
-      return source;
+    const analysers: AnalyserNode[] = [];
+    const createAnalyser = AudioContext.prototype.createAnalyser;
+    AudioContext.prototype.createAnalyser = function () {
+      const analyser = createAnalyser.call(this);
+      analysers.push(analyser);
+      return analyser;
     };
+    const NativeWorklet = window.AudioWorkletNode;
+    window.AudioWorkletNode = class extends NativeWorklet {
+      constructor(
+        context: BaseAudioContext,
+        name: string,
+        options?: AudioWorkletNodeOptions,
+      ) {
+        super(context, name, options);
+        if (name === "speech-playback") {
+          this.port.addEventListener("message", ({ data }) => {
+            if (data.type === "started") target.formaPcmStarts++;
+          });
+          this.port.start();
+        }
+      }
+    };
+    const samples = new Float32Array(512);
+    setInterval(() => {
+      for (const analyser of analysers) {
+        if (analyser.context.state !== "running") continue;
+        analyser.getFloatTimeDomainData(samples);
+        for (const sample of samples) target.formaPcmEnergy += sample * sample;
+      }
+    }, 20);
   });
 }
 // Replay remains a protocol recovery path; it is no longer a visible UI action.
@@ -91,6 +126,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   page,
   context,
 }) => {
+  test.setTimeout(90000);
   await context.grantPermissions(["microphone"]);
   await trackSpeakerPlayback(page);
   const errors: string[] = [];
@@ -179,7 +215,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await expect(page.getByRole("button", { name: "Send answer" })).toHaveCount(
     0,
   );
-  await expect(page.getByRole("log")).toHaveCount(0);
+  await expect(page.getByRole("log")).toHaveCount(1);
   await openTranscript(page);
   await expect(page.getByRole("log")).toContainText(
     "You mentioned testing behavior",
@@ -197,7 +233,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
     )
     .toBeGreaterThan(0);
   await expect(
-    page.locator('[data-slot="live-caption"] [data-slot="streaming-text"]'),
+    page.locator('[data-slot="live-caption"] [data-slot="message-response"]'),
   ).toContainText("You mentioned testing behavior");
   const firstPlayback = await playbackCount(page);
   await replayQuestion(page);
@@ -208,8 +244,10 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   await page.request.post(`${voiceURL}/partial`, {
     data: { transcript: "I am thinking through the failure cases." },
   });
-  await expect(page.locator('[data-slot="live-caption"]')).toContainText("You");
-  await expect(page.locator('[data-slot="streaming-text"]')).toContainText(
+  await expect(page.locator('[data-slot="candidate-caption"]')).toContainText(
+    "You",
+  );
+  await expect(page.locator('[data-slot="candidate-caption"]')).toContainText(
     "I am thinking through the failure cases.",
   );
   // The controlled provider fails once; the UI must preserve the conversation.
@@ -249,7 +287,9 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
     .click();
   await page.getByRole("button", { name: "Finish and view feedback" }).click();
   await expect(page).toHaveURL(/\/feedback$/);
-  await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible({
+    timeout: 15000,
+  });
   expect(downloads).toEqual([]);
   await expect(page.getByText("7.8", { exact: true })).toBeVisible();
   if (process.env.CAPTURE_SCREENSHOTS)
@@ -262,7 +302,7 @@ test("complete practice journey, recovery, history, and desktop reflow", async (
   expect((await download).suggestedFilename()).toMatch(
     /screenly-interview.*\.txt/,
   );
-  await page.reload();
+  await acceptDocumentExit(page, () => page.reload());
   await expect(page.getByText("7.8", { exact: true })).toBeVisible();
   await navigateHistory(page);
   await expect(
@@ -321,7 +361,7 @@ test("protected workspace redirects to sign-in", async ({ page }) => {
   await expect(page).toHaveURL(/\/auth\/sign-in$/);
 });
 
-test("full question stays readable while speaking highlights follow playback state", async ({
+test("full question stays readable through streaming, playback, and interruption", async ({
   page,
   context,
 }) => {
@@ -376,7 +416,7 @@ test("full question stays readable while speaking highlights follow playback sta
       .getByRole("button", { name: "Start interview", exact: true })
       .click();
     const caption = page.locator(
-      '[data-slot="live-caption"] [data-slot="streaming-text"]',
+      '[data-slot="live-caption"] [data-slot="message-response"]',
     );
     const fullQuestion =
       "Welcome. Let’s begin with React. How would you test a component that fetches data?";
@@ -387,7 +427,7 @@ test("full question stays readable while speaking highlights follow playback sta
         window as Window & { captionAudioContexts: AudioContext[] }
       ).captionAudioContexts;
       await contexts[0]!.suspend();
-      return document.querySelector('[data-slot="streaming-text"]')
+      return document.querySelector('[data-slot="message-response"]')
         ?.textContent;
     });
     await page.waitForTimeout(600); // Pausing audio must not hide or truncate the question.
@@ -416,7 +456,12 @@ test("full question stays readable while speaking highlights follow playback sta
     await replayQuestion(page);
     await expect(caption).toHaveText(fullQuestion);
     await expect(caption).toHaveAttribute("data-speaking", "true");
-    await page.getByRole("button", { name: "Interrupt", exact: true }).click();
+    await page.request.post(`${voiceURL}/partial`, {
+      data: {
+        transcript: "I would start with the expected behavior.",
+        startOfTurn: true,
+      },
+    });
     await expect(caption).toHaveText(fullQuestion);
     await expect(caption).toHaveAttribute("data-speaking", "false");
     const ended = await page.evaluate(
@@ -495,7 +540,7 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   await expect(
     page.getByRole("button", { name: "Mute", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("log")).toHaveCount(0);
+  await expect(page.getByRole("log")).toHaveCount(1);
   await openTranscript(page);
   await expect(page.getByRole("log")).toContainText(
     "I test the component behavior and loading states.",
@@ -508,7 +553,7 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
     await visual.evaluate(
       (node) => node.getAnimations({ subtree: true }).length,
     ),
-  ).toBeGreaterThan(0);
+  ).toBe(0); // Porcelain has no autonomous CSS animation.
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect
     .poll(() =>
@@ -531,7 +576,7 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   ).toBe(0);
   await page.getByRole("button", { name: "Unmute", exact: true }).click();
   await expect(visual).toHaveAttribute("data-state", "listening");
-  await page.reload();
+  await acceptDocumentExit(page, () => page.reload());
   await expect(
     page.getByRole("button", { name: "Resume interview", exact: true }),
   ).toBeVisible();
@@ -546,7 +591,9 @@ test("voice capture, transcription, playback, mute, and cleanup", async ({
   await page.getByRole("button", { name: "Finish saved interview" }).click();
   await page.getByRole("button", { name: "Finish and view feedback" }).click();
   await expect(page).toHaveURL(/\/feedback$/);
-  await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible({
+    timeout: 15000,
+  });
   expect(errors).toEqual([]);
 });
 
@@ -660,7 +707,8 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   await page.route("**/api/capabilities", (route) =>
     route.fulfill({ json: { llm: true, voice: false, google: false } }),
   );
-  await page.reload();
+  await acceptDocumentExit(page, () => page.reload());
+  await expect(page.getByRole("main")).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByText("Voice interviews are unavailable. Try again later."),
   ).toBeVisible();
@@ -670,7 +718,7 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   await expect(page.getByRole("textbox")).toHaveCount(0);
   await expect(page.getByRole("radio")).toHaveCount(0);
   await page.unroute("**/api/capabilities");
-  await page.reload();
+  await acceptDocumentExit(page, () => page.reload());
   await page
     .getByRole("button", { name: "Start interview", exact: true })
     .click();
@@ -818,9 +866,9 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
       ),
     )
     .toBeLessThan(64);
-  await log.evaluate((node) => {
-    node.scrollTop = 0;
-  });
+  await log.hover();
+  await page.mouse.wheel(0, -10000);
+  await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBe(0);
   await expect(
     page.getByRole("button", { name: "Jump to latest", exact: true }),
   ).toBeVisible();
@@ -862,7 +910,7 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   await expect(page).toHaveURL(/\/feedback$/);
   await expect(
     page.getByRole("heading", { name: "Feedback could not be generated" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await page.getByText("Full conversation", { exact: false }).click();
   await expect(page.getByText(second, { exact: true })).toBeVisible();
   await page
@@ -922,7 +970,7 @@ test("voice-only setup, reconnect, feedback retry and keyboard access", async ({
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");
-  await page.goto("/history");
+  await acceptDocumentExit(page, () => page.goto("/history"));
   await expect(page).toHaveURL(/\/auth\/sign-in$/);
   expect(errors).toEqual([]);
 });

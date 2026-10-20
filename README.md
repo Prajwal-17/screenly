@@ -51,13 +51,17 @@ Sources checked October 14, 2026: [Flux STT quickstart](https://developers.deepg
 
 The LLM endpoint and model are configurable; DeepSeek is only the example endpoint. Select a model that supports Chat Completions streaming and JSON output when instructed. No provider key is sent to the browser.
 
+For voice replies, optionally set `LLM_INTERVIEW_MODEL` to a tested fast model on the same endpoint. Feedback continues to use `LLM_MODEL`. `LLM_INTERVIEW_REASONING_EFFORT=low` and `LLM_INTERVIEW_MAX_TOKENS=256` can constrain live replies when supported by your provider; both are omitted unless configured. Automatic model routers can introduce multi-second changes in time to first text, so compare actual first-token latency before choosing a route. The streaming path never waits for the full response before forwarding text or audio.
+
+`DEEPGRAM_EOT_TIMEOUT_MS` defaults to `3000`, reducing the silence backstop for uncertain turn endings from the provider's five-second default. Natural end-of-turn confidence remains unchanged. Increase this value if your thinking pauses are frequently split into separate answers. See [Deepgram's turn-detection configuration](https://developers.deepgram.com/docs/flux/configuration).
+
 ```sh
 bun run dev
 ```
 
 Open [localhost:3000](http://localhost:3000). The Hono backend runs in the local Cloudflare Workers runtime on port 8787, persists D1 data under `apps/backend/.wrangler/state`, and applies committed Drizzle migrations automatically. Bun runs the development and migration commands. Sign in with Google, prepare an interview, and check your microphone and sound before starting.
 
-If the LLM or voice service is not configured, setup and history remain available, but starting an interview is disabled. Allow microphone access in your browser and retry if permission is denied. A transcription connection must succeed before the timer starts. If microphone transcription fails during the interview, retry the microphone; speech playback has its own **Retry speech** action. Use **Hear question** to replay the latest question. Answers are accepted only through microphone audio and transcription; there is no answer text field or text-submission event. Finalized messages remain saved for transcript review, feedback, and export.
+If the LLM or voice service is not configured, setup and history remain available, but starting an interview is disabled. Allow microphone access in your browser and retry if permission is denied. A transcription connection must succeed before the session opens. The interview timer and automatic deadline start only when the browser begins playing the first interviewer audio; waiting for generation, speech synthesis, or suspended playback does not consume the budget. Replays and reconnects keep the original start time. If microphone transcription fails during the interview, retry the microphone; speech playback has its own **Retry speech** action. Use **Hear question** to replay the latest question. Answers are accepted only through microphone audio and transcription; there is no answer text field or text-submission event. Finalized messages remain saved for transcript review, feedback, and export.
 
 Google is the only sign-in method. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:8787/api/auth/callback/google` as the callback URL. Register `http://localhost:3000` as an authorized JavaScript origin. For production, register the HTTPS frontend origin and backend callback URL and update the environment URLs. Without Google credentials the app starts, but sign-in is unavailable. Password authentication is disabled.
 

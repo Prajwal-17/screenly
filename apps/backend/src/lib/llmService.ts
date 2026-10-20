@@ -54,7 +54,13 @@ export class LLMService {
       (Date.now() - (interview.startedAt ?? Date.now())) / 60000;
     const stream = await this.client.chat.completions.create(
       {
-        model: this.env.LLM_MODEL!,
+        model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,
+        ...(this.env.LLM_INTERVIEW_REASONING_EFFORT
+          ? { reasoning_effort: this.env.LLM_INTERVIEW_REASONING_EFFORT }
+          : {}),
+        ...(this.env.LLM_INTERVIEW_MAX_TOKENS
+          ? { max_tokens: this.env.LLM_INTERVIEW_MAX_TOKENS }
+          : {}),
         messages: [
           {
             role: "system",

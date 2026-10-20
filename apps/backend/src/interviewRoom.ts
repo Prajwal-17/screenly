@@ -78,7 +78,8 @@ export class InterviewRoom extends DurableObject<Env> {
           reply: (interview, signal) =>
             new LLMService(config).generateReply(interview, signal),
           feedback: (id) => this.queueFeedback(id),
-          stt: (turn, error) => new STTService(config, turn, error),
+          stt: (turn, error, topics) =>
+            new STTService(config, turn, error, topics),
           tts: (audio) => new TTSService(config, audio),
           background: (task) => this.background(task),
           scheduleDeadline: async (deadline) => {

@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AudioLines, Mic, ArrowDown, CornerDownLeft, X } from "lucide-react";
+import { memo } from "react";
+import { AudioLines, Mic, CornerDownLeft, X } from "lucide-react";
 import type { InterviewMessage } from "@repo/shared";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 
 function MessageBubble({
@@ -102,7 +112,7 @@ export function TranscriptMessage({ message }: { message: InterviewMessage }) {
   );
 }
 
-function TranscriptLine({
+const TranscriptLine = memo(function TranscriptLine({
   message,
   live = false,
 }: {
@@ -112,91 +122,71 @@ function TranscriptLine({
 }) {
   const candidate = message.role === "user";
   return (
-    <div className="min-w-0" data-speaker={message.role}>
-      <div className="mb-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-        {!candidate && (
-          <AudioLines className="size-3.5 text-primary" aria-hidden="true" />
-        )}
-        <span className="font-semibold text-foreground">
-          {candidate ? "You" : "Interviewer"}
-          {live ? (candidate ? " · transcribing" : " · responding") : ""}
-        </span>
-        {message.createdAt && (
-          <time
-            className="tabular-nums"
-            dateTime={new Date(message.createdAt).toISOString()}
+    <Message
+      from={message.role}
+      className={candidate ? "max-w-[90%]" : "max-w-full"}
+      data-speaker={message.role}
+      role="article"
+      aria-label={candidate ? "Your message" : "AI message"}
+    >
+      <MessageContent>
+        {candidate ? (
+          <p className="text-sm leading-[1.75] whitespace-pre-wrap">
+            {message.content}
+          </p>
+        ) : (
+          <MessageResponse
+            mode={live ? "streaming" : "static"}
+            isAnimating={live}
+            controls={false}
+            className="text-sm leading-[1.75]"
           >
-            {new Date(message.createdAt).toLocaleTimeString([], {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </time>
+            {message.content}
+          </MessageResponse>
         )}
-        {message.status === "interrupted" && (
-          <span className="inline-flex items-center gap-1">
-            <CornerDownLeft className="size-3" />
-            Interrupted
-          </span>
-        )}
-        {candidate && <Mic className="ml-auto size-3.5" aria-hidden="true" />}
-      </div>
-      <p className="text-[13px] leading-[1.75] whitespace-pre-wrap text-ink-secondary">
-        {message.content}
-      </p>
-    </div>
+      </MessageContent>
+      {message.status === "interrupted" && (
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <CornerDownLeft className="size-3" aria-hidden="true" />
+          Interrupted
+        </span>
+      )}
+    </Message>
   );
-}
+});
 
 export function LiveTranscript({
   messages,
   streaming,
   partial,
   onClose,
+  fit = false,
 }: {
   messages: InterviewMessage[];
   streaming: string;
   partial: string;
   onClose?: () => void;
+  fit?: boolean;
 }) {
-  const transcript = useRef<HTMLDivElement>(null);
-  const content = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const [atLatest, setAtLatest] = useState(true);
-  useEffect(() => {
-    if (transcript.current && follow.current)
-      transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [messages, streaming, partial]);
-  useEffect(() => {
-    const viewport = transcript.current;
-    const turns = content.current;
-    if (!viewport || !turns) return;
-    const observer = new ResizeObserver(() => {
-      if (follow.current) viewport.scrollTop = viewport.scrollHeight;
-    });
-    observer.observe(viewport);
-    observer.observe(turns);
-    return () => observer.disconnect();
-  }, []);
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col"
+      className={cn("flex min-h-0 flex-1 flex-col", fit && "h-full")}
       role="region"
       aria-label="Conversation"
     >
-      <div className="flex items-start justify-between gap-3 border-b pb-4">
-        <div>
-          <h2 className="text-base">Transcript</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Read back your conversation.
-          </p>
-        </div>
+      <div
+        data-slot="transcript-heading"
+        className={cn(
+          "flex shrink-0 items-center justify-between gap-3",
+          fit ? "pb-3" : "pb-5",
+        )}
+      >
+        <h2 className="text-base font-medium">Transcript</h2>
         <div className="flex items-center gap-1.5">
-          <Badge variant="outline">{messages.length} turns</Badge>
           {onClose && (
             <Button
               variant="ghost"
-              size="icon-sm"
-              className="-mt-1 -mr-2"
+              size="icon"
               aria-label="Close transcript"
               onClick={onClose}
             >
@@ -205,76 +195,55 @@ export function LiveTranscript({
           )}
         </div>
       </div>
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={transcript}
-          className="h-[min(64dvh,620px)] min-h-0 overflow-y-auto overscroll-contain py-5 pr-2 outline-offset-[-4px] focus-visible:outline-2 focus-visible:outline-ring"
-          role="log"
-          aria-label="Saved conversation"
-          aria-live="polite"
-          aria-relevant="additions"
-          tabIndex={0}
-          onScroll={(event) => {
-            const el = event.currentTarget;
-            const latest =
-              el.scrollHeight - el.scrollTop - el.clientHeight < 64;
-            follow.current = latest;
-            setAtLatest(latest);
-          }}
-        >
-          <div
-            ref={content}
-            className="flex min-w-0 flex-col gap-6 pb-12 [&>div]:shrink-0"
-          >
-            {messages.length === 0 && !streaming && (
-              <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-                <AudioLines className="size-6" aria-hidden="true" />
-                <p className="max-w-[28ch] text-sm">
-                  Your conversation will appear here when the interview begins.
-                </p>
-              </div>
-            )}
-            {messages.map((message) => (
-              <TranscriptLine key={message.id} message={message} />
-            ))}
-            {streaming && (
-              <div aria-hidden="true" data-live-message="interviewer">
-                <TranscriptLine
-                  message={{ role: "assistant", content: streaming }}
-                  live
-                />
-              </div>
-            )}
-            {partial && (
-              <div aria-hidden="true" data-live-message="candidate">
-                <TranscriptLine
-                  message={{ role: "user", content: partial }}
-                  live
-                />
-              </div>
-            )}
-          </div>
-        </div>
-        {!atLatest && (
-          <div className="absolute right-0 bottom-4 left-0 flex justify-center px-4">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-card shadow-sm"
-              onClick={() => {
-                follow.current = true;
-                setAtLatest(true);
-                if (transcript.current)
-                  transcript.current.scrollTop =
-                    transcript.current.scrollHeight;
-              }}
-            >
-              <ArrowDown />
-              Jump to latest
-            </Button>
-          </div>
+      <Conversation
+        className={cn(
+          "min-h-0",
+          fit ? "h-full" : "h-[min(66dvh,680px)] flex-none",
         )}
-      </div>
+      >
+        <ConversationContent
+          data-slot="transcript-content"
+          viewportClassName="pt-1 pr-2"
+          className={cn(
+            "min-w-0 gap-5 p-0 [&>div]:shrink-0",
+            fit ? "pb-2" : "pb-12",
+          )}
+        >
+          {messages.length === 0 && !streaming && (
+            <ConversationEmptyState
+              className={cn(
+                "text-muted-foreground",
+                fit ? "px-0 py-4" : "px-0 py-16",
+              )}
+            >
+              <AudioLines className="size-6" aria-hidden="true" />
+              <p className="max-w-[28ch] text-sm">
+                Your conversation will appear here when the interview begins.
+              </p>
+            </ConversationEmptyState>
+          )}
+          {messages.map((message) => (
+            <TranscriptLine key={message.id} message={message} />
+          ))}
+          {streaming && (
+            <div aria-hidden="true" data-live-message="interviewer">
+              <TranscriptLine
+                message={{ role: "assistant", content: streaming }}
+                live
+              />
+            </div>
+          )}
+          {partial && (
+            <div aria-hidden="true" data-live-message="candidate">
+              <TranscriptLine
+                message={{ role: "user", content: partial }}
+                live
+              />
+            </div>
+          )}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
     </section>
   );
 }

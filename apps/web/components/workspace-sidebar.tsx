@@ -288,7 +288,7 @@ export function WorkspaceSidebar({
               />
               {!collapsed && (
                 <>
-                  <span className="flex-1">Find anything…</span>
+                  <span className="flex-1">Search workspace</span>
                   <kbd className="rounded border bg-sidebar px-1.5 py-0.5 font-sans text-[10px] leading-4">
                     Ctrl K
                   </kbd>

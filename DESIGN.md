@@ -96,6 +96,22 @@ typography:
     fontSize: 15px
     fontWeight: 400
     lineHeight: 1.7
+  live-question:
+    fontFamily: var(--font-geist-sans), Arial, sans-serif
+    fontSize: 28px
+    fontWeight: 450
+    lineHeight: 1.45
+    letterSpacing: -0.028em
+  live-state:
+    fontFamily: var(--font-geist-sans), Arial, sans-serif
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 1.6
+  live-transcript:
+    fontFamily: var(--font-geist-sans), Arial, sans-serif
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.8
   metric:
     fontFamily: var(--font-geist-sans), Arial, sans-serif
     fontSize: 34px
@@ -299,11 +315,14 @@ components:
   voice-dock:
     backgroundColor: "{colors.card}"
     textColor: "{colors.foreground}"
-    rounded: "{rounded.xl}"
-    padding: 8px
+    rounded: "{rounded.lg}"
+    padding: 6px
   voice-visual:
     rounded: "{rounded.full}"
     size: clamp(144px, min(50vw, calc(100dvh - 550px)), 264px)
+  porcelain-orb:
+    width: 100%
+    height: 100%
 ---
 
 # Design System: Screenly
@@ -314,7 +333,7 @@ components:
 
 Screenly gives spoken technical interview practice a steady working environment. Warm paper holds the page, a cooler sidebar anchors navigation, and white surfaces carry settings, saved sessions, and evidence. Charcoal type and fern actions make the interface feel calm, clear, and professional across landing, authentication, setup, conversation, and feedback.
 
-The voice session is the signature expression: a centered, responsive fern presence, a concise state label, current attributed captions, and a compact control dock. The saved conversation expands inline within the page when requested. Product data and recovery states remain visible and truthful; the landing conversation is explicitly labeled as an example.
+The voice session is the signature expression: a centered, responsive Porcelain presence above a concise state label, the persistent current question, and a compact control dock. A separate clay caption carries the candidate's live answer. The saved conversation starts open beside the stage on desktop and below it on smaller screens, and can be closed. Product data and recovery states remain visible and truthful; the landing conversation is explicitly labeled as an example.
 
 This documents the implemented application in `apps/web`, including its shared primitives. The frontmatter is the normative extracted token layer; `apps/web/app/globals.css` remains the runtime source. CSS aliases are resolved to their source values in the frontmatter because token primitives cannot reference one another. The sidecar extends these tokens with motion, depth, responsive metadata, and representative component snippets.
 
@@ -324,7 +343,7 @@ This documents the implemented application in `apps/web`, including its shared p
 - Fern actions and selected controls; restrained candidate and status colors.
 - Locally bundled Geist with compact labels and readable conversation text.
 - A fixed desktop workspace shell that becomes a focus-managed mobile drawer.
-- A voice stage that leads the live session, with recoverable real states and optional transcript reading.
+- A voice stage that leads the live session, with recoverable real states and a default-open transcript.
 
 ## Colors
 
@@ -332,8 +351,8 @@ The palette is light-only: warm neutral surfaces carry the interface, and semant
 
 ### Primary
 
-- **Fern action** (`primary`, `primary-hover`, `primary-active`): primary actions, brand icon, actionable links, focus, and the active interviewer presence. `primary-foreground` provides the white action label.
-- **Fern selection wash** (`accent`, `accent-foreground`, `accent-hover`, `accent-active`): checked form choices, selected duration controls, interviewer avatars, and the voice orb's illuminated surface.
+- **Fern action** (`primary`, `primary-hover`, `primary-active`): primary actions, brand icon, actionable links, focus, and interviewer attribution. `primary-foreground` provides the white action label.
+- **Fern selection wash** (`accent`, `accent-foreground`, `accent-hover`, `accent-active`): checked form choices, selected duration controls, interviewer avatars, the current transcript question, and the static authentication orb.
 - **Fern interaction roles** (`link`, `link-hover`, `ring`, `selection`, `selection-foreground`): links, keyboard focus, and selected text retain their own semantic assignments even where values match other fern tokens.
 
 ### Secondary
@@ -375,7 +394,8 @@ Both variable fonts are loaded locally through `next/font/local` from `apps/web/
 - **Title:** section headings use the title role; tertiary headings use (16px), semibold, with (1.4) line height.
 - **Body:** the base body role is used for general reading; most interface descriptions use the body-small role. Page descriptions stay within (65ch), with narrower copy on landing and authentication.
 - **Label:** buttons use the label role. Navigation and choice labels use the navigation role; metadata and status badges use compact caption sizing. Badge and attribution labels increase to medium weight.
-- **Transcript:** saved turns use the transcript role, preserve line breaks, wrap long content, and stay within (75ch).
+- **Transcript:** saved feedback turns use the transcript role, preserve line breaks, wrap long content, and stay within (75ch). Live transcript turns use (14px) chat text at (1.75) line height, with a (16px) medium-weight heading and no visible speaker labels or timestamps.
+- **Live question and state:** the live-question role keeps the full current question prominent in the open stage. Its nominal sizes are (28px), (24px) for long prompts or short windows, and (23px) on narrow screens. It fits down to (14px) when a long question needs the available space. The live-state role stays quieter beneath the orb. These sizes belong to the approved studio composition; they do not change the general page-heading scale.
 - **Metric:** repeated overview values use the metric role and tabular numerals. Timers and timestamps also use tabular numerals to avoid shifting as values change.
 
 **The Local Type Rule.** Extend the locally bundled Geist hierarchy across screens; retain the readable transcript role and visible label hierarchy.
@@ -390,29 +410,32 @@ Regular workspace content is centered within (1160px), with horizontal padding p
 
 Overview metrics become three columns at (640px); role shortcuts become three columns at (1024px). Setup adds a (300px) summary column at (1280px). History keeps the interview and status visible, adds experience at (1024px), and places the date in its own column at (1100px); below that the date remains beneath the interview label. Landing becomes a two-column layout at (1024px). Authentication stays a centered single column capped at (520px), with (24px) horizontal page padding and the brand/home link above it; the open composition has no enclosing card or marketing footer.
 
-The live interview centers its voice stage in the remaining workspace width. A flex column fills the viewport below the 56px app bar and 16px bottom padding (`calc(100dvh - 72px)`); the in-page session toolbar takes its natural height and the stage fills the rest. The dock stays below the flexible centered stage. The visual uses `clamp(144px, min(50vw, calc(100dvh - 550px)), 264px)`, adapting to both width and height. The voice page has no top padding. A bordered session toolbar sits below the top bar, with live status, session details, a prominent elapsed timer (30px on mobile / 36px from 640px) and smaller total duration. Transcript belongs to this toolbar, alongside the timer, with 16px before the stage. On mobile, status/details occupy a first row and the timer/action occupy a second row. Current captions remain within (540px). The dock is in document flow, so short screens can scroll without covering the stage or controls.
+The active interview takes the full dynamic viewport (`100dvh`), without the workspace header or sidebar. A (44px) navigation trigger opens the workspace drawer from the compact (56px) live toolbar; Ctrl+B remains available. Preflight and saved-session recovery retain the ordinary workspace. The conversation and its compact controls occupy one column while the transcript spans the full available height beside them, with no document scrolling or footer reserved beneath the transcript. The live toolbar keeps session details on the left, with the Transcript toggle followed by elapsed/total time at the far right. The timer uses the shared shadcn Badge; controls, menus, separators, alerts, navigation drawer, and finish confirmation use the shared shadcn components.
+
+The stage centers the Porcelain orb, state, persistent question, and candidate caption. The orb yields height before the question or controls: its flexible area is capped at `min(36dvh, 360px)`, reducing for short and narrow layouts. The question stays within (800px), normally (28px) or (24px) for long prompts, and fits down to (14px) only when content and available height require it; its complete text is retained. The candidate caption follows its latest two lines while its full text remains in the transcript. When a long question needs the space on a narrow screen, the duplicate candidate caption yields to the transcript; in very short windows or narrow, short phones with long questions, the decorative orb also yields to reading. Secondary hints disappear when space is limited. Microphone, speed, and finish share one persistent compact dock.
+
+The transcript starts open beside the stage in a column clamped between (280px) and (400px), with a leading hairline and (16px–26px) padding. Below (900px), when the window is taller than (500px), it becomes a bounded lower panel taking roughly (24dvh), between (100px) and (220px), compacting to (88px) for long questions on the smallest phones. Its history scrolls within the panel while the page and controls stay still. In windows no wider than (767px) and no taller than (500px), the conversation opens first and the transcript toggle switches the reading area between conversation and transcript; the dock remains available in both views. Opening or closing the transcript never scrolls the page.
 
 Touch controls keep at least (44px) target height on small screens and coarse pointers, including icon actions and the caption/transcript controls. Compact (32px / 36px) variants are confined to larger fine-pointer layouts. Form choices and accordion triggers retain (44px) minimum height.
 
 ## Elevation & Depth
 
-Working panels are primarily flat: white fill, a quiet border, and tonal separation from the paper canvas. Small shadows distinguish action surfaces and current navigation. Stronger elevation belongs to temporary sheets and the live control dock. The voice orb uses its own soft shading and gradients to communicate presence, rather than turning ordinary panels into glass or decorative gradients.
+Working panels are primarily flat: white fill, a quiet border, and tonal separation from the paper canvas. Small shadows distinguish action surfaces and current navigation. Stronger elevation belongs to temporary sheets; live controls sit directly on the paper canvas. The voice orb uses its own soft shading and gradients to communicate presence, rather than turning ordinary panels into glass or decorative gradients.
 
 ### Shadow Vocabulary
 
 - **Primary action:** `inset 0 1px 0 rgb(255 255 255 / 0.08), 0 1px 2px rgb(20 19 18 / 0.08)` gives the fern button a slight surface edge.
 - **Current navigation:** `0 1px 2px rgb(20 19 18 / 0.03)` separates the selected white row from the sidebar.
-- **Voice dock:** `0 5px 20px rgb(20 19 18 / 0.09), 0 1px 3px rgb(20 19 18 / 0.06)` lifts the control group from the page.
 - **Small temporary surface:** the Tailwind small shadow, used by confirmation dialogs and transcript jump-to-latest, is `0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)`.
-- **Sheet:** the Tailwind extra-large shadow is `0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)`. Navigation/transcript overlays use charcoal at (25%); confirmation overlays use (40%).
+- **Sheet:** the Tailwind extra-large shadow is `0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)`. Navigation overlays use charcoal at (25%); confirmation overlays use (40%).
 
-**The Working Surface Rule.** Use borders and tonal separation for ordinary panels; reserve the dock and sheet shadows for their implemented roles.
+**The Working Surface Rule.** Use borders and tonal separation for ordinary panels; reserve sheet shadows for temporary surfaces.
 
 ## Shapes
 
-Controls and navigation use the medium radius; smaller focus outlines use the small radius. Choice labels and many icon tiles use the large radius. Working panels, the dock, dialogs, and transcript bubbles use the extra-large radius. Checkboxes use the dedicated compact radius, while badges, speaker avatars, and the voice visual are circular or pill-shaped.
+Controls and navigation use the medium radius; smaller focus outlines use the small radius. Choice labels, many icon tiles, and live transcript turn treatments use the large radius. The live microphone, speed, and finish controls use pill corners. Working panels, dialogs, and saved transcript bubbles use the extra-large radius. Checkboxes use the dedicated compact radius, while badges, speaker avatars, and the voice visual are circular or pill-shaped.
 
-The approved direction mentioned (12px) panels; the implemented shared extra-large radius is (16px), and the finished panels use that value. This document records the shipped refinement rather than restating the earlier measurement. Transcript bubbles keep a smaller upper corner toward their speaker, and live turns add a dashed input-colored border. Borders are generally (1px), with selected choices using the primary color rather than thicker geometry.
+The approved direction mentioned (12px) panels; the implemented shared extra-large radius is (16px), and the finished panels use that value. This document records the shipped refinement rather than restating the earlier measurement. Saved transcript bubbles keep a smaller upper corner toward their speaker. Live answers and the current question use large corners and quiet speaker-colored borders. Borders are generally (1px), with selected choices using the primary color rather than thicker geometry.
 
 ## Components
 
@@ -438,7 +461,7 @@ Text fields are white, (44px) high, with medium corners, a stronger input stroke
 
 ### Authentication
 
-The short “Think out loud.” headline pairs charcoal with fern beside a static reuse of the voice orb, (112px) wide below (640px) and (168px) above it. The decorative orb is hidden from assistive technology and has no animation or input response on this route. A short sign-in line leads to the full-width white outline **Continue with Google** action, at least (52px) high with (20px) horizontal padding, followed by one brief account-creation note. Shared focus, loading, disabled, and error treatments remain in use; unavailable sign-in and failed availability checks show explicit messages, with retry for the latter.
+The short “Think out loud.” headline pairs charcoal with fern beside the static fern VoiceVisual decoration, (112px) wide below (640px) and (168px) above it. This is distinct from the live Porcelain orb. The decorative orb is hidden from assistive technology and has no animation or input response on this route. A short sign-in line leads to the full-width white outline **Continue with Google** action, at least (52px) high with (20px) horizontal padding, followed by one brief account-creation note. Shared focus, loading, disabled, and error treatments remain in use; unavailable sign-in and failed availability checks show explicit messages, with retry for the latter.
 
 Production presents Google-only authentication through Better Auth. An opt-in **Local development** email form follows a dashed divider only when the frontend runs in development and the backend reports the local capability. Its labeled shared input and secondary action remain compact; the local form is excluded from production builds.
 
@@ -470,23 +493,31 @@ Sheets are square-edged, full-height surfaces with a labeled (44px) close contro
 
 ### Voice stage, captions, and control dock
 
-The responsive circular voice presence sits above its readable state label and hint. Fern light and ribbon layers animate only during listening, thinking, and speaking; muted, paused, attention, and disconnected modes switch to neutral shading. The microphone meter reflects actual input, while the decorative visual is hidden from assistive technology. The state label is announced through `role="status"`.
+The responsive Porcelain orb sits above a readable state label, the full current question, and a quiet hint. The approved shader gives the orb warm ceramic shading within Screenly's existing visual world; its material colors stay local to this component and do not create a new action palette. The orb is hidden from assistive technology; the separate state label is announced through `role="status"`. Candidate speech brings a clay material treatment, while inactive states desaturate the surface.
 
-The full current question is readable below the orb as LLM text arrives and remains visible after it is saved. Candidate text follows real partial transcription. There is no trailing-word limit, progressive hiding, or caption-controlled audio timing. **You** uses candidate clay and **Interviewer** uses fern.
+The full current question is readable as LLM text arrives and remains visible while the candidate answers. Real partial transcription appears in a separate softly tinted clay caption beneath the question and hint. There is no trailing-word limit, progressive hiding, or caption-controlled audio timing. **You** uses candidate clay and **Interviewer** uses fern.
 
-While audio plays, a gentle fern highlight moves through the visible words. This is a visual speaking indicator, not word alignment. It never delays, splits, flushes, resamples, or schedules the provider's speech. Reduced motion uses a steady highlight. Replay displays the full saved question immediately; interruption stops the highlight and retains readable text. Caption updates use `aria-live="off"`. Deepgram audio is forwarded as each frame arrives, with one synthesis flush for the complete response.
+AI Elements **MessageResponse** renders the current question and interviewer transcript with Streamdown, including incomplete Markdown during generation. Candidate speech stays literal text inside **Message** and **MessageContent**. The thinking status uses AI Elements **Shimmer** in fern, with a static label for reduced motion. Text appears as it arrives without a staged reveal; replay and interruption retain the full question. These presentation components never schedule or delay audio. Caption updates use `aria-live="off"`. Deepgram audio is forwarded as each frame arrives, with one synthesis flush for the complete response.
 
-The white dock groups **Mute / Unmute**, **Interrupt**, and **Finish interview**, with a divider before finish. Mute reflects its pressed state; interrupt is available while speaking or thinking. Finish opens a confirmation before ending the interview and generating feedback. The narrow layout shortens the finish label while retaining its accessible name.
+The compact control group sits directly on the paper canvas beneath the orb, centered within the conversation column. It takes only its content width, without an enclosing white tray or a footer stretching beneath the transcript. It contains three stable controls: **Mute / Unmute**, playback speed, and **Finish interview**. There are no replay or pause/resume buttons; candidates can interrupt naturally by speaking. The microphone uses a charcoal circle while active and a soft destructive surface with a slashed microphone while muted; its pressed state remains accessible. Speed offers (1×), (1.25×), (1.5×), and (2×), with the current choice marked. Changing speed preserves vocal pitch and applies to queued speech without replaying the question. The destructive phone control opens the existing finish confirmation. Shared shadcn buttons, tooltips, menu, and confirmation retain keyboard access. Controls are (52px) high, compacting to (48px) in short windows; speed keeps a fixed readable width, and the dock never changes width with interview state.
 
-The orb uses a (5s) breathing cycle, (16s) surface drift, and (7s) ribbon motion; speaking and thinking shorten surface drift to (7s) and (5s). Input scale responds over (160ms ease-out). The dock enters from (10px) below over (300ms), with `cubic-bezier(0.16, 1, 0.3, 1)`. MotionConfig respects the user's reduced-motion preference; CSS suppresses ongoing visual animation and input scaling, reduces transitions globally.
+Mic changes crossfade the icon over (140ms); presses compress the control briefly, and the speed chevron rotates with the menu. Reduced motion retains color and opacity feedback while removing compression, icon scaling, and chevron rotation. There are no dock entrance delays or idle loops.
+
+Active interview navigation opens a shared shadcn confirmation with **Keep interviewing**, **Leave for now**, and **End and leave**. The copy distinguishes saved conversation from words still being transcribed and explains that an already-started timer keeps running when leaving without ending. Links, workspace search, and sign-out await the same decision; canceling preserves capture, playback, the socket, and the original session budget. Back/Forward use the Navigation API in current browsers to cancel before the live document changes, without adding history entries. Refresh, tab close, and document exits request the browser's standard warning; its text and appearance are browser-owned. Ending first waits for saved completion and feedback generation before continuing to the requested destination, suppresses competing feedback redirects, and keeps failures in the confirmation for retry. Deliberate finish and completed-session redirects bypass the exit guard.
+
+Porcelain deformation and light response follow measured interviewer playback or microphone energy. There is no time-driven idle animation: the surface settles fully in silence, with (55ms) attack and (160ms) release smoothing. The renderer skips unchanged frames and pauses drawing when hidden. Reduced motion removes deformation while retaining readable state; muted, paused, thinking, error, and disconnected states are still. A CSS ceramic sphere remains available when WebGL is unavailable or its graphics context is lost. The static fern authentication decoration retains its separate implementation and has no live motion.
+
+The live renderer samples audio directly without re-rendering the question or transcript for each microphone chunk. A centered square canvas preserves the sphere's apparent size while limiting shading to its own area; ResizeObserver updates its dimensions without per-frame layout reads.
 
 ### Transcript
 
-The full live conversation starts collapsed behind **Transcript** in the in-page session toolbar, below the top bar. Saved-session setup keeps this action beside the saved-session controls. It expands as a normal page column beside the voice stage at (1024px) and wider, separated by a hairline; smaller layouts stack it below the stage and scroll it into view. It does not overlay or trap focus. Closing restores the trigger and the previous scroll position; Escape works while reading the inline transcript. Live read-back uses flat left-aligned text rows with speaker labels, real timestamps, and interruption status, matching the supplied reference. Saved feedback retains its existing message bubbles. The reading viewport follows new content only while the reader is near the latest turn; scrolling back reveals **Jump to latest**. An empty conversation explains when turns will appear. Saved additions are politely announced; partial and streaming message copies are hidden from the accessibility tree. The transcript accepts no typed answer.
+The full live conversation starts open, with **Transcript** in the in-page session toolbar controlling its visibility. Saved-session setup keeps this action beside the saved-session controls. Its reading panel fits the remaining viewport beside or below the conversation, with a single-view switch in short mobile windows. It does not overlay the dock or trap focus. Closing restores the trigger without moving the page; Escape works while reading the inline transcript.
+
+The live transcript uses the AI Elements chat composition: left-aligned assistant responses and right-aligned candidate messages in soft, warm-neutral bubbles. Message text carries the conversation; visible speaker names, avatars, timestamps, turn-count subtitles, and **Current question** labels are omitted. Accessible message names retain attribution for screen readers. AI responses use **MessageResponse** for streaming Markdown; candidate speech stays literal text in **MessageContent**. Interrupted turns retain a quiet status beneath the message. Download and close controls sit beside the title; export is disabled without saved turns. Saved feedback retains its existing message bubbles. AI Elements **Conversation**, **ConversationContent**, **ConversationEmptyState**, and **ConversationScrollButton** manage the bounded reading viewport and follow behavior. Following uses instant scrolling; reading earlier turns reveals **Jump to latest**. An empty conversation explains when turns will appear. Saved additions are politely announced; partial and streaming message copies are hidden from the accessibility tree. The transcript accepts no typed answer.
 
 ### Preflight
 
-Audio setup is an open, compact two-column composition on desktop: a brief session summary on the left and a 360px audio-control column on the right, within a 760px ceiling. Below 1024px it stacks in reading order. Experience, duration, and topics appear once; the draft status/zero timer row and empty transcript action are omitted. Two compact device rows use plain icons and quiet inline actions, followed by one full-width Start/Resume button. The microphone meter appears only while testing, checked status confirms access rather than claiming speech was detected, and service/device failures and recovery actions stay with the audio controls. The start hint explains the timer; a saved session shows its actual remaining original budget. No enclosing or nested cards.
+Audio setup is an open, compact two-column composition on desktop: a brief session summary on the left and a 360px audio-control column on the right, within a 760px ceiling. Below 1024px it stacks in reading order. Experience, duration, and topics appear once; the draft status/zero timer row and empty transcript action are omitted. Two compact device rows use plain icons and quiet inline actions, followed by one full-width Start/Resume button. The microphone meter appears only while testing, checked status confirms access rather than claiming speech was detected, and service/device failures and recovery actions stay with the audio controls. The start hint explains that timing begins when the first interviewer audio actually plays, after setup and generation. The server persists this start once and schedules the full duration from it; replays and reconnects retain that original budget. A saved session shows its actual remaining budget. No enclosing or nested cards.
 
 ### Loading, empty, and error states
 
@@ -498,7 +529,7 @@ Pages use a labeled status and neutral skeletons while real data loads. The over
 
 - **Do** use semantic tokens and the shared interaction states across every screen.
 - **Do** retain the fixed desktop sidebar and focus-managed mobile drawer at the implemented navigation breakpoint.
-- **Do** keep live voice centered, current captions concise, and the full transcript available on request.
+- **Do** keep the live orb centered above the persistent current question, candidate captions separate, and the transcript open by default beside the stage or stacked below it.
 - **Do** preserve visible focus, labeled controls, mobile touch targets, and reduced-motion behavior.
 - **Do** show real loading, empty, saved, failed, and recovery states alongside real product data.
 - **Do** use the local Geist fonts and the extracted readable transcript hierarchy.
@@ -506,7 +537,7 @@ Pages use a labeled status and neutral skeletons while real data loads. The over
 ### Don't:
 
 - **Don't** reintroduce the retired Jade presentation or a dark theme into this light-only visual world.
-- **Don't** add a persistent large question panel or permanently expanded transcript to the live voice stage.
+- **Don't** hide the current question when the candidate speaks or make the live transcript an overlay; keep its close and reopen controls available.
 - **Don't** introduce fabricated production metrics, sessions, or feedback; keep the landing example explicitly labeled.
 - **Don't** use candidate clay or status colors as competing primary action palettes.
 - **Don't** make decorative motion necessary to understand session state or announce every partial spoken word.

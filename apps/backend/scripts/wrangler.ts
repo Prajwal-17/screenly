@@ -28,11 +28,15 @@ const publicKeys = [
   "BETTER_AUTH_URL",
   "DEEPGRAM_WS_URL",
   "DEEPGRAM_STT_MODEL",
+  "DEEPGRAM_EOT_TIMEOUT_MS",
   "DEEPGRAM_TTS_MODEL",
   "DEEPGRAM_TTS_EXPRESSIVITY",
   "DEEPGRAM_TTS_SPEED",
   "LLM_BASE_URL",
   "LLM_MODEL",
+  "LLM_INTERVIEW_MODEL",
+  "LLM_INTERVIEW_REASONING_EFFORT",
+  "LLM_INTERVIEW_MAX_TOKENS",
 ];
 for (const key of publicKeys)
   if (process.env[key]) config.vars[key] = process.env[key];

@@ -17,6 +17,12 @@ const configSchema = z.object({
   DEEPGRAM_API_KEY: optional,
   DEEPGRAM_WS_URL: z.url().default("wss://api.deepgram.com"),
   DEEPGRAM_STT_MODEL: z.string().default("flux-general-en"),
+  DEEPGRAM_EOT_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(500)
+    .max(60000)
+    .default(3000),
   DEEPGRAM_TTS_MODEL: z.string().default("flux-elise-en"),
   DEEPGRAM_TTS_EXPRESSIVITY: z.coerce.number().int().min(-2).max(2).default(0),
   DEEPGRAM_TTS_SPEED: z.coerce
@@ -28,6 +34,15 @@ const configSchema = z.object({
   LLM_API_KEY: optional,
   LLM_BASE_URL: z.url().default("https://api.deepseek.com/v1"),
   LLM_MODEL: optional,
+  LLM_INTERVIEW_MODEL: optional,
+  LLM_INTERVIEW_REASONING_EFFORT: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.enum(["none", "minimal", "low", "medium", "high"]).optional(),
+  ),
+  LLM_INTERVIEW_MAX_TOKENS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().min(64).max(2048).optional(),
+  ),
 });
 export type Config = z.infer<typeof configSchema>;
 export function readConfig(bindings: object): Config {

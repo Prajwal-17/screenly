@@ -5,10 +5,12 @@ type State = {
   turnIndex: number;
   timer: ReturnType<typeof setTimeout> | null;
   audioDuration: number;
+  audioTimers: ReturnType<typeof setTimeout>[];
 };
 const listeners = new Set<Bun.ServerWebSocket<State>>();
 let wordMs = 45;
 let automaticAnswer = true;
+let audioDelayMs = 0;
 function emitTurn(socket: Bun.ServerWebSocket<State>, transcript: string) {
   const turnIndex = socket.data.turnIndex++;
   socket.send(
@@ -38,18 +40,23 @@ const server = Bun.serve<State>({
       const settings = (await request.json()) as {
         wordMs: number;
         automaticAnswer: boolean;
+        audioDelayMs?: number;
       };
       wordMs = settings.wordMs;
       automaticAnswer = settings.automaticAnswer;
+      audioDelayMs = settings.audioDelayMs ?? 0;
       return new Response("ok");
     }
     if (url.pathname === "/partial" && request.method === "POST") {
-      const { transcript } = (await request.json()) as { transcript: string };
+      const { transcript, startOfTurn } = (await request.json()) as {
+        transcript: string;
+        startOfTurn?: boolean;
+      };
       for (const socket of listeners)
         socket.send(
           JSON.stringify({
             type: "TurnInfo",
-            event: "Update",
+            event: startOfTurn ? "StartOfTurn" : "Update",
             turn_index: socket.data.turnIndex,
             transcript,
           }),
@@ -69,6 +76,7 @@ const server = Bun.serve<State>({
         turnIndex: 0,
         timer: null,
         audioDuration: 0,
+        audioTimers: [],
       },
     })
       ? undefined
@@ -97,7 +105,12 @@ const server = Bun.serve<State>({
         const samples = new Int16Array(Math.round(duration * 24));
         for (let i = 0; i < samples.length; i++)
           samples[i] = Math.sin((i / 24000) * 440 * Math.PI * 2) * 1000;
-        socket.send(new Uint8Array(samples.buffer));
+        const audio = new Uint8Array(samples.buffer);
+        if (audioDelayMs > 0)
+          socket.data.audioTimers.push(
+            setTimeout(() => socket.send(audio), audioDelayMs),
+          );
+        else socket.send(audio);
       }
       if (event.type === "Flush") {
         socket.send(JSON.stringify({ type: "Flushed" }));
@@ -110,13 +123,14 @@ const server = Bun.serve<State>({
                 audio_duration_ms: socket.data.audioDuration,
               }),
             ),
-          50,
+          audioDelayMs + 50,
         );
       }
     },
     close(socket) {
       listeners.delete(socket);
       if (socket.data.timer) clearTimeout(socket.data.timer);
+      socket.data.audioTimers.forEach(clearTimeout);
     },
   },
 });

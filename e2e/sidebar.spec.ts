@@ -116,21 +116,23 @@ test("structured sidebar, remembered rail, workspace search, and interview focus
   await expect(
     page.getByRole("button", { name: "Mute", exact: true }),
   ).toBeVisible();
-  await expect(sidebar).toHaveAttribute("data-state", "collapsed");
-  await expect(sidebar).toHaveAttribute("data-focus-mode", "true");
-  await expect
-    .poll(async () => Math.round((await sidebar.boundingBox())?.width ?? 0))
-    .toBe(64);
+  await expect(sidebar).not.toBeVisible();
+  await expect(page.getByRole("banner")).toHaveCount(0);
   await capture("sidebar-interview-focus");
   await page.keyboard.press("Control+b");
-  await expect(sidebar).toHaveAttribute("data-state", "expanded");
+  const liveNavigation = page.getByRole("dialog", {
+    name: "Navigation",
+    exact: true,
+  });
+  await expect(liveNavigation).toBeVisible();
   await page.keyboard.press("Control+b");
-  await expect(sidebar).toHaveAttribute("data-state", "collapsed");
+  await expect(liveNavigation).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Expand sidebar", exact: true })
+    .getByRole("button", { name: "Open navigation", exact: true })
     .click();
-  await expect(sidebar).toHaveAttribute("data-state", "expanded");
-  await sidebar.getByRole("link", { name: "History", exact: true }).click();
+  await liveNavigation
+    .getByRole("link", { name: "History", exact: true })
+    .click();
   await expect(sidebar).toHaveAttribute("data-state", "expanded");
   await expect(sidebar).toHaveAttribute("data-focus-mode", "false");
   await page.request.delete(`${backendURL}/api/interviews/${interviewId}`);
