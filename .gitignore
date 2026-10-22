@@ -39,3 +39,30 @@ yarn-error.log*
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Browser test artifacts
+test-results/
+playwright-report/
+
+# Track CLI-managed project skills; keep other local skills private.
+.agents/skills/*
+!.agents/skills/emil-design-eng/
+!.agents/skills/git-commit/
+!.agents/skills/grill-me/
+!.agents/skills/impeccable/
+
+# Local design metadata
+.impeccable/
+
+# Local Workers state and secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.e2e-workers*/
+.local-e2e-workers*/
+
+# Bundled audio worklet, generated before web dev/build.
+/apps/web/public/audio/playback-processor.js
+/apps/web/public/audio/soundtouch-LICENSE.txt
+/apps/web/public/vad/

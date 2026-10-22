@@ -2,28 +2,44 @@
   "name": "backend",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
+    "dev": "bun scripts/wrangler.ts dev",
+    "start": "NODE_ENV=production bun scripts/wrangler.ts dev",
     "db:generate": "drizzle-kit generate",
-    "check-types": "tsc --noEmit",
+    "db:migrate:local": "bun scripts/wrangler.ts migrate:local",
+    "db:migrate:remote": "bun scripts/wrangler.ts migrate:remote",
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.tools.json",
     "format": "prettier --write .",
-    "lint": "eslint --max-warnings 0"
+    "lint": "eslint --max-warnings 0",
+    "test": "vitest run && bun test test/voice.test.ts test/profile-transport.test.ts test/migration.test.ts",
+    "build": "wrangler deploy --dry-run --outdir .wrangler/build",
+    "deploy": "bun scripts/wrangler.ts deploy",
+    "cf:types": "wrangler types src/worker-configuration.d.ts --strict-vars=false --env-file .dev.vars.example"
   },
   "dependencies": {
     "@deepgram/sdk": "^5.9.0",
+    "@repo/shared": "workspace:*",
     "better-auth": "1.7.2",
-    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
+    "fflate": "^0.8.3",
     "hono": "^4.12.23",
-    "openai": "^7.9.0"
+    "ipaddr.js": "^2.5.0",
+    "linkedom": "^0.18.13",
+    "openai": "^7.9.0",
+    "unpdf": "^1.9.1",
+    "word-extractor": "1.0.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.4",
     "@repo/eslint-config": "workspace:*",
     "@types/bun": "^1.4.0",
     "@types/node": "^22.15.3",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.1",
+    "jsonc-parser": "^3.3.1",
     "prettier": "^3.6.2",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.151.1"
   }
 }

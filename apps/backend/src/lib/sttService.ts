@@ -1,132 +1,203 @@
-import { DeepgramClient } from "@deepgram/sdk";
 import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
-import { V2Socket } from "@deepgram/sdk/listen/v2";
-import { env } from "../config";
+import type { InterviewSettings } from "@repo/shared";
+import type { Config } from "../config";
+import { DeepgramSocket, type SocketFactory } from "./deepgramSocket";
 
+const vocabulary: Record<InterviewSettings["topics"][number], string[]> = {
+  JavaScript: [
+    "JavaScript",
+    "ECMAScript",
+    "Promise",
+    "async await",
+    "event loop",
+  ],
+  React: ["React", "JSX", "useEffect", "useState", "useMemo", "React hooks"],
+  TypeScript: [
+    "TypeScript",
+    "generics",
+    "type inference",
+    "discriminated union",
+  ],
+  APIs: ["API", "REST", "GraphQL", "HTTP", "OAuth"],
+  Databases: ["SQL", "PostgreSQL", "NoSQL", "indexes", "transactions"],
+  "System design": [
+    "load balancer",
+    "caching",
+    "sharding",
+    "replication",
+    "idempotency",
+  ],
+  Testing: [
+    "unit test",
+    "integration test",
+    "end-to-end test",
+    "Jest",
+    "Playwright",
+  ],
+  "Web performance": ["Core Web Vitals", "LCP", "INP", "CLS", "lazy loading"],
+};
 export class STTService {
-  readonly DEEPGRAM_API_KEY = env.DEEPGRAM_API_KEY;
-  sttClient: V2Socket | null = null;
-
-  private deepgramListenReady = false;
-  private deepgramConnecting: Promise<void> | null = null;
-  private audioQueue: Uint8Array[] = [];
-
-  constructor(private readonly onTurnInfo: (event: ListenV2TurnInfo) => void) {}
-
-  async connect(): Promise<void> {
-    // A socket already exists or is being opened. Never create another one.
-    if (this.sttClient) return;
-    if (this.deepgramConnecting) return this.deepgramConnecting;
-
-    const connectionPromise = this.openConnection();
-    this.deepgramConnecting = connectionPromise;
-
-    try {
-      await connectionPromise;
-    } finally {
-      if (this.deepgramConnecting === connectionPromise) {
-        this.deepgramConnecting = null;
-      }
-    }
-  }
-
-  async sendAudio(audio: Uint8Array): Promise<void> {
-    if (this.sttClient && this.deepgramListenReady) {
-      this.sttClient.sendMedia(audio);
-      return;
-    }
-
-    this.audioQueue.push(audio);
-    await this.connect();
-  }
-
-  close() {
-    this.sttClient?.close();
-    this.sttClient = null;
-    this.deepgramListenReady = false;
-    this.audioQueue = [];
-  }
-
-  private async openConnection(): Promise<void> {
-    const client = new DeepgramClient({
-      apiKey: this.DEEPGRAM_API_KEY,
+  private socket: DeepgramSocket | null = null;
+  private opening: Promise<void> | null = null;
+  private closed = false;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private endTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastAudioAt = 0;
+  private pendingBytes = 0;
+  private latestTurn = -1;
+  private activeTurn = false;
+  private endRequested = false;
+  constructor(
+    private env: Config,
+    private onTurn: (event: ListenV2TurnInfo) => void,
+    private onError: (error: Error) => void,
+    private topics: InterviewSettings["topics"] = [],
+    private makeSocket?: SocketFactory,
+  ) {}
+  connect(): Promise<void> {
+    if (this.closed)
+      return Promise.reject(new Error("Transcription is closed."));
+    if (this.opening) return this.opening;
+    if (this.socket) return Promise.resolve();
+    const task = this.open().finally(() => {
+      if (this.opening === task) this.opening = null;
     });
-
-    const connection = await client.listen.v2.connect({
-      model: "flux-general-en",
-      sample_rate: 16000,
+    this.opening = task;
+    return task;
+  }
+  private async open() {
+    const url = new URL("/v2/listen", this.env.DEEPGRAM_WS_URL);
+    url.search = new URLSearchParams({
+      model: this.env.DEEPGRAM_STT_MODEL,
       encoding: "linear16",
-    });
-
-    this.sttClient = connection;
-
-    connection.on("open", () => {
-      console.log("Connected To Deepgram Listen");
-    });
-
-    connection.on("message", (event) => {
-      switch (event.type) {
-        case "Connected": {
-          this.deepgramListenReady = true;
-
-          const queuedAudio = this.audioQueue.splice(0);
-
-          for (const audio of queuedAudio) {
-            connection.sendMedia(audio);
+      sample_rate: "16000",
+      eot_timeout_ms: String(this.env.DEEPGRAM_EOT_TIMEOUT_MS),
+    }).toString();
+    // Give technical names context without changing the audio cadence or
+    // the confidence required for a natural end-of-turn.
+    const keyterms = new Set(this.topics.flatMap((topic) => vocabulary[topic]));
+    for (const term of [...keyterms].slice(0, 32))
+      url.searchParams.append("keyterm", term);
+    // Flux has no KeepAlive control. Retire idle sockets rather than billing
+    // silent PCM, and reopen on demand while the caller buffers speech frames.
+    // Provider turn indices restart at zero on each connection.
+    const turnOffset = this.latestTurn + 1;
+    const socket = new DeepgramSocket(
+      url,
+      this.env.DEEPGRAM_API_KEY ?? "",
+      {
+        json: (message) => {
+          if (this.socket !== socket || this.closed) return;
+          if (message.type === "TurnInfo") {
+            const turn = message as unknown as ListenV2TurnInfo;
+            const turnIndex = turn.turn_index + turnOffset;
+            this.latestTurn = Math.max(this.latestTurn, turnIndex);
+            if (turn.event === "StartOfTurn" || turn.event === "Update")
+              this.activeTurn = true;
+            if (turn.event === "EndOfTurn") {
+              this.activeTurn = false;
+              this.endRequested = false;
+              if (this.endTimer) clearTimeout(this.endTimer);
+              this.endTimer = null;
+            }
+            this.onTurn({ ...turn, turn_index: turnIndex });
+            this.maybeEndTurn();
           }
-
-          break;
-        }
-
-        case "TurnInfo": {
-          this.onTurnInfo(event);
-          break;
-        }
-
-        case "ConfigureFailure": {
-          console.log("fail");
-          break;
-        }
-
-        case "ConfigureSuccess": {
-          console.log("success");
-          break;
-        }
-
-        case "Error": {
-          console.log(event);
-          break;
-        }
-
-        default: {
-          console.log("Unhandled Event", event);
-          break;
-        }
-      }
-    });
-
-    connection.on("error", (error) => {
-      console.error("Deepgram connection error", error);
-    });
-
-    connection.on("close", () => {
-      if (this.sttClient === connection) {
-        this.sttClient = null;
-        this.deepgramListenReady = false;
-      }
-    });
-
+        },
+        error: (error) => {
+          if (this.socket !== socket || this.closed) return;
+          this.socket = null;
+          this.clearTimers();
+          this.onError(error);
+        },
+      },
+      this.makeSocket,
+    );
+    this.socket = socket;
+    await socket.connect();
+    if (this.closed || this.socket !== socket) return;
+    this.armIdle();
+  }
+  async sendAudio(audio: Uint8Array) {
+    if (this.closed || !audio.byteLength) return;
+    // At most three seconds may wait for a handshake. Never grow an unbounded
+    // queue or silently discard the beginning of an answer on a slow network.
+    this.pendingBytes += audio.byteLength;
     try {
-      connection.connect();
-      await connection.waitForOpen();
+      if (this.pendingBytes > 96000)
+        throw new Error(
+          "Transcription is too slow. Retry the microphone to continue.",
+        );
+      this.endRequested = false;
+      if (this.endTimer) clearTimeout(this.endTimer);
+      this.endTimer = null;
+      await this.connect();
+      if (this.closed) return;
+      this.socket?.send(audio);
+      this.lastAudioAt = Date.now();
+      this.armIdle();
     } catch (error) {
-      if (this.sttClient === connection) {
-        this.sttClient = null;
-        this.deepgramListenReady = false;
+      if (!this.closed) {
+        this.close();
+        this.onError(
+          error instanceof Error ? error : new Error("Transcription failed."),
+        );
       }
-
-      connection.close();
-      throw error;
+    } finally {
+      this.pendingBytes -= audio.byteLength;
+      this.maybeEndTurn();
     }
+  }
+  endSpeech() {
+    if (this.closed || !this.socket) return;
+    this.endRequested = true;
+    this.maybeEndTurn();
+  }
+  private maybeEndTurn() {
+    if (
+      !this.endRequested ||
+      !this.activeTurn ||
+      this.pendingBytes ||
+      this.endTimer
+    )
+      return;
+    // ForceEndTurn uses the latest decoded Update. Allow the last small PCM
+    // packet to be decoded if it waited for an on-demand connection.
+    this.endTimer = setTimeout(
+      () => {
+        this.endTimer = null;
+        if (this.endRequested && this.activeTurn && !this.pendingBytes) {
+          this.endRequested = false;
+          this.socket?.send({ type: "ForceEndTurn" });
+        }
+      },
+      Math.max(0, 320 - (Date.now() - this.lastAudioAt)),
+    );
+  }
+  private armIdle() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (this.activeTurn || this.pendingBytes) {
+        this.endSpeech();
+        this.armIdle();
+        return;
+      }
+      const socket = this.socket;
+      this.socket = null;
+      socket?.send({ type: "CloseStream" });
+      socket?.close();
+    }, 5000);
+  }
+  private clearTimers() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    if (this.endTimer) clearTimeout(this.endTimer);
+    this.idleTimer = this.endTimer = null;
+  }
+  close() {
+    this.closed = true;
+    this.clearTimers();
+    this.socket?.close();
+    this.socket = null;
   }
 }

@@ -1,3 +1,11 @@
+import type {
+  Feedback,
+  FeedbackStatus,
+  InterviewSettings,
+  InterviewStatus,
+  ProfileDetails,
+  OnboardingState,
+} from "@repo/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   index,
@@ -107,9 +115,77 @@ export const interviewSession = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    settings: text("settings", { mode: "json" })
+      .$type<InterviewSettings>()
+      .notNull()
+      .default({
+        role: "Full-stack",
+        level: "Mid-level",
+        topics: ["JavaScript"],
+        duration: 20,
+      }),
+    status: text("status").$type<InterviewStatus>().notNull().default("draft"),
+    startedAt: integer("started_at"),
+    endedAt: integer("ended_at"),
+    pausedAt: integer("paused_at"),
+    pausedMs: integer("paused_ms").notNull().default(0),
+    feedbackStatus: text("feedback_status")
+      .$type<FeedbackStatus>()
+      .notNull()
+      .default("pending"),
+    feedback: text("feedback", { mode: "json" }).$type<Feedback>(),
+    feedbackModel: text("feedback_model"),
   },
   (table) => [index("interview_session_user_id_idx").on(table.userId)],
 );
+
+export const interviewMessage = sqliteTable(
+  "interview_message",
+  {
+    id: text("id").primaryKey(),
+    interviewId: text("interview_id")
+      .notNull()
+      .references(() => interviewSession.id, { onDelete: "cascade" }),
+    role: text("role").$type<"user" | "assistant">().notNull(),
+    content: text("content").notNull(),
+    status: text("status")
+      .$type<"complete" | "interrupted">()
+      .notNull()
+      .default("complete"),
+    sourceKey: text("source_key").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("message_source_unique").on(table.interviewId, table.sourceKey),
+    index("message_interview_idx").on(table.interviewId),
+  ],
+);
+
+export const userProfile = sqliteTable("user_profile", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  details: text("details", { mode: "json" }).$type<ProfileDetails>().notNull(),
+  onboarding: text("onboarding", { mode: "json" })
+    .$type<OnboardingState>()
+    .notNull()
+    .default({ step: 0, pendingImport: null }),
+  status: text("status")
+    .$type<"draft" | "complete" | "skipped">()
+    .notNull()
+    .default("draft"),
+  completedAt: integer("completed_at"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const profileImportLimit = sqliteTable("profile_import_limit", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  windowStart: integer("window_start").notNull(),
+  count: integer("count").notNull(),
+  activeUntil: integer("active_until").notNull(),
+});
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
