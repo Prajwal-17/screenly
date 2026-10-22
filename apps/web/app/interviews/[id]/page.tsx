@@ -6,10 +6,11 @@ import { Square, Phone, RefreshCw, FileText } from "lucide-react";
 import { Workspace } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
 import { LiveInterview } from "@/components/live-interview";
-import { Loading, ErrorState, InlineAlert } from "@/components/common";
+import { Loading, ErrorState } from "@/components/common";
 import { FinishInterviewDialog } from "@/components/finish-interview-dialog";
 import { useInterviewExitGuard } from "@/components/interview-exit-guard";
 import { LiveTranscript } from "@/components/transcript";
+import { InterviewNotice } from "@/components/interview-notice";
 import { Preflight } from "@/components/preflight";
 import { Session } from "@/lib/interview-session";
 import { useInterviewView } from "@/store/interviewStore";
@@ -140,12 +141,11 @@ export default function InterviewPage() {
   const notices = (
     <>
       {(state.error || finish.error) && (
-        <InlineAlert className={started ? "mb-5" : undefined}>
-          <p>{state.error || finish.error?.message}</p>
-          <div className="mt-2">
-            {state.connected ? (
+        <InterviewNotice
+          action={
+            state.connected ? (
               <Button
-                variant="link"
+                variant="outline"
                 size="sm"
                 onClick={() =>
                   finish.error
@@ -155,6 +155,7 @@ export default function InterviewPage() {
                       : void controller.current?.start()
                 }
               >
+                <RefreshCw aria-hidden="true" />
                 {finish.error
                   ? "Retry finish"
                   : state.errorScope === "speech"
@@ -165,40 +166,51 @@ export default function InterviewPage() {
               </Button>
             ) : (
               <Button
-                variant="link"
+                variant="outline"
                 size="sm"
                 onClick={() => controller.current?.connect()}
               >
-                <RefreshCw />
+                <RefreshCw aria-hidden="true" />
                 Reconnect
               </Button>
-            )}
-          </div>
-        </InlineAlert>
+            )
+          }
+        >
+          {state.error || finish.error?.message}
+        </InterviewNotice>
       )}
       {capabilities.error && (
-        <InlineAlert className={started ? "mb-5" : undefined}>
-          Could not check service availability.{" "}
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => void capabilities.refetch()}
-          >
-            Try again
-          </Button>
-        </InlineAlert>
+        <InterviewNotice
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void capabilities.refetch()}
+            >
+              <RefreshCw aria-hidden="true" />
+              Try again
+            </Button>
+          }
+        >
+          Could not check service availability.
+        </InterviewNotice>
       )}
       {state.status === "disconnected" && !state.error && (
-        <InlineAlert variant="warning">
-          Your conversation is saved.{" "}
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => controller.current?.connect()}
-          >
-            Reconnect to resume
-          </Button>
-        </InlineAlert>
+        <InterviewNotice
+          warning
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => controller.current?.connect()}
+            >
+              <RefreshCw aria-hidden="true" />
+              Reconnect to resume
+            </Button>
+          }
+        >
+          Your conversation is saved.
+        </InterviewNotice>
       )}
     </>
   );
