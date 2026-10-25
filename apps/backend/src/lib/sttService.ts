@@ -1,7 +1,17 @@
 import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
 import type { InterviewSettings } from "@repo/shared";
 import type { Config } from "../config";
-import { DeepgramSocket, type SocketFactory } from "./deepgramSocket";
+import {
+  DEEPGRAM_CONNECT_TIMEOUT_MS,
+  DeepgramConnectionError,
+  DeepgramSocket,
+  type SocketFactory,
+} from "./deepgramSocket";
+
+// The upgrade and Connected acknowledgement each have a bounded deadline.
+// Retain speech for that whole interval (768 KB), not just its first 3 seconds.
+const MAX_PENDING_BYTES =
+  16000 * 2 * ((2 * DEEPGRAM_CONNECT_TIMEOUT_MS) / 1000);
 
 const vocabulary: Record<InterviewSettings["topics"][number], string[]> = {
   JavaScript: [
@@ -46,6 +56,7 @@ export class STTService {
   private pendingBytes = 0;
   private latestTurn = -1;
   private activeTurn = false;
+  private unfinalizedAudio = false;
   private endRequested = false;
   constructor(
     private env: Config,
@@ -97,6 +108,7 @@ export class STTService {
               this.activeTurn = true;
             if (turn.event === "EndOfTurn") {
               this.activeTurn = false;
+              this.unfinalizedAudio = false;
               this.endRequested = false;
               if (this.endTimer) clearTimeout(this.endTimer);
               this.endTimer = null;
@@ -109,31 +121,44 @@ export class STTService {
           if (this.socket !== socket || this.closed) return;
           this.socket = null;
           this.clearTimers();
+          // A quiet prewarmed socket can be reopened on the next microphone
+          // packet. Never suppress failures that could have lost an answer.
+          if (
+            !this.unfinalizedAudio &&
+            !this.pendingBytes &&
+            error instanceof DeepgramConnectionError &&
+            error.retryable
+          )
+            return;
           this.onError(error);
         },
       },
       this.makeSocket,
     );
     this.socket = socket;
-    await socket.connect();
+    try {
+      await socket.connect();
+    } catch (error) {
+      if (this.socket === socket) this.socket = null;
+      socket.close();
+      throw error;
+    }
     if (this.closed || this.socket !== socket) return;
     this.armIdle();
   }
   async sendAudio(audio: Uint8Array) {
     if (this.closed || !audio.byteLength) return;
-    // At most three seconds may wait for a handshake. Never grow an unbounded
-    // queue or silently discard the beginning of an answer on a slow network.
+    // Keep the queue bounded while allowing the connection its full deadline.
     this.pendingBytes += audio.byteLength;
     try {
-      if (this.pendingBytes > 96000)
-        throw new Error(
-          "Transcription is too slow. Retry the microphone to continue.",
-        );
+      if (this.pendingBytes > MAX_PENDING_BYTES)
+        throw new DeepgramConnectionError("AUDIO_BACKLOG");
       this.endRequested = false;
       if (this.endTimer) clearTimeout(this.endTimer);
       this.endTimer = null;
       await this.connect();
       if (this.closed) return;
+      this.unfinalizedAudio = true;
       this.socket?.send(audio);
       this.lastAudioAt = Date.now();
       this.armIdle();
@@ -186,6 +211,7 @@ export class STTService {
       }
       const socket = this.socket;
       this.socket = null;
+      this.unfinalizedAudio = false;
       socket?.send({ type: "CloseStream" });
       socket?.close();
     }, 5000);

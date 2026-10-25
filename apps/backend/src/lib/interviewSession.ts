@@ -130,7 +130,10 @@ export class InterviewSession {
           try {
             await this.stt?.connect();
           } catch (error) {
-            this.voiceError(error);
+            // Warming is optional. A transient failure here must not disable
+            // the microphone; the next audio packet makes a fresh attempt.
+            if (!(error instanceof DeepgramConnectionError && error.retryable))
+              this.voiceError(error);
           }
         }
       }
@@ -771,6 +774,16 @@ export class InterviewSession {
     }
   }
   private voiceError(error?: unknown) {
+    console.warn(
+      JSON.stringify({
+        event: "transcription_failed",
+        code:
+          error instanceof DeepgramConnectionError &&
+          /^[A-Z0-9_-]{1,48}$/.test(error.code)
+            ? error.code
+            : "UNKNOWN",
+      }),
+    );
     this.voice = false;
     this.stt?.close();
     this.stt = null;
@@ -781,7 +794,7 @@ export class InterviewSession {
         message:
           error instanceof DeepgramConnectionError
             ? error.message
-            : "Microphone transcription is unavailable. Check the Deepgram key and retry microphone.",
+            : "Microphone transcription stopped. Retry the microphone to reconnect.",
       });
   }
   finish(generateFeedback = true): Promise<void> {
