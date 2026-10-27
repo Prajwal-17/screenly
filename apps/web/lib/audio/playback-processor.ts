@@ -1,4 +1,4 @@
-import { SpeechTempo } from "./speech-tempo";
+import { SpeechPlayback } from "./speech-playback";
 
 // AudioWorklet globals are separate from the main-thread DOM type definitions.
 declare const sampleRate: number;
@@ -31,7 +31,7 @@ export type PlaybackEvent =
     };
 
 class PlaybackProcessor extends AudioWorkletProcessor {
-  private stream = new SpeechTempo(sampleRate);
+  private stream = new SpeechPlayback(sampleRate);
   private generation = 0;
   private started = false;
   private ended = false;
@@ -43,7 +43,7 @@ class PlaybackProcessor extends AudioWorkletProcessor {
       if (data.type === "reset") {
         if (data.generation < this.generation) return;
         this.generation = data.generation;
-        this.stream = new SpeechTempo(sampleRate);
+        this.stream = new SpeechPlayback(sampleRate);
         this.stream.setRate(data.rate);
         this.started = false;
         this.ended = false;

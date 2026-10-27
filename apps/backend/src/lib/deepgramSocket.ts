@@ -2,10 +2,11 @@ export type SocketFactory = (
   url: URL,
   key: string,
 ) => WebSocket | Promise<WebSocket>;
+export const DEEPGRAM_CONNECT_TIMEOUT_MS = 12000;
 export async function openProviderSocket(
   url: URL,
   key: string,
-  timeoutMs = 12000,
+  timeoutMs = DEEPGRAM_CONNECT_TIMEOUT_MS,
 ): Promise<WebSocket> {
   const target = new URL(url);
   target.protocol = target.protocol === "wss:" ? "https:" : "http:";
@@ -38,7 +39,7 @@ type Handlers = {
   error: (error: Error) => void;
 };
 export class DeepgramConnectionError extends Error {
-  constructor(code = "CONNECTION_FAILED") {
+  constructor(readonly code = "CONNECTION_FAILED") {
     const message =
       code === "401" || code === "INVALID_AUTH"
         ? "Deepgram rejected the API key (401 INVALID_AUTH). Update DEEPGRAM_API_KEY on the backend and restart it."
@@ -54,9 +55,23 @@ export class DeepgramConnectionError extends Error {
                   ? "Deepgram connection timed out. Check network access and retry."
                   : code === "SPEECH_TIMEOUT"
                     ? "Speech stopped arriving from Deepgram. Retry speech."
-                    : "Deepgram connection failed. Check the backend API key, model, and network access, then retry.";
+                    : code === "AUDIO_BACKLOG"
+                      ? "The transcription connection is too slow to keep up with your microphone. Retry the microphone to reconnect."
+                      : "The connection to Deepgram was interrupted. Retry to reconnect.";
     super(message);
     this.name = "DeepgramConnectionError";
+  }
+  get retryable() {
+    return [
+      "CONNECTION_FAILED",
+      "TIMEOUT",
+      "429",
+      "NET-0000",
+      "NET-0001",
+      "NET-0002",
+      "NET-0003",
+      "NET-0004",
+    ].includes(this.code);
   }
 }
 export class DeepgramSocket {
@@ -96,7 +111,7 @@ export class DeepgramSocket {
       this.rejectReady = reject;
       this.timer = setTimeout(
         () => this.fail(new DeepgramConnectionError("TIMEOUT")),
-        12000,
+        DEEPGRAM_CONNECT_TIMEOUT_MS,
       );
       socket.addEventListener("message", (event: MessageEvent) => {
         if (this.closed) return;

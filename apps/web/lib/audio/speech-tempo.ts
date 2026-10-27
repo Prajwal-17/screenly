@@ -64,6 +64,16 @@ export class SpeechTempo {
     return Math.min(this.consumed, this.received) / this.sampleRate;
   }
 
+  get bufferedSeconds() {
+    return Math.max(0, this.received - this.consumed) / this.sampleRate;
+  }
+
+  get lookaheadSeconds() {
+    return (
+      (this.stretch.sampleReq + this.stretch.overlapLength) / this.sampleRate
+    );
+  }
+
   render(destination: Float32Array) {
     destination.fill(0);
     let written = 0;
@@ -76,9 +86,14 @@ export class SpeechTempo {
             this.input.frameCount,
         );
         const available = Math.min(needed, this.queued.frameCount);
-        this.queued.extract(this.window, 0, available);
-        this.queued.receive(available);
-        this.input.putSamples(this.window, 0, available);
+        // SoundTouch treats a zero frame count as "copy the whole buffer".
+        // During network starvation that would inject the stale scratch window
+        // as speech, spend the source budget, and displace subsequent words.
+        if (available > 0) {
+          this.queued.extract(this.window, 0, available);
+          this.queued.receive(available);
+          this.input.putSamples(this.window, 0, available);
+        }
         if (this.ended && available < needed) {
           // Flush lookahead with silence, then crop it to the real speech budget.
           this.window.fill(0, 0, (needed - available) * 2);
