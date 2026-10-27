@@ -7,6 +7,7 @@ import {
   ChartNoAxesCombined,
   Bookmark,
   Settings2,
+  CircleHelp,
 } from "lucide-react";
 
 export const workspaceNavigation = [
@@ -27,7 +28,7 @@ export const workspaceNavigation = [
       },
       {
         href: "/history",
-        label: "History",
+        label: "Interviews",
         icon: History,
         description: "Revisit sessions and feedback",
       },
@@ -74,6 +75,12 @@ export const workspaceNavigation = [
 ];
 
 export const workspaceUtilities = [
+  {
+    href: "/help",
+    label: "Help",
+    icon: CircleHelp,
+    description: "Interview controls and troubleshooting",
+  },
   {
     href: "/settings",
     label: "Settings",

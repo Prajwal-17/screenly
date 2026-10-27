@@ -106,10 +106,10 @@ export function PorcelainOrb({
       // Material colors come from the same palette as the surrounding UI.
       const tokens = getComputedStyle(wrapper);
       for (const [name, token, fallbackColor] of [
-        ["uPaper", "--background", "f4f3ee"],
-        ["uFern", "--primary", "1f6b45"],
-        ["uMint", "--accent-active", "a8dcc0"],
-        ["uClay", "--candidate", "b8451a"],
+        ["uPaper", "--orb-paper", "ffffff"],
+        ["uFern", "--orb-body", "656e78"],
+        ["uMint", "--orb-highlight", "c9cfd5"],
+        ["uClay", "--orb-reflection", "7b838c"],
       ] as const) {
         const value = tokens.getPropertyValue(token).trim().replace("#", "");
         const hex = /^[a-f\d]{6}$/i.test(value) ? value : fallbackColor;

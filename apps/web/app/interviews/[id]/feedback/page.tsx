@@ -7,7 +7,6 @@ import {
   ArrowRight,
   Check,
   Download,
-  Lightbulb,
   Loader2,
   Plus,
   Trash2,
@@ -16,7 +15,6 @@ import {
 import { TranscriptMessage } from "@/components/transcript";
 import { Workspace } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Accordion,
@@ -178,120 +176,67 @@ export default function Report() {
                 )}
               </section>
             ) : (
-              <div className="space-y-10">
+              <div className="space-y-7">
                 <section
-                  className="grid gap-6 border-y py-7 md:grid-cols-[minmax(0,1fr)_160px]"
+                  className="grid gap-6 border-y py-7 sm:grid-cols-[minmax(0,1fr)_120px]"
                   aria-labelledby="summary-title"
                 >
                   <div>
-                    <Badge variant="secondary">
-                      <Check />
-                      Interview complete
-                    </Badge>
-                    <h2 id="summary-title" className="mt-4 mb-2 text-xl">
-                      Summary
+                    <h2 id="summary-title" className="sr-only">
+                      Feedback summary
                     </h2>
-                    <p className="max-w-[65ch] text-base leading-[1.8] text-ink-secondary">
+                    <p className="max-w-[65ch] text-base leading-relaxed">
                       {feedback.summary}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4 border-t pt-5 md:flex-col md:justify-center md:gap-2 md:border-t-0 md:border-l md:pt-0 md:pl-6">
-                    <strong className="text-4xl leading-none font-medium tracking-[-0.04em] tabular-nums">
+                  <div className="flex items-baseline gap-2 sm:block sm:text-right">
+                    <strong className="text-4xl leading-none font-medium tracking-[-0.035em] tabular-nums">
                       {feedback.overallScore ?? "—"}
                     </strong>
-                    <span className="text-xs text-muted-foreground">
+                    {feedback.overallScore !== null && (
+                      <span className="text-sm text-muted-foreground">
+                        {" "}
+                        / 10
+                      </span>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {feedback.overallScore === null
                         ? "More evidence needed"
-                        : "Overall · out of 10"}
-                    </span>
+                        : "Overall score"}
+                    </p>
                   </div>
                 </section>
-                <section
-                  className="rounded-xl bg-muted p-6 sm:p-8"
-                  aria-labelledby="next-steps-title"
-                >
-                  <h2 id="next-steps-title">Next steps</h2>
-                  <ol className="mt-3 divide-y">
-                    {feedback.nextSteps.map((step, i) => (
-                      <li key={i} className="flex items-start gap-3 py-4">
-                        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-card text-xs font-medium text-ink-secondary">
-                          {i + 1}
-                        </span>
-                        <p className="text-base leading-relaxed text-ink-secondary">
+                <div className="grid gap-8 border-b pb-7 lg:grid-cols-2 lg:gap-12">
+                  <section aria-labelledby="next-steps-title">
+                    <h2 id="next-steps-title" className="text-base">
+                      Next practice
+                    </h2>
+                    <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground">
+                      {feedback.nextSteps.map((step, i) => (
+                        <li key={i} className="pl-1">
                           {step}
-                        </p>
-                      </li>
-                    ))}
-                  </ol>
-                  <Button asChild className="mt-4">
-                    <Link
-                      href={`/interviews/new?role=${encodeURIComponent(interview.role)}`}
-                    >
-                      <Plus />
-                      Practice again
-                    </Link>
-                  </Button>
-                </section>
-                <div className="grid items-start gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:gap-14">
-                  <div className="divide-y">
-                    {[
-                      {
-                        title: "What you did well",
-                        items: feedback.strengths,
-                        icon: Check,
-                        color: "text-success",
-                        empty: "Not enough evidence in this session.",
-                      },
-                      {
-                        title: "Improve next",
-                        items: feedback.improvements,
-                        icon: Lightbulb,
-                        color: "text-warning",
-                        empty: "No specific improvements identified.",
-                      },
-                    ].map(({ title, items, icon: Icon, color, empty }) => (
-                      <section key={title} className="pb-6 not-first:pt-6">
-                        <h2 className="mb-4 text-base">{title}</h2>
-                        {items.length ? (
-                          <ul className="space-y-4">
-                            {items.map((item, index) => (
-                              <li
-                                key={index}
-                                className="flex items-start gap-3"
-                              >
-                                <Icon
-                                  className={`mt-0.5 size-4 shrink-0 ${color}`}
-                                  aria-hidden="true"
-                                />
-                                <p className="text-sm leading-relaxed text-ink-secondary">
-                                  {item}
-                                </p>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            {empty}
-                          </p>
-                        )}
-                      </section>
-                    ))}
-                  </div>
-                  <section
-                    className="min-w-0"
-                    aria-labelledby="breakdown-title"
-                  >
-                    <div className="border-b pb-4">
-                      <h2 id="breakdown-title" className="text-base">
-                        Score breakdown
-                      </h2>
-                    </div>
-                    <div className="space-y-7 pt-5">
+                        </li>
+                      ))}
+                    </ol>
+                    <Button asChild size="sm" className="mt-6">
+                      <Link
+                        href={`/interviews/new?role=${encodeURIComponent(interview.role)}`}
+                      >
+                        <Plus />
+                        Practice again
+                      </Link>
+                    </Button>
+                  </section>
+                  <section aria-labelledby="breakdown-title">
+                    <h2 id="breakdown-title" className="text-base">
+                      Score breakdown
+                    </h2>
+                    <div className="mt-4 space-y-4">
                       {feedback.dimensions.map((d) => (
                         <div key={d.name}>
                           <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                            <span className="font-medium">{d.name}</span>
-                            <span className="text-muted-foreground tabular-nums">
+                            <span>{d.name}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">
                               {d.score === null
                                 ? "Insufficient evidence"
                                 : `${d.score}/10`}
@@ -299,19 +244,57 @@ export default function Report() {
                           </div>
                           {d.score !== null && (
                             <Progress
-                              className="h-1.5 [&_[data-slot=progress-indicator]]:bg-ink-secondary"
+                              className="h-1 [&_[data-slot=progress-indicator]]:bg-muted-foreground"
                               value={d.score * 10}
                               aria-label={`${d.name} score`}
                             />
                           )}
-                          <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-                            {d.explanation}
-                          </p>
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-muted-foreground">
+                              Score explanation
+                            </summary>
+                            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                              {d.explanation}
+                            </p>
+                          </details>
                         </div>
                       ))}
                     </div>
                   </section>
                 </div>
+                <Accordion type="multiple" className="border-b">
+                  {[
+                    {
+                      title: "Strengths",
+                      items: feedback.strengths,
+                      empty: "Not enough evidence in this session.",
+                    },
+                    {
+                      title: "Improvements",
+                      items: feedback.improvements,
+                      empty: "No specific improvements identified.",
+                    },
+                  ].map(({ title, items, empty }) => (
+                    <AccordionItem key={title} value={title}>
+                      <AccordionTrigger className="py-4 text-sm">
+                        {title}
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        {items.length ? (
+                          <ul className="list-disc space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground">
+                            {items.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            {empty}
+                          </p>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
                 {feedback.answers.length > 0 && (
                   <section aria-labelledby="answer-review-title">
                     <h2 id="answer-review-title" className="mb-4">

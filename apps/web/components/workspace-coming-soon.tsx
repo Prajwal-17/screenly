@@ -13,31 +13,31 @@ import { Button } from "@/components/ui/button";
 const comingSoonSections = {
   library: {
     icon: BookOpen,
-    headline: "Prompts worth practising",
+    headline: "Question library",
     detail:
       "Technical questions by role and topic, ready to start a session from.",
-    action: { href: "/interviews/new", label: "Start a session" },
+    action: { href: "/interviews/new", label: "New interview" },
   },
   plans: {
     icon: Layers3,
-    headline: "A path for your next role",
+    headline: "Practice plans",
     detail:
       "Tracks that sequence topics and tune difficulty to the role you are practising for.",
-    action: { href: "/interviews/new", label: "Start a session" },
+    action: { href: "/interviews/new", label: "New interview" },
   },
   progress: {
     icon: ChartNoAxesCombined,
-    headline: "See how you are improving",
+    headline: "Progress",
     detail:
       "Real trends from your sessions: time spent, recurring gaps, and how your answers change over the weeks.",
-    action: { href: "/history", label: "Browse history" },
+    action: { href: "/history", label: "View interviews" },
   },
   saved: {
     icon: Bookmark,
-    headline: "Keep your best answers close",
+    headline: "Saved answers",
     detail:
       "Save the responses that landed well, organise them by topic, and turn any of them into the next session.",
-    action: { href: "/history", label: "Browse history" },
+    action: { href: "/history", label: "View interviews" },
   },
 } as const satisfies Record<
   string,
@@ -54,18 +54,15 @@ export function ComingSoonCard({
 }: {
   section: keyof typeof comingSoonSections;
 }) {
-  const { icon: Icon, headline, detail, action } = comingSoonSections[section];
+  const { icon: Icon, headline, action } = comingSoonSections[section];
   return (
     <div className="flex min-h-[min(480px,65dvh)] items-center justify-center">
       <div className="w-full max-w-md px-6 py-10 text-center">
         <span className="mx-auto mb-4 grid size-11 place-items-center text-muted-foreground">
           <Icon className="size-5" strokeWidth={1.6} aria-hidden="true" />
         </span>
-        <h2 className="mt-2 text-xl font-medium">{headline}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {detail}
-        </p>
-        <p className="mt-3 text-sm text-muted-foreground">Coming soon</p>
+        <h2 className="sr-only">{headline}</h2>
+        <p className="mt-3 text-lg font-medium">Coming soon</p>
         <Button asChild size="sm" className="mt-5">
           <Link href={action.href}>
             {action.label}

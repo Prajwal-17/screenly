@@ -47,6 +47,7 @@ export function InterviewAudioMenu({
 }) {
   const state = useInterviewView();
   const [open, setOpen] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
   const [panel, setPanel] = useState<
     "main" | "speed" | "microphone" | "speaker"
   >("main");
@@ -111,11 +112,12 @@ export function InterviewAudioMenu({
       })),
   ];
   return (
-    <Tooltip>
+    <Tooltip open={tooltipOpen && !open} onOpenChange={setTooltipOpen}>
       <DropdownMenu
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
+          setTooltipOpen(false);
           if (!next) {
             setPanel("main");
             setError("");

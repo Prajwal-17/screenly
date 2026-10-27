@@ -59,27 +59,27 @@ const steps = [
 ];
 const copy = [
   {
-    title: "Let’s start with your story.",
+    title: "Import profile",
     description: "Import your background, or build your profile step by step.",
   },
   {
-    title: "Tell us about yourself.",
-    description: "A little context to make your practice more relevant.",
+    title: "About you",
+    description: "",
   },
   {
-    title: "Connect the dots.",
-    description: "Add the profiles and places that represent your work.",
+    title: "Links",
+    description: "",
   },
   {
-    title: "Show what you’ve built.",
+    title: "Projects",
     description: "Personal, open-source, and professional projects all count.",
   },
   {
-    title: "Find your practice focus.",
-    description: "Choose your direction. Everything here can change later.",
+    title: "Practice focus",
+    description: "",
   },
   {
-    title: "Your profile, ready for practice.",
+    title: "Review profile",
     description:
       "Review your details before continuing. You can edit them anytime.",
   },
@@ -155,7 +155,13 @@ export default function Onboarding() {
       ...prior,
       details: { ...prior.details, [key]: value },
     }));
-    setErrors((prior) => ({ ...prior, [key]: "" }));
+    setErrors((prior) =>
+      Object.fromEntries(
+        Object.entries(prior).filter(
+          ([path]) => path !== key && !path.startsWith(`${key}.`),
+        ),
+      ),
+    );
   }
   function validate(all = false) {
     if (!draft) return false;
@@ -175,7 +181,7 @@ export default function Onboarding() {
     if (!issues.length) return true;
     setErrors(
       Object.fromEntries(
-        issues.map((issue) => [String(issue.path[0]), issue.message]),
+        issues.map((issue) => [issue.path.join("."), issue.message]),
       ),
     );
     const field = String(issues[0]?.path[0]);
@@ -195,7 +201,17 @@ export default function Onboarding() {
       }));
     }
     setError(issues[0]?.message ?? "Check your details.");
-    setTimeout(() => document.getElementById(`profile-${field}`)?.focus(), 0);
+    const index = issues[0]?.path[1];
+    const nested = String(issues[0]?.path[2] ?? "name");
+    const focusId =
+      field === "otherLinks" && typeof index === "number"
+        ? `extra-${nested === "label" ? "label" : "url"}-${index}`
+        : field === "projects" && typeof index === "number"
+          ? `project-${nested}`
+          : `profile-${field}`;
+    if (field === "projects" && typeof index === "number")
+      setProjectIndex(index);
+    setTimeout(() => document.getElementById(focusId)?.focus(), 0);
     return false;
   }
   async function next() {
@@ -383,7 +399,7 @@ export default function Onboarding() {
     </div>
   );
   return (
-    <div className="relative flex h-dvh min-h-0 flex-col overflow-hidden">
+    <div className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar">
       <header className="mx-auto flex h-[72px] w-full max-w-[1200px] shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
         <Brand />
         <Button
@@ -399,9 +415,6 @@ export default function Onboarding() {
         <aside className="hidden w-[216px] shrink-0 flex-col py-6 md:flex">
           <div className="mb-7">
             <h2 className="text-base">Your Screenly profile</h2>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Your experience. Your next step.
-            </p>
           </div>
           <nav aria-label="Onboarding steps">
             <ol className="space-y-1">
@@ -412,10 +425,10 @@ export default function Onboarding() {
                     disabled={busy || saving || !!pending}
                     onClick={() => go(index)}
                     aria-current={index === step ? "step" : undefined}
-                    className={`flex min-h-[62px] w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${index === step ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary"}`}
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${index === step ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary"}`}
                   >
                     <span
-                      className={`grid size-8 shrink-0 place-items-center rounded-full ${index === step ? "bg-primary text-primary-foreground" : index < step ? "bg-secondary text-primary" : "border border-border"}`}
+                      className={`grid size-7 shrink-0 place-items-center rounded-md ${index === step ? "bg-primary text-primary-foreground" : index < step ? "bg-secondary text-primary" : "border border-border"}`}
                     >
                       {index < step ? (
                         <Check className="size-4" aria-hidden="true" />
@@ -427,21 +440,13 @@ export default function Onboarding() {
                       <span className="block text-sm font-medium">
                         {item.title}
                       </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {item.hint}
-                      </span>
                     </span>
                   </button>
                 </li>
               ))}
             </ol>
           </nav>
-          <div className="mt-auto pt-8">
-            {saveStatus}
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Pick up where you left off, anytime.
-            </p>
-          </div>
+          <div className="mt-auto pt-8">{saveStatus}</div>
         </aside>
         <section
           aria-labelledby="onboarding-heading"
@@ -452,7 +457,7 @@ export default function Onboarding() {
               <span className="text-xs font-medium text-muted-foreground">
                 {pending
                   ? "Review AI suggestions"
-                  : `${steps[step]?.title} · ${step + 1} of ${steps.length}`}
+                  : `Step ${step + 1} of ${steps.length}`}
               </span>
               <span className="md:hidden">{saveStatus}</span>
             </div>
@@ -467,13 +472,15 @@ export default function Onboarding() {
               tabIndex={-1}
               className="text-[24px] leading-tight tracking-[-0.03em] outline-none sm:text-[28px]"
             >
-              {pending ? "Here’s what we found." : copy[step]?.title}
+              {pending ? "Review suggestions" : copy[step]?.title}
             </h1>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {pending
-                ? "Nothing is applied until you approve. You can edit every detail next."
-                : copy[step]?.description}
-            </p>
+            {(pending || copy[step]?.description) && (
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {pending
+                  ? "Nothing is applied until you approve. You can edit every detail next."
+                  : copy[step]?.description}
+              </p>
+            )}
           </div>
           <div
             ref={content}
@@ -534,9 +541,6 @@ export default function Onboarding() {
                   placeholder:
                     "Your background, experience, and the work you enjoy.",
                 })}
-                <p className="text-xs text-muted-foreground">
-                  Only your name is required. Add as much context as you’d like.
-                </p>
               </div>
             )}
             {step === 2 && (
@@ -560,6 +564,7 @@ export default function Onboarding() {
                         <ProfileField
                           id={`extra-label-${index}`}
                           label="Link label"
+                          error={errors[`otherLinks.${index}.label`]}
                           value={link.label}
                           maxLength={40}
                           onChange={(value) =>
@@ -574,6 +579,7 @@ export default function Onboarding() {
                         <ProfileField
                           id={`extra-url-${index}`}
                           label="URL"
+                          error={errors[`otherLinks.${index}.url`]}
                           value={link.url}
                           maxLength={2048}
                           onChange={(value) =>
@@ -720,7 +726,7 @@ export default function Onboarding() {
                       strokeWidth={1.5}
                       aria-hidden="true"
                     />
-                    <h2 className="text-base">A place for your best work.</h2>
+                    <h2 className="text-base">No projects yet</h2>
                     <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                       Share what you built, your contribution, and the
                       technologies you used.
@@ -834,6 +840,11 @@ export default function Onboarding() {
         </section>
       </main>
       <ProjectEditor
+        validationErrors={Object.fromEntries(
+          Object.entries(errors)
+            .filter(([key]) => key.startsWith(`projects.${projectIndex}.`))
+            .map(([key, message]) => [key.split(".")[2]!, message]),
+        )}
         project={
           projectIndex === null
             ? null

@@ -2,103 +2,65 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "motion/react";
-import { Tooltip } from "radix-ui";
 import {
-  AudioLines,
   Search,
   ChevronDown,
-  Ellipsis,
   ChevronsUpDown,
-  Check,
-  Plus,
   LogOut,
   Settings2,
-  Bell,
   UserRound,
+  CircleHelp,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
-  workspaceNavigation,
-  workspaceUtilities,
-} from "@/lib/workspace-navigation";
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { workspaceNavigation } from "@/lib/workspace-navigation";
+import { Wordmark } from "@/components/wordmark";
 import { useUIStore } from "@/store/uiStore";
-import { cn } from "@/lib/utils";
-
-function Hint({
-  label,
-  enabled,
-  children,
-}: {
-  label: string;
-  enabled: boolean;
-  children: React.ReactNode;
-}) {
-  if (!enabled) return children;
-  return (
-    <Tooltip.Root>
-      <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content
-          side="right"
-          sideOffset={12}
-          className="z-[70] rounded-md bg-foreground px-2.5 py-1.5 text-xs text-background shadow-sm duration-100 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0"
-        >
-          {label}
-          <Tooltip.Arrow className="fill-foreground" />
-        </Tooltip.Content>
-      </Tooltip.Portal>
-    </Tooltip.Root>
-  );
-}
 
 export function WorkspaceSidebar({
   name,
   email,
-  collapsed = false,
-  onNavigate,
   onSignOut,
   signOutError = "",
 }: {
   name: string;
   email: string;
-  collapsed?: boolean;
-  onNavigate?: () => void;
   onSignOut: () => Promise<void>;
   signOutError?: string;
 }) {
   const path = usePathname();
-  const signingOut = useUIStore((state) => state.signingOut);
+  const { isMobile, setOpenMobile } = useSidebar();
+  const signingOut = useUIStore((s) => s.signingOut);
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
-  const initial = name
+  const closeNavigation = () => setOpenMobile(false);
+  const initials = name
     .trim()
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-  const row = cn(
-    "relative flex items-center outline-none transition-colors hover:bg-secondary-hover focus-visible:ring-2 focus-visible:ring-ring",
-    collapsed
-      ? "mx-auto size-11 justify-center rounded-lg"
-      : "min-h-11 w-full gap-3 rounded-md px-3 text-sm font-medium md:min-h-10 [@media(pointer:coarse)]:min-h-11",
-  );
-  const navigate = () => onNavigate?.();
-  const openSearch = () => {
-    onNavigate?.();
-    setSearchOpen(true);
-  };
   const renderLink = ({
     href,
     label,
@@ -107,343 +69,208 @@ export function WorkspaceSidebar({
     href: string;
     label: string;
     icon: LucideIcon;
-    comingSoon?: boolean;
   }) => {
     const active =
-      path === href || (href === "/history" && path.endsWith("/feedback"));
+      path === href ||
+      (href === "/history" &&
+        path.startsWith("/interviews/") &&
+        path !== "/interviews/new");
     return (
-      <Hint key={href} label={label} enabled={collapsed}>
-        <Link
-          href={href}
-          onClick={navigate}
-          aria-label={label}
-          aria-current={active ? "page" : undefined}
-          className={cn(
-            row,
-            "group",
-            active
-              ? "text-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {active && (
-            <motion.span
-              layoutId={
-                onNavigate
-                  ? "mobile-navigation-active"
-                  : "desktop-navigation-active"
-              }
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className={cn(
-                "absolute inset-0",
-                collapsed ? "rounded-lg bg-card" : "rounded-md bg-card",
-              )}
-              aria-hidden="true"
-            />
-          )}
-          <Icon
-            className={cn(
-              "relative size-[18px] shrink-0",
-              active
-                ? "text-primary"
-                : "text-muted-foreground group-hover:text-ink-secondary",
-            )}
-            strokeWidth={1.7}
-            aria-hidden="true"
-          />
-          {!collapsed && (
-            <>
-              <span className="relative min-w-0 flex-1 truncate">{label}</span>
-            </>
-          )}
-        </Link>
-      </Hint>
+      <SidebarMenuItem key={href}>
+        <SidebarMenuButton asChild isActive={active} tooltip={label}>
+          <Link
+            href={href}
+            onClick={closeNavigation}
+            aria-label={label}
+            aria-current={active ? "page" : undefined}
+          >
+            <Icon aria-hidden="true" strokeWidth={1.7} />
+            <span>{label}</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
     );
   };
   return (
-    <Tooltip.Provider
-      delayDuration={100}
-      skipDelayDuration={250}
-      disableHoverableContent
+    <Sidebar
+      variant="inset"
+      collapsible="offcanvas"
+      aria-label="Screenly workspace"
     >
-      <div
-        className={cn(
-          "flex min-h-0 flex-1 flex-col",
-          collapsed ? "w-[calc(4rem_-_1px)]" : "w-full",
-        )}
-      >
-        <div
-          className={cn(
-            "flex h-14 shrink-0 items-center border-b",
-            collapsed ? "justify-center px-2" : "px-2.5",
-          )}
-        >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label="Switch workspace"
-                className={cn(
-                  "flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-left outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-secondary",
-                  collapsed && "size-11 flex-none justify-center p-0",
-                )}
+      <SidebarHeader className="gap-3 pb-4">
+        <div className="flex items-center gap-1">
+          <SidebarMenu className="min-w-0 flex-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                size="lg"
+                tooltip="Screenly home"
+                className="gap-2.5"
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.14)]">
-                  <AudioLines className="size-[19px]" strokeWidth={1.8} />
-                </span>
-                {!collapsed && (
-                  <>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] font-semibold tracking-[-0.025em]">
-                        Screenly
-                      </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        Personal workspace
-                      </span>
-                    </span>
-                    <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-                  </>
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              side={collapsed ? "right" : "bottom"}
-              className="w-64"
-            >
-              <DropdownMenuLabel>Your workspaces</DropdownMenuLabel>
-              <DropdownMenuItem>
-                <span className="grid size-7 place-items-center rounded-md border bg-accent text-primary">
-                  <AudioLines />
-                </span>
-                <span className="flex-1">Personal workspace</span>
-                <Check />
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/settings" onClick={navigate}>
-                  <Settings2 />
-                  Workspace settings
+                <Link
+                  href="/dashboard"
+                  onClick={closeNavigation}
+                  aria-label="Screenly home"
+                >
+                  <Wordmark />
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings?tab=workspace" onClick={navigate}>
-                  <Plus />
-                  Create a workspace
-                  <span className="ml-auto text-[10px] text-muted-foreground">
-                    Preview
-                  </span>
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {onNavigate && (
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          {isMobile && (
             <Button
               variant="ghost"
               size="icon-sm"
-              className="ml-1 shrink-0"
               aria-label="Close navigation"
-              onClick={onNavigate}
+              onClick={closeNavigation}
             >
-              <X className="size-4" />
+              <X />
             </Button>
           )}
         </div>
-
-        <div
-          className={cn(
-            "shrink-0",
-            collapsed ? "px-2 pt-2 pb-1" : "px-2.5 pt-3 pb-2",
-          )}
-        >
-          <Hint label="Search workspace · Ctrl K" enabled={collapsed}>
-            <button
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Search workspace"
+              onClick={() => {
+                closeNavigation();
+                setSearchOpen(true);
+              }}
               aria-label="Search workspace"
-              onClick={openSearch}
-              className={cn(
-                "flex items-center rounded-lg text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                collapsed
-                  ? "mx-auto size-11 justify-center hover:bg-secondary-hover hover:text-foreground"
-                  : "h-11 w-full gap-2.5 bg-card/70 px-3 text-left text-[13px] hover:border-input hover:bg-card md:h-10",
-              )}
+              className="border bg-card text-muted-foreground group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent"
             >
-              <Search
-                className={cn("shrink-0", collapsed ? "size-[18px]" : "size-4")}
-                strokeWidth={1.7}
+              <Search aria-hidden="true" />
+              <span className="flex-1">Search</span>
+              <kbd className="text-[10px] font-normal">Ctrl K</kbd>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <nav aria-label="Main navigation">
+              <SidebarMenu>
+                {workspaceNavigation[0]?.items.map(renderLink)}
+              </SidebarMenu>
+            </nav>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup className="pt-2">
+          <details
+            key={path}
+            className="group/planned"
+            open={
+              workspaceNavigation
+                .slice(1)
+                .some((group) =>
+                  group.items.some((item) => item.href === path),
+                ) || undefined
+            }
+          >
+            <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+              Coming soon
+              <ChevronDown
+                className="size-3.5 transition-transform group-open/planned:rotate-180"
                 aria-hidden="true"
               />
-              {!collapsed && (
-                <>
-                  <span className="flex-1">Search workspace</span>
-                  <kbd className="rounded border bg-sidebar px-1.5 py-0.5 font-sans text-[10px] leading-4">
-                    Ctrl K
-                  </kbd>
-                </>
-              )}
-            </button>
-          </Hint>
-        </div>
-
-        <nav
-          aria-label="Main navigation"
-          className={cn(
-            "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pt-1 pb-3",
-            collapsed ? "px-2" : "px-2.5",
-          )}
-        >
-          <div className="space-y-1 pt-3">
-            {workspaceNavigation[0]?.items.map(renderLink)}
-            {workspaceUtilities.map(renderLink)}
-          </div>
-          {collapsed ? (
-            <Hint label="More destinations" enabled>
-              <button
-                className={cn(row, "mt-4 text-muted-foreground")}
-                onClick={openSearch}
-                aria-label="More destinations"
-              >
-                <Ellipsis className="size-[18px]" />
-              </button>
-            </Hint>
-          ) : (
-            <details
-              key={path}
-              className="group mt-7"
-              open={
-                workspaceNavigation
-                  .slice(1)
-                  .some((group) =>
-                    group.items.some((item) => item.href === path),
-                  ) || undefined
-              }
-            >
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-                Coming soon
-                <ChevronDown
-                  className="size-4 transition-transform group-open:rotate-180"
-                  aria-hidden="true"
-                />
-              </summary>
-              <div className="mt-1 space-y-1">
+            </summary>
+            <nav aria-label="Planned features">
+              <SidebarMenu className="mt-1">
                 {workspaceNavigation
                   .slice(1)
                   .flatMap((group) => group.items)
                   .map(renderLink)}
-              </div>
-            </details>
-          )}
+              </SidebarMenu>
+            </nav>
+          </details>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <nav aria-label="Workspace utilities">
+          <SidebarMenu>
+            {renderLink({ href: "/help", label: "Help", icon: CircleHelp })}
+            {renderLink({
+              href: "/settings",
+              label: "Settings",
+              icon: Settings2,
+            })}
+          </SidebarMenu>
         </nav>
-
-        <div className={cn("shrink-0 border-t", collapsed ? "p-2" : "p-2.5")}>
+        <div className="border-t pt-2">
           {signOutError && (
             <p role="alert" className="mb-2 px-2 text-xs text-destructive">
               {signOutError}
             </p>
           )}
-          <div
-            className={cn(
-              "flex items-center gap-1",
-              collapsed && "justify-center",
-            )}
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label="Account menu"
-                  className={cn(
-                    "flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 text-left outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-secondary",
-                    collapsed && "size-11 flex-none justify-center p-0",
-                  )}
-                >
-                  <Avatar
-                    className={cn(
-                      "shrink-0 rounded-full",
-                      collapsed ? "size-7" : "size-8",
-                    )}
-                  >
-                    <AvatarFallback
-                      className={cn(
-                        "rounded-full text-[10px] font-medium",
-                        collapsed
-                          ? "bg-accent text-primary"
-                          : "bg-card text-ink-secondary",
-                      )}
-                    >
-                      {initial}
-                    </AvatarFallback>
-                  </Avatar>
-                  {!collapsed && (
-                    <>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium">
-                          {name}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
-                          Personal account
-                        </span>
-                      </span>
-                      <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
-                    </>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="top" className="w-64">
-                <div className="px-2.5 py-2">
-                  <p className="truncate text-xs font-medium">{name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {email}
-                  </p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/settings" onClick={navigate}>
-                    <UserRound />
-                    Your account
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/settings?tab=workspace" onClick={navigate}>
-                    <Settings2 />
-                    Preferences
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  disabled={signingOut}
-                  className="text-destructive focus:bg-destructive-surface [&_svg]:text-destructive"
-                  onSelect={() => void onSignOut()}
-                >
-                  <LogOut />
-                  {signingOut ? "Signing out…" : "Sign out"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {!collapsed && (
+          <SidebarMenu>
+            <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Notifications"
-                    className="shrink-0 rounded-full"
+                  <SidebarMenuButton
+                    size="lg"
+                    tooltip={name}
+                    aria-label="Account menu"
+                    className="gap-2.5 data-[state=open]:bg-sidebar-accent"
                   >
-                    <Bell className="size-4" strokeWidth={1.7} />
-                  </Button>
+                    <Avatar className="size-8 shrink-0 rounded-lg">
+                      <AvatarFallback className="rounded-lg border bg-secondary text-[11px] font-medium">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium">
+                        {name}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                        {email}
+                      </span>
+                    </span>
+                    <ChevronsUpDown
+                      className="ml-auto size-3.5!"
+                      aria-hidden="true"
+                    />
+                  </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  side="top"
-                  align="end"
-                  className="w-64 p-4"
+                  side={isMobile ? "bottom" : "top"}
+                  align="start"
+                  className="w-60"
                 >
-                  <p className="text-xs font-medium">You’re all caught up</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                    Updates about your workspace will appear here.
-                  </p>
+                  <div className="px-2 py-2">
+                    <p className="truncate text-sm font-medium">{name}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {email}
+                    </p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/onboarding?edit=1" onClick={closeNavigation}>
+                      <UserRound />
+                      Edit profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" onClick={closeNavigation}>
+                      <Settings2 />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={signingOut}
+                    className="text-destructive focus:bg-destructive-surface [&_svg]:text-destructive"
+                    onSelect={() => void onSignOut()}
+                  >
+                    <LogOut />
+                    {signingOut ? "Signing out…" : "Sign out"}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-          </div>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </div>
-      </div>
-    </Tooltip.Provider>
+      </SidebarFooter>
+    </Sidebar>
   );
 }

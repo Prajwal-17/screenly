@@ -49,6 +49,9 @@ playwright-report/
 
 # Local design metadata
 .impeccable/
+!/.impeccable/
+/.impeccable/*
+!/.impeccable/design.json
 
 # Local documentation
 /docs/

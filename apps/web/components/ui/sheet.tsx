@@ -15,6 +15,7 @@ export function Sheet({
   side = "right",
   className,
   showHeader = true,
+  onCloseAutoFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,6 +26,9 @@ export function Sheet({
   side?: "left" | "right";
   className?: string;
   showHeader?: boolean;
+  onCloseAutoFocus?: React.ComponentProps<
+    typeof Dialog.Content
+  >["onCloseAutoFocus"];
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -32,6 +36,7 @@ export function Sheet({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-foreground/25 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
         <Dialog.Content
+          onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
             "fixed inset-y-0 z-50 flex w-[min(480px,100%)] flex-col bg-card shadow-xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
             side === "right"

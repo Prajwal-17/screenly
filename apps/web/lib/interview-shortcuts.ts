@@ -9,6 +9,7 @@ export function useInterviewShortcuts(actions: {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (
+        window.innerWidth < 1024 ||
         event.defaultPrevented ||
         event.repeat ||
         event.isComposing ||

@@ -23,7 +23,9 @@ export function ChoiceGroup({
   value,
   onValueChange,
   onBlur,
+  variant = "default",
 }: {
+  variant?: "default" | "segmented";
   name: string;
   label: string;
   options: readonly string[];
@@ -38,10 +40,23 @@ export function ChoiceGroup({
       value={value}
       onValueChange={onValueChange}
       onBlur={onBlur}
-      className="flex flex-wrap gap-2"
+      className={cn(
+        "flex flex-wrap gap-2",
+        variant === "segmented" &&
+          "grid grid-cols-3 gap-0 overflow-hidden rounded-lg border",
+      )}
     >
-      <>
-        {options.map((option) => (
+      {options.map((option) =>
+        variant === "segmented" ? (
+          <RadioGroupItem
+            key={option}
+            id={`${name}-${encodeURIComponent(option)}`}
+            value={option}
+            variant="segment"
+          >
+            {option}
+          </RadioGroupItem>
+        ) : (
           <ChoiceLabel
             key={option}
             htmlFor={`${name}-${encodeURIComponent(option)}`}
@@ -52,8 +67,8 @@ export function ChoiceGroup({
             />
             {option}
           </ChoiceLabel>
-        ))}
-      </>
+        ),
+      )}
     </RadioGroup>
   );
 }

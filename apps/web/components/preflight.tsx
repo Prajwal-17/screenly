@@ -142,8 +142,8 @@ export function Preflight({
           className="text-2xl leading-tight font-semibold tracking-[-0.025em]"
         >
           {interview.status === "active"
-            ? "Welcome back."
-            : "Before you begin."}
+            ? "Resume interview"
+            : "Check your audio"}
         </h2>
         <p className="mt-4 text-sm text-ink-secondary">
           {interview.level}{" "}
@@ -168,7 +168,7 @@ export function Preflight({
               <span className="flex min-w-0 items-center gap-3 text-[13px] font-medium">
                 {checked ? (
                   <Check
-                    className="size-[18px] shrink-0 text-primary"
+                    className="size-[18px] shrink-0 text-success"
                     aria-hidden="true"
                   />
                 ) : (

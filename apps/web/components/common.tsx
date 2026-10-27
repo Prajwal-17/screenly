@@ -7,6 +7,8 @@ import {
   TriangleAlert,
   Check,
   AudioLines,
+  History,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import type { Interview } from "@repo/shared";
@@ -45,6 +47,7 @@ export function PageIntro({
   action?: React.ReactNode;
   className?: string;
 }) {
+  if (!description && !action) return null;
   return (
     <div
       className={cn(
@@ -57,7 +60,7 @@ export function PageIntro({
           {description}
         </p>
       )}
-      {action}
+      {action && <div className="ml-auto">{action}</div>}
     </div>
   );
 }
@@ -149,10 +152,8 @@ export function EmptyState() {
         <AudioLines className="size-5" aria-hidden="true" />
       </span>
       <h3>No interviews yet</h3>
-      <p className="mt-1.5 mb-5 text-sm text-muted-foreground">
-        Your next interview starts with a little practice.
-      </p>
-      <Button asChild size="sm">
+
+      <Button asChild size="sm" className="mt-5">
         <Link href="/interviews/new">
           New interview
           <ArrowRight />
@@ -207,14 +208,56 @@ export function InterviewRows({
   interviews,
   onDelete,
   deleting = false,
+  compact = false,
 }: {
   interviews: Interview[];
   onDelete?: (interview: Interview) => void;
   deleting?: boolean;
+  compact?: boolean;
 }) {
   if (!interviews.length) return <EmptyState />;
+  if (compact)
+    return (
+      <ul className="divide-y border-t" aria-label="Recent interviews">
+        {interviews.map((item) => (
+          <li key={item.id}>
+            <Link
+              href={interviewLink(item)}
+              className="flex items-center gap-3 py-4 text-sm transition-colors hover:bg-muted/50"
+            >
+              <History
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">
+                  {item.role} · {item.level}
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {item.topics.slice(0, 2).join(", ")} ·{" "}
+                  {formatDate(item.createdAt)}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs tabular-nums">
+                {item.status === "active"
+                  ? "Resume"
+                  : item.status === "draft"
+                    ? "Continue setup"
+                    : item.feedback?.overallScore != null
+                      ? `${item.feedback.overallScore} / 10`
+                      : "View"}
+              </span>
+              <ChevronRight
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    );
   return (
-    <div className="overflow-hidden border-y bg-card">
+    <div className="overflow-hidden rounded-lg border bg-card">
       <Table className="table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/60 hover:bg-muted/60">
@@ -269,7 +312,7 @@ export function InterviewRows({
                       ? "success"
                       : item.status === "active"
                         ? "warning"
-                        : "outline"
+                        : "info"
                   }
                 >
                   {item.status === "completed" ? (
