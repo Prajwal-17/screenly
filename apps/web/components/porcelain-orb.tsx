@@ -31,6 +31,10 @@ export function PorcelainOrb({
     let frame = 0;
     let visible = true;
     let level = 0;
+    let low = 0;
+    let high = 0;
+    let wobble = 0;
+    let velocity = 0;
     let candidate = 0;
     let inactive = 0;
     let elapsed = 0;
@@ -92,6 +96,7 @@ export function PorcelainOrb({
         "uResolution",
         "uTime",
         "uEnergy",
+        "uWobble",
         "uLow",
         "uHigh",
         "uCandidate",
@@ -131,7 +136,8 @@ export function PorcelainOrb({
         visible &&
           !document.hidden &&
           !reduced.matches &&
-          !readSignal().inactive,
+          !readSignal().inactive &&
+          (level > 0 || Math.abs(wobble) > 0),
       );
     };
     const observer = new IntersectionObserver(([entry]) => {
@@ -163,22 +169,47 @@ export function PorcelainOrb({
         return;
       }
       const signal = readSignal();
-      // Idle material moves at 18 fps; speech gets 30 fps. Keep all work on a
-      // bounded square, and freeze its clock rather than jumping after a pause.
-      const moving = !signal.inactive && !reduced.matches;
-      const interval = moving && signal.level > 0.02 ? 1000 / 30 : 1000 / 18;
+      // Paint at up to 60 Hz during speech, including on high-refresh displays.
+      // Throttle resting state checks; voice sampling can wake the next frame.
+      const active = !signal.inactive && !reduced.matches;
+      const atRest = level === 0 && wobble === 0 && low === 0 && high === 0;
+      const interval =
+        atRest && (!active || signal.level === 0) ? 50 : 1000 / 60 - 1;
       if (now - lastFrame < interval) return;
-      const dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.1) : 0;
+      const dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0;
       lastFrame = now;
-      if (moving) elapsed += dt;
-      const target =
-        signal.inactive || reduced.matches
-          ? 0
-          : Math.min(1, Math.max(0, signal.level));
+      const target = active
+        ? Math.pow(Math.min(1, Math.max(0, signal.level)), 0.72)
+        : 0;
       level +=
-        (target - level) *
-        (1 - Math.exp(-dt / (target > level ? 0.055 : 0.16)));
+        (target - level) * (1 - Math.exp(-dt / (target > level ? 0.04 : 0.12)));
       if (level < 0.001) level = 0;
+      const bandBlend = 1 - Math.exp(-dt / 0.09);
+      low += ((target > 0 ? signal.low : 0) - low) * bandBlend;
+      high += ((target > 0 ? signal.high : 0) - high) * bandBlend;
+      if (low < 0.001) low = 0;
+      if (high < 0.001) high = 0;
+      // Substeps keep this lightly damped spring stable on slower displays.
+      const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+      const step = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        velocity += ((level - wobble) * 190 - velocity * 19) * step;
+        wobble += velocity * step;
+      }
+      if (
+        level === 0 &&
+        Math.abs(wobble) < 0.001 &&
+        Math.abs(velocity) < 0.005
+      ) {
+        wobble = 0;
+        velocity = 0;
+      }
+      if (reduced.matches) {
+        level = low = high = wobble = velocity = 0;
+      }
+      // Material advection is powered by the voice, never by an idle loop.
+      elapsed += dt * level * 2.4;
+      const moving = active && (level > 0 || wobble !== 0);
       const blend = 1 - Math.exp(-dt / 0.3);
       candidate += ((signal.candidate ? 1 : 0) - candidate) * blend;
       inactive += ((signal.inactive ? 1 : 0) - inactive) * blend;
@@ -193,26 +224,62 @@ export function PorcelainOrb({
         w,
         h,
         level.toFixed(3),
+        wobble.toFixed(3),
         elapsed.toFixed(3),
         candidate.toFixed(3),
         inactive.toFixed(3),
-        signal.low.toFixed(2),
-        signal.high.toFixed(2),
+        low.toFixed(3),
+        high.toFixed(3),
         signal.candidate,
         signal.inactive,
         reduced.matches,
+        moving,
       ].join();
       if (next === signature) return;
       signature = next;
       const surfaceState = [
         level.toFixed(3),
+        wobble.toFixed(3),
+        elapsed.toFixed(3),
         signal.candidate,
         signal.inactive,
         moving,
       ].join();
       if (surfaceState !== surfaceSignature) {
         surfaceSignature = surfaceState;
-        wrapper.style.setProperty("--orb-energy", String(level));
+        // The CSS fallback shares the same envelope and clock as the shader.
+        // Avoid touching styles on the WebGL path: all its motion stays on GPU.
+        if (wrapper.dataset.renderer === "fallback") {
+          const stretch = Math.sin(elapsed * 1.7) * wobble;
+          wrapper.style.setProperty(
+            "--orb-scale-x",
+            String(1 + wobble * 0.035 + stretch * 0.025),
+          );
+          wrapper.style.setProperty(
+            "--orb-scale-y",
+            String(1 + wobble * 0.035 - stretch * 0.025),
+          );
+          wrapper.style.setProperty(
+            "--orb-round-a",
+            `${50 + Math.sin(elapsed * 1.3) * wobble * 7}%`,
+          );
+          wrapper.style.setProperty(
+            "--orb-round-b",
+            `${50 + Math.cos(elapsed * 1.6) * wobble * 6}%`,
+          );
+          wrapper.style.setProperty(
+            "--orb-current-x",
+            `${Math.sin(elapsed * 0.7) * 12}%`,
+          );
+          wrapper.style.setProperty(
+            "--orb-current-y",
+            `${Math.sin(elapsed * 0.9) * 9}%`,
+          );
+          wrapper.style.setProperty(
+            "--orb-current-turn",
+            `${Math.sin(elapsed * 0.6) * 24}deg`,
+          );
+        }
         wrapper.dataset.candidate = String(signal.candidate);
         wrapper.dataset.inactive = String(signal.inactive);
         wrapper.dataset.moving = String(moving);
@@ -233,9 +300,10 @@ export function PorcelainOrb({
       gl.uniform2f(uniforms.uResolution!, w, h);
       const values = {
         uEnergy: level,
+        uWobble: wobble,
         uTime: elapsed,
-        uLow: signal.low,
-        uHigh: signal.high,
+        uLow: low,
+        uHigh: high,
         uCandidate: candidate,
         uInactive: inactive,
         uReduced: reduced.matches ? 1 : 0,

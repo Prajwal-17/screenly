@@ -2,6 +2,7 @@ export type SocketFactory = (
   url: URL,
   key: string,
 ) => WebSocket | Promise<WebSocket>;
+export type DeepgramKey = string | (() => Promise<string>);
 export const DEEPGRAM_CONNECT_TIMEOUT_MS = 12000;
 export async function openProviderSocket(
   url: URL,
@@ -47,31 +48,42 @@ export class DeepgramConnectionError extends Error {
           ? "Deepgram denied access (403). Check API key permissions and model access."
           : code === "429"
             ? "Deepgram rate limit reached (429). Wait a moment and retry."
-            : code === "400"
-              ? "Deepgram rejected the model or audio settings (400). Check backend voice configuration."
-              : code === "MISSING_KEY"
-                ? "The backend Deepgram API key is missing. Configure DEEPGRAM_API_KEY and restart."
-                : code === "TIMEOUT"
-                  ? "Deepgram connection timed out. Check network access and retry."
-                  : code === "SPEECH_TIMEOUT"
-                    ? "Speech stopped arriving from Deepgram. Retry speech."
-                    : code === "AUDIO_BACKLOG"
-                      ? "The transcription connection is too slow to keep up with your microphone. Retry the microphone to reconnect."
-                      : "The connection to Deepgram was interrupted. Retry to reconnect.";
+            : /^5\d\d$/.test(code)
+              ? "The speech service is temporarily unavailable. Retry to reconnect."
+              : code === "400"
+                ? "Deepgram rejected the model or audio settings (400). Check backend voice configuration."
+                : code === "MISSING_KEY"
+                  ? "The backend Deepgram API key is missing. Configure DEEPGRAM_API_KEY and restart."
+                  : code === "MISSING_PROJECT"
+                    ? "The backend Deepgram project is missing. Configure DEEPGRAM_PROJECT_ID and restart."
+                    : code === "KEY_MANAGEMENT"
+                      ? "Could not manage the interview's Deepgram key. Check DEEPGRAM_PROJECT_ID and the backend key's keys:write and usage:write permissions, then retry."
+                      : code === "SESSION_CLOSED"
+                        ? "This interview has ended. Start a new interview to use voice."
+                        : code === "TIMEOUT"
+                          ? "Deepgram connection timed out. Check network access and retry."
+                          : code === "SPEECH_TIMEOUT"
+                            ? "Speech stopped arriving from Deepgram. Retry speech."
+                            : code === "AUDIO_BACKLOG"
+                              ? "The transcription connection is too slow to keep up with your microphone. Retry the microphone to reconnect."
+                              : "The connection to Deepgram was interrupted. Retry to reconnect.";
     super(message);
     this.name = "DeepgramConnectionError";
   }
   get retryable() {
-    return [
-      "CONNECTION_FAILED",
-      "TIMEOUT",
-      "429",
-      "NET-0000",
-      "NET-0001",
-      "NET-0002",
-      "NET-0003",
-      "NET-0004",
-    ].includes(this.code);
+    return (
+      /^5\d\d$/.test(this.code) ||
+      [
+        "CONNECTION_FAILED",
+        "TIMEOUT",
+        "429",
+        "NET-0000",
+        "NET-0001",
+        "NET-0002",
+        "NET-0003",
+        "NET-0004",
+      ].includes(this.code)
+    );
   }
 }
 export class DeepgramSocket {
@@ -81,7 +93,7 @@ export class DeepgramSocket {
   private timer: ReturnType<typeof setTimeout> | null = null;
   constructor(
     private url: URL,
-    private key: string,
+    private key: DeepgramKey,
     private handlers: Handlers,
     private makeSocket: (
       url: URL,
@@ -90,10 +102,12 @@ export class DeepgramSocket {
   ) {}
   async connect() {
     if (this.closed) throw new Error("Connection was cancelled.");
-    if (!this.key) throw new DeepgramConnectionError("MISSING_KEY");
     let socket: WebSocket;
     try {
-      socket = await this.makeSocket(this.url, this.key);
+      const key = typeof this.key === "function" ? await this.key() : this.key;
+      if (this.closed) throw new Error("Connection was cancelled.");
+      if (!key) throw new DeepgramConnectionError("MISSING_KEY");
+      socket = await this.makeSocket(this.url, key);
     } catch (error) {
       throw error instanceof DeepgramConnectionError
         ? error

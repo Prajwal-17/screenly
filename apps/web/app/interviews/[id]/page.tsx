@@ -147,6 +147,7 @@ export default function InterviewPage() {
               <Button
                 variant="outline"
                 size="sm"
+                loading={finish.isPending || state.starting}
                 onClick={() =>
                   finish.error
                     ? finish.mutate(finish.variables ?? true)

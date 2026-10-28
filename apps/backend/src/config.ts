@@ -15,6 +15,7 @@ const configSchema = z.object({
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
   DEEPGRAM_API_KEY: optional,
+  DEEPGRAM_PROJECT_ID: optional,
   DEEPGRAM_WS_URL: z.url().default("wss://api.deepgram.com"),
   DEEPGRAM_STT_MODEL: z.string().default("flux-general-en"),
   DEEPGRAM_EOT_TIMEOUT_MS: z.coerce
@@ -59,6 +60,6 @@ export const isDevLoginEnabled = (env: Config) =>
 export const getCapabilities = (env: Config) => ({
   devLogin: isDevLoginEnabled(env),
   google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
-  voice: Boolean(env.DEEPGRAM_API_KEY),
+  voice: Boolean(env.DEEPGRAM_API_KEY && env.DEEPGRAM_PROJECT_ID),
   llm: Boolean(env.LLM_API_KEY && env.LLM_MODEL),
 });

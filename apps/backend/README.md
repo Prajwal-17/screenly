@@ -13,7 +13,11 @@ bun run --cwd apps/backend dev
 
 Local development uses Wrangler's Workers runtime on `127.0.0.1:8787`, local D1, and local Durable Objects. Committed migrations apply before startup. Data persists under `apps/backend/.wrangler/state`; override `D1_PERSIST_PATH` to isolate it. No Cloudflare account is needed for local development.
 
-Google is the production sign-in method. Configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, with `http://localhost:8787/api/auth/callback/google` as the local redirect URI. Email/password authentication is disabled. Set `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL` for replies, profile import, and feedback. Set `DEEPGRAM_API_KEY` for microphone transcription and spoken replies. Provider keys stay on the backend.
+Google is the production sign-in method. Configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, with `http://localhost:8787/api/auth/callback/google` as the local redirect URI. Email/password authentication is disabled. Set `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL` for replies, profile import, and feedback. Set `DEEPGRAM_API_KEY` and `DEEPGRAM_PROJECT_ID` for microphone transcription and spoken replies. The backend management key needs `keys:write` and `usage:write` in that project. Provider keys stay on the backend.
+
+Voice connections use a separate `usage:write` API key for each interview, issued on first use and stored privately in its Durable Object. Reconnects reuse that key; interviews never share keys. Completion (with or without feedback), automatic timeout, and deletion revoke it. Deletion retains pending revocation metadata, and durable alarms retry provider failures every minute until revocation succeeds or the key expires. Each key expires after one hour even if cleanup cannot reach Deepgram. Pauses and disconnects retain the interview key until that expiry; resumed voice replaces an expired key. Management requests use the HTTPS counterpart of `DEEPGRAM_WS_URL` so regional endpoints remain consistent. Missing project configuration disables voice; management failures never fall back to the backend key for speech.
+
+Deepgram currently documents a [250-per-day limit for expiring API keys](https://developers.deepgram.com/docs/create-additional-api-keys). This flow creates keys for interviews, rather than issuing a new key for every speech connection.
 
 From the repository root:
 
@@ -38,7 +42,7 @@ Old `storage/local.sqlite` files are preserved and are not used by Workers. To c
 
 Create a D1 database once with Wrangler (for example, `bunx wrangler d1 create screenly` from this directory), then set its UUID as `CLOUDFLARE_DATABASE_ID` in `.env` or the deployment environment. Set `CLOUDFLARE_ACCOUNT_ID` when required and authenticate Wrangler. The checked-in zero UUID is a local placeholder; remote commands reject it.
 
-Set `FRONTEND_URL` and `BETTER_AUTH_URL` to the production HTTPS origins. The deploy wrapper copies public settings into the Worker config, forces production mode, and disables development login. It rejects localhost production URLs. Configure provider model/base-URL overrides in the same environment.
+Set `FRONTEND_URL` and `BETTER_AUTH_URL` to the production HTTPS origins. The deploy wrapper copies public settings into the Worker config, forces production mode, and disables development login. It rejects localhost production URLs. Set `DEEPGRAM_PROJECT_ID` and provider model/base-URL overrides in the same deployment environment.
 
 Provision secrets in Cloudflare, using Wrangler's interactive prompts from `apps/backend`:
 

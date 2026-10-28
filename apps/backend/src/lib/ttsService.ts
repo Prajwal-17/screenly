@@ -2,6 +2,7 @@ import type { Config } from "../config";
 import {
   DeepgramConnectionError,
   DeepgramSocket,
+  type DeepgramKey,
   type SocketFactory,
 } from "./deepgramSocket";
 // A separate connection per reply isolates late binary audio after cancellation.
@@ -17,6 +18,7 @@ export class TTSService {
     private env: Config,
     private onAudio: (data: Uint8Array) => void,
     private makeSocket?: SocketFactory,
+    private key: DeepgramKey = env.DEEPGRAM_API_KEY ?? "",
   ) {}
   async connect() {
     const url = new URL("/v2/speak", this.env.DEEPGRAM_WS_URL);
@@ -28,7 +30,7 @@ export class TTSService {
     }).toString();
     this.socket = new DeepgramSocket(
       url,
-      this.env.DEEPGRAM_API_KEY ?? "",
+      this.key,
       {
         json: (message) => {
           if (message.type === "ConfigureFailure") {

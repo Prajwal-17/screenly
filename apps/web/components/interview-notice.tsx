@@ -16,7 +16,7 @@ export function InterviewNotice({
     <Alert
       variant="default"
       role={warning ? "status" : "alert"}
-      className="@container mx-auto max-w-4xl gap-x-3 px-4 py-3"
+      className="@container mx-auto max-w-4xl min-w-0 gap-x-3 px-4 py-3 [&>svg]:row-span-1 [&>svg]:self-center [&>svg]:translate-y-0"
       data-interview-notice=""
     >
       <Icon

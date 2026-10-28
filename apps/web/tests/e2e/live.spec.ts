@@ -225,3 +225,47 @@ test("finish cancellation and guarded navigation preserve a live interview", asy
     .click();
   await expect(page).toHaveURL(/\/history$/);
 });
+
+test("long speech errors wrap without covering recovery or live controls", async ({
+  page,
+  api,
+}, testInfo) => {
+  await page.goto("/interviews/active");
+  await expect(
+    page.getByRole("button", { name: "Finish interview", exact: true }),
+  ).toBeVisible();
+  api.send({
+    type: "error",
+    scope: "voice",
+    message:
+      "The connection to the transcription service was interrupted. Your saved conversation is still available. Retry the microphone to reconnect and continue your answer.",
+  });
+  const notice = page.locator("[data-interview-notice]");
+  for (const width of [1024, 1440]) {
+    await page.setViewportSize({ width, height: 600 });
+    const retry = page.getByRole("button", {
+      name: "Retry microphone",
+      exact: true,
+    });
+    await expect(retry).toBeInViewport();
+    await expect(
+      page.getByRole("button", { name: "Finish interview", exact: true }),
+    ).toBeInViewport();
+    const bounds = await notice.boundingBox();
+    const text = await notice.locator("p").boundingBox();
+    const action = await retry.boundingBox();
+    const icon = await notice.locator(":scope > svg").boundingBox();
+    expect(
+      Math.abs(icon!.y + icon!.height / 2 - (action!.y + action!.height / 2)),
+    ).toBeLessThanOrEqual(1);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    const separated =
+      text!.x + text!.width <= action!.x + 1 ||
+      text!.y + text!.height <= action!.y + 1;
+    expect(separated).toBe(true);
+    await testInfo.attach(`speech-error-${width}`, {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+  }
+});

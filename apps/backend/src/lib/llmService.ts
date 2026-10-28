@@ -60,6 +60,14 @@ export function parseFeedback(raw: string, messages: InterviewMessage[]) {
   return feedback;
 }
 
+export class InvalidOpeningReplyError extends Error {
+  readonly code = "INVALID_OPENING_RESPONSE";
+  constructor(readonly model: string) {
+    super("The configured model did not return a valid readiness decision.");
+    this.name = "InvalidOpeningReplyError";
+  }
+}
+
 export class LLMService {
   private client: OpenAI;
   constructor(private env: Config) {
@@ -104,9 +112,17 @@ export class LLMService {
       },
       { signal },
     );
-    return openingReplySchema.parse(
-      JSON.parse(result.choices[0]?.message.content ?? ""),
-    );
+    try {
+      return openingReplySchema.parse(
+        JSON.parse(result.choices[0]?.message.content ?? ""),
+      );
+    } catch {
+      // A compatible gateway may return HTTP 200 with a provider failure as
+      // message content. Never treat that text as readiness or speak it aloud.
+      throw new InvalidOpeningReplyError(
+        this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,
+      );
+    }
   }
   async *generateReply(
     interview: InterviewDetail,

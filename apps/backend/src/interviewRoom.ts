@@ -8,11 +8,18 @@ import { generateFeedback } from "./lib/feedbackService";
 import { LLMService } from "./lib/llmService";
 import { STTService } from "./lib/sttService";
 import { TTSService } from "./lib/ttsService";
+import { DeepgramCredentials } from "./lib/deepgramCredentials";
 
 export class InterviewRoom extends DurableObject<Env> {
   private session: InterviewSession | null = null;
   private socket: WebSocket | null = null;
   private connecting = false;
+  private alarmTask: Promise<void> = Promise.resolve();
+  private credentials = new DeepgramCredentials(
+    this.config(),
+    this.ctx.storage,
+    () => this.scheduleAlarm(),
+  );
   private config() {
     return readConfig(this.env);
   }
@@ -63,6 +70,9 @@ export class InterviewRoom extends DurableObject<Env> {
     try {
       await this.ctx.storage.put("interviewId", id);
       const config = this.config();
+      const key = () => this.credentials.get(id);
+      // Provider services never receive the management key as a fallback.
+      const voiceConfig = { ...config, DEEPGRAM_API_KEY: undefined };
       this.socket = server;
       const session = new InterviewSession(
         id,
@@ -81,14 +91,15 @@ export class InterviewRoom extends DurableObject<Env> {
             new LLMService(config).openingReply(interview, signal),
           feedback: (id) => this.queueFeedback(id),
           stt: (turn, error, topics) =>
-            new STTService(config, turn, error, topics),
-          tts: (audio) => new TTSService(config, audio),
+            new STTService(voiceConfig, turn, error, topics, undefined, key),
+          tts: (audio) => new TTSService(voiceConfig, audio, undefined, key),
           background: (task) => this.background(task),
           scheduleDeadline: async (deadline) => {
             await this.ctx.storage.put("deadline", deadline);
-            await this.ctx.storage.setAlarm(deadline);
+            await this.scheduleAlarm();
           },
           cancelDeadline: () => this.cancelDeadline(),
+          closeVoice: () => this.closeVoice(),
         },
       );
       this.session = session;
@@ -133,12 +144,42 @@ export class InterviewRoom extends DurableObject<Env> {
     this.socket?.close(1000, "Interview closed");
     this.socket = null;
     await session?.close();
-    await this.ctx.storage.deleteAlarm();
-    await this.ctx.storage.deleteAll();
+    await this.credentials.close();
+    // Keep credential tombstones and pending revocations after deletion.
+    await this.ctx.storage.delete([
+      "interviewId",
+      "deadline",
+      "feedbackPending",
+    ]);
+    await this.scheduleAlarm();
+  }
+  private scheduleAlarm(): Promise<void> {
+    // One alarm services all durable work. Serialize rescheduling so a pause
+    // or feedback update cannot accidentally cancel a revocation retry.
+    const task = this.alarmTask.then(async () => {
+      const [deadline, feedback, credential] = await Promise.all([
+        this.ctx.storage.get<number>("deadline"),
+        this.ctx.storage.get<boolean>("feedbackPending"),
+        this.credentials.nextAlarm(),
+      ]);
+      const times = [
+        deadline,
+        feedback ? Date.now() + 1 : null,
+        credential,
+      ].filter((time): time is number => time != null);
+      if (times.length) await this.ctx.storage.setAlarm(Math.min(...times));
+      else await this.ctx.storage.deleteAlarm();
+    });
+    this.alarmTask = task.catch(() => {});
+    return task;
   }
   private async cancelDeadline() {
-    await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.delete(["deadline", "feedbackPending"]);
+    await this.scheduleAlarm();
+  }
+  private async closeVoice() {
+    await this.ctx.storage.delete("deadline");
+    await this.credentials.close();
   }
   async finish(id: string, generateFeedback = true) {
     if (this.session) await this.session.finish(generateFeedback);
@@ -146,6 +187,7 @@ export class InterviewRoom extends DurableObject<Env> {
       const interview = await this.store().get(id);
       if (interview?.status === "active")
         await this.store().finish(id, generateFeedback);
+      await this.closeVoice();
       const saved = await this.store().get(id);
       if (saved?.feedbackStatus === "skipped") await this.cancelDeadline();
       else await this.queueFeedback(id);
@@ -165,11 +207,16 @@ export class InterviewRoom extends DurableObject<Env> {
     await this.ctx.storage.put("interviewId", id);
     await this.ctx.storage.delete("deadline");
     await this.ctx.storage.put("feedbackPending", true);
-    await this.ctx.storage.setAlarm(Date.now() + 1);
+    await this.scheduleAlarm();
   }
   async alarm() {
+    // Revocation still runs when the interview has been deleted from D1.
+    await this.credentials.alarm();
     const id = await this.ctx.storage.get<string>("interviewId");
-    if (!id) return;
+    if (!id) {
+      await this.scheduleAlarm();
+      return;
+    }
     const deadline = await this.ctx.storage.get<number>("deadline");
     if (deadline && deadline <= Date.now()) {
       const interview = await this.store().get(id);
@@ -181,5 +228,6 @@ export class InterviewRoom extends DurableObject<Env> {
       await generateFeedback(id, this.store(), this.config());
       await this.ctx.storage.delete("feedbackPending");
     }
+    await this.scheduleAlarm();
   }
 }

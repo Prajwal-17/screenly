@@ -1,7 +1,7 @@
 ---
 name: Screenly
 description:
-  A professional voice-first interview workspace with white surfaces, neutral navigation, and charcoal
+  A professional voice-first AI interviewing app with white surfaces, neutral navigation, and charcoal
   actions.
 colors:
   sidebar-foreground: "#262626"
@@ -200,9 +200,9 @@ components:
 
 ## Overview
 
-**Creative North Star: "A clear professional practice workspace"**
+**Creative North Star: "A clear professional interviewing workspace"**
 
-Screenly uses white working surfaces, quiet gray navigation, and charcoal actions to make spoken interview practice easy to operate. The approved Cal.com-inspired replacement supersedes the previous paper-and-fern identity. The classic shadcn sidebar supplies familiar navigation; concise headings, visible state, and restrained borders carry the hierarchy.
+Screenly uses white working surfaces, quiet gray navigation, and charcoal actions to make spoken AI technical interviews easy to operate. The approved Cal.com-inspired replacement supersedes the previous paper-and-fern identity. The classic shadcn sidebar supplies familiar navigation; concise headings, visible state, and restrained borders carry the hierarchy.
 
 The live session retains its existing composition: PorcelainOrb above status and the persistent question, a separate candidate caption, a default-open transcript, and microphone, replay, audio, and finish controls. Neutral material tokens give the orb its own appearance without coupling its rendering to action colors.
 
@@ -213,6 +213,7 @@ The live session retains its existing composition: PorcelainOrb above status and
 - Classic expanded inset sidebar and a focus-managed live-interview navigation drawer.
 - Borders and tonal separation for working surfaces; elevation for temporary overlays.
 - Concise task copy with explicit loading, empty, error, recovery, and saved states.
+- A responsive public landing within the same white, charcoal, and Geist visual world.
 
 ## Colors
 
@@ -230,17 +231,23 @@ Use the locally bundled Geist Sans throughout; Geist Mono remains available for 
 
 Conversation text uses the live-transcript role. The live question starts at live-question and fits available space; its narrower and short-screen adaptations remain owned by `live-interview.module.css`. Do not replace this fitting behavior with a fixed headline size. Keep readable text measure, wrapping, and tabular timing and score values.
 
+The public `/` uses Tailwind utilities in its page and preview components. Reusable landing container, typography, and navigation-link utilities, easing, and entrance keyframes live in `apps/web/app/globals.css`; there is no landing CSS module. These scoped utilities do not replace the workspace type ramp. Its hero uses weight 500, line-height 1.1, and -0.04em tracking with `clamp(44px, 5.1vw, 74px)`, changing at the landing's 1100px, 800px, and 620px maximum-width breakpoints to `clamp(44px, 5.1vw, 62px)`, `clamp(42px, 7.8vw, 64px)`, and `clamp(34px, 9.5vw, 46px)`. Section headings use weight 500, line-height 1.18, -0.035em tracking, and `clamp(30px, 3.2vw, 42px)`; those same breakpoints set 34px, 30px, and 34px. The closing heading uses `clamp(36px, 4.2vw, 56px)`, weight 500, line-height 1.15, and -0.04em tracking, becoming 38px at 620px.
+
+Within the landing example, the question uses `clamp(19px, 1.8vw, 24px)`, weight 450, line-height 1.45, and -0.025em tracking; it becomes 20px at 800px and 21px at 620px. The feedback title uses 23px, weight 450, line-height 1.4, and -0.025em tracking, becoming 21px at 800px and 23px at 620px. Supporting paragraphs use local 14–15px text with 1.75–1.8 line-height; navigation, transcript, and metadata use 10–13px text. FAQ questions use 14px and answers use 13px with 1.85 line-height. Keep these display and compact example sizes scoped to the public landing.
+
 **The One Heading Rule.** Let the workspace header identify the page. Add a larger content heading only when it advances the task; do not repeat the title as an eyebrow or slogan.
 
 ## Layout
 
 The classic shadcn/Radix sidebar uses an inset workspace, with a 16rem expanded navigation on every normal workspace page, including preflight. There is no compact rail or saved collapse preference. During an active live interview, navigation opens as a focus-managed drawer. Ctrl/Meta+B operates that drawer only; Ctrl/Meta+K opens workspace search. At heights of 500px or less, navigation scrolls as a whole so destinations and account actions stay reachable. Help and Settings sit above the account menu; planned destinations remain searchable.
 
-Screenly requires a desktop or laptop window at least 1024 CSS pixels wide. Below that threshold, the app displays a concise wider-window notice. The underlying page remains mounted, so an active interview is not reset or finished by a resize. Transient overlays dismiss on crossing the boundary so their focus traps do not obscure the notice.
+Workspace, authentication, onboarding, and live-interview routes require a desktop or laptop window at least 1024 CSS pixels wide. Below that threshold, those routes display a concise wider-window notice. The underlying page remains mounted, so an active interview is not reset or finished by a resize. Transient overlays dismiss on crossing the boundary so their focus traps do not obscure the notice. `Providers` bypasses this boundary only for the public `/` landing.
 
 The workspace has an 8px desktop inset, a 56px header, a 16px outer corner, and a bordered white content area. Ordinary pages use a centered maximum width of 1080px; content gutters grow from 20px to 32px to 40px. The dashboard starter is narrower at 720px. A visible-on-focus skip link targets the main content, which receives focus after route changes.
 
 Live interviews use drawer navigation and retain the existing viewport-height stage, right transcript column, persistent question, candidate caption, and dock. The existing fitting rules in `live-interview.module.css` keep controls reachable in short desktop windows and handle long questions.
+
+The public landing uses a centered 1160px maximum width with 48px side gutters, reducing to 24px at 800px and 18px at 380px. Its navigation has an 84px minimum height, reducing to 74px at 800px; in-page navigation links hide there while sign-in and the primary action remain. The hero places its description beside the headline above a bordered interview example. The example transcript is a 330px side column, reducing to 290px at 1100px and 260px at 800px, then stacking below the stage at 620px. Process, feedback, and FAQ sections use two columns with gaps of 100px, 56px at 1100px, and 36px at 800px; they become one column at 620px. Major vertical section spacing is 88–110px on wide screens and 64px at 800px. These are local public-surface rules, without a sidebar or changes to workspace density.
 
 **The Preserved Stage Rule.** Keep the existing live composition and its responsive fitting behavior. Styling changes must not move session ownership or audio behavior into presentation components.
 
@@ -252,9 +259,15 @@ Working panels and the workspace are flat, using subtle borders and neutral fill
 
 Control color transitions generally run for 150ms. Dialogs and sheets use their existing 150–200ms transitions; the retained question reveal uses 500ms. Respect reduced motion in global CSS and the live renderer. The sidecar contains exact elevation and motion metadata beyond the frontmatter schema.
 
+The live orb uses Liquid porcelain: measured voice energy drives a 40ms attack / 120ms release envelope, a lightly damped contour spring, and layered subsurface currents. Low frequencies shape broad lobes; high frequencies add small pearl highlights. Its center stays anchored. The material clock advances only with voice energy, and the spring settles back to a sphere during silence. Speech follows display frames at up to 60 Hz on a bounded square canvas with pixel ratio capped at 1.75; resting frames do not repaint, and offscreen/hidden rendering stops. The CSS fallback shares the voice envelope and clock without an independent animation loop. Reduced motion removes deformation and material movement while readable speaker status remains available.
+
+The landing adds a single hero arrival (650ms, opacity 0.65 to 1 and 8px upward settling) using `cubic-bezier(0.23, 1, 0.32, 1)`. Primary and follow-up controls use a 140ms press scale to 0.97, while primary-action arrows shift 2px over 180ms on fine-pointer hover. Their color transitions use 160ms; role tabs retain 150ms state transitions. Keyboard focus removes the relevant press and tab transitions, FAQ content has no expansion animation, and reduced motion removes the hero arrival and control transforms. The landing reuses PorcelainOrb at rest, with no independent ambient animation or raster assets.
+
 ## Shapes
 
 Use the extracted radius scale: small for subtle inline targets, medium for inputs and buttons, large for compact groups, and extra-large for cards, dialogs, and the inset workspace. Badges and the retained live dock controls use fully rounded shapes. The existing checkbox and live-question focus outline retain local 4px corners. Shared cards use 24px spacing and a one-pixel border. Form controls have clear input boundaries; selected segmented choices add an inset stroke as well as a neutral fill. Do not replace this state distinction with a barely different background alone.
+
+The landing interview example and feedback report use the shared extra-large radius and one-pixel semantic borders. Role-tab groups use medium corners and their individual tabs use small corners; FAQ triggers also use small corners. The compact example label retains a local 6px corner equivalent to the small radius. These extensions retain the established form language.
 
 ## Components
 
@@ -267,6 +280,7 @@ Use the extracted radius scale: small for subtle inline targets, medium for inpu
 - **Page and session patterns:** `PageIntro` accepts optional description and action and renders nothing when both are absent. `InterviewRows` supports compact recent-session lists and full responsive tables. `Loading`, `ErrorState`, `InlineAlert`, `EmptyState`, and `ConfirmAction` preserve state and recovery semantics.
 - **Live session:** retain `LiveInterview`, `PorcelainOrb`, `LiveTranscript`, `InterviewAudioMenu`, `FinishInterviewDialog`, and `InterviewExitGuard`. Style through semantic tokens, component variants, and the existing CSS module. Preserve interrupt, mute, replay, playback preferences, reconnect, timing, microphone recovery, export, and finish-without-feedback behavior.
 - **Recovery and validation:** `PageRecovery` supplies provider-independent route/not-found actions with full navigation; the root error document is self-contained. Keep error details private. Repeated link and project errors retain their field paths, accessible descriptions, and focus recovery. Audio tooltips close when their menu opens so Escape and focus return belong to the menu.
+- **Public landing:** compose the existing Wordmark, Button, Tabs, Accordion, and PorcelainOrb. The main action links to `/interviews/new`, and sign-in retains `/auth/sign-in`. Three role tabs select explicitly illustrative Frontend, Backend, and Full-stack exchanges; changing roles resets the follow-up toggle. The toggle exposes pressed state and announces its question politely. The resting orb, illustrative transcript, and labeled feedback sample request no microphone or interview API. The FAQ retains shared Radix keyboard and expanded-state behavior. Public navigation and preview controls retain visible focus, coarse-pointer targets, and a skip link to the main content.
 
 Agent-safe edit boundaries: presentation belongs in `app`, `components`, and global tokens; preserve backend endpoints, shared Zod schemas, ownership checks, query keys, auth policy, profile import consent/autosave, audio hooks, and state-store contracts. Locate actions by role and accessible name and state by `aria-*`/Radix `data-state`; do not depend on incidental copy or add test IDs where semantics already identify the control. New styles must update both design artifacts, and interaction changes require relevant fixture journeys beyond a screenshot.
 
