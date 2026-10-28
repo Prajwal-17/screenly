@@ -2,22 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import {
-  AudioLines,
-  Loader2,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { Wordmark } from "@/components/wordmark";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Sheet } from "@/components/ui/sheet";
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
-import { motion, useReducedMotion } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { CSSProperties } from "react";
 import { WorkspaceSidebar } from "@/components/workspace-sidebar";
 import { useUserProfile } from "@/lib/profile";
 import { ErrorState } from "@/components/common";
@@ -29,13 +26,10 @@ export function Brand() {
   return (
     <Link
       href="/"
-      className="inline-flex min-h-11 items-center gap-2.5 rounded-md text-xl font-semibold tracking-[-0.04em]"
+      className="inline-flex min-h-11 items-center rounded-md"
       aria-label="Screenly home"
     >
-      <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-        <AudioLines className="size-5" strokeWidth={1.8} aria-hidden="true" />
-      </span>
-      Screenly
+      <Wordmark />
     </Link>
   );
 }
@@ -45,7 +39,6 @@ export function Workspace({
   title,
   actions,
   voice = false,
-  interviewActive = false,
   immersive = false,
   beforeNavigate,
 }: {
@@ -72,55 +65,9 @@ export function Workspace({
   const needsOnboarding =
     profile.data?.status === "new" || profile.data?.status === "draft";
   const path = usePathname();
-  const {
-    navigationOpen,
-    setNavigationOpen,
-    sidebarCollapsed,
-    setSidebarCollapsed,
-    signingOut,
-    setSigningOut,
-  } = useUIStore();
-  const [focusExpanded, setFocusExpanded] = useState(false);
+  const { navigationOpen, setNavigationOpen, signingOut, setSigningOut } =
+    useUIStore();
   const [signOutError, setSignOutError] = useState("");
-  const reducedMotion = useReducedMotion();
-  const focusMode = voice && interviewActive;
-  const collapsed = focusMode ? !focusExpanded : sidebarCollapsed;
-  const toggleSidebar = useCallback(() => {
-    if (immersive) setNavigationOpen(!navigationOpen);
-    else if (focusMode) setFocusExpanded((value) => !value);
-    else setSidebarCollapsed(!sidebarCollapsed);
-  }, [
-    immersive,
-    navigationOpen,
-    setNavigationOpen,
-    focusMode,
-    setSidebarCollapsed,
-    sidebarCollapsed,
-  ]);
-  useEffect(() => {
-    if (signingOut || !session || needsOnboarding) return;
-    const shortcut = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.repeat ||
-        event.isComposing ||
-        event.altKey ||
-        event.shiftKey ||
-        !(event.ctrlKey || event.metaKey) ||
-        event.key.toLowerCase() !== "b" ||
-        (event.target instanceof HTMLElement &&
-          event.target.closest(
-            'input, textarea, select, [role="textbox"], [contenteditable]:not([contenteditable="false"])',
-          ))
-      )
-        return;
-      event.preventDefault();
-      if (window.matchMedia("(min-width: 768px)").matches) toggleSidebar();
-      else setNavigationOpen(!useUIStore.getState().navigationOpen);
-    };
-    window.addEventListener("keydown", shortcut);
-    return () => window.removeEventListener("keydown", shortcut);
-  }, [signingOut, session, needsOnboarding, toggleSidebar, setNavigationOpen]);
   useEffect(() => {
     router.prefetch("/");
   }, [router]);
@@ -164,6 +111,9 @@ export function Workspace({
           : path.endsWith("/feedback")
             ? "Feedback"
             : "Interview");
+  useEffect(() => {
+    document.title = `${context} · Screenly`;
+  }, [context]);
   if (signingOut || isPending || !session || needsOnboarding)
     return (
       <div
@@ -174,52 +124,16 @@ export function Workspace({
         {signingOut ? "Signing out…" : "Loading your workspace…"}
       </div>
     );
-  const navigation = (
-    <Sheet
-      showHeader={false}
-      open={navigationOpen}
-      onOpenChange={setNavigationOpen}
-      side="left"
-      title="Navigation"
-      description="Your Screenly workspace"
-      className="w-[min(280px,85vw)] bg-sidebar"
-      trigger={
-        <Button
-          variant="ghost"
-          size="icon"
-          className={
-            immersive
-              ? "absolute top-2 left-3 z-20 sm:left-6"
-              : "-ml-2 md:hidden"
-          }
-          aria-label="Open navigation"
-          aria-keyshortcuts="Control+B Meta+B"
-        >
-          <Menu />
-        </Button>
-      }
-    >
-      <WorkspaceSidebar
-        name={profile.data?.details.name || session.user.name}
-        email={session.user.email}
-        onNavigate={() => setNavigationOpen(false)}
-        onSignOut={signOut}
-        signOutError={signOutError}
-      />
-    </Sheet>
-  );
   return (
-    <motion.div
-      className={immersive ? "h-dvh overflow-hidden" : "min-h-dvh"}
-      initial={false}
-      style={
-        { "--sidebar-width": collapsed ? "64px" : "256px" } as CSSProperties
-      }
-      animate={{ "--sidebar-width": collapsed ? "64px" : "256px" }}
-      transition={{
-        duration: reducedMotion ? 0 : 0.24,
-        ease: [0.22, 1, 0.36, 1],
-      }}
+    <SidebarProvider
+      open
+      openMobile={navigationOpen}
+      onOpenMobileChange={setNavigationOpen}
+      forceMobile={immersive}
+      className={cn(
+        "bg-sidebar",
+        immersive && "h-dvh min-h-0 overflow-hidden p-2",
+      )}
     >
       <a
         href="#workspace-content"
@@ -227,60 +141,36 @@ export function Workspace({
       >
         Skip to content
       </a>
-      <aside
-        id="workspace-sidebar"
+      <WorkspaceSidebar
+        name={profile.data?.details.name || session.user.name}
+        email={session.user.email}
+        onSignOut={signOut}
+        signOutError={signOutError}
+      />
+      <SidebarInset
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col overflow-hidden border-r bg-sidebar",
-          !immersive && "md:flex",
-        )}
-        aria-label="Screenly workspace"
-        data-state={collapsed ? "collapsed" : "expanded"}
-        data-focus-mode={focusMode}
-      >
-        <WorkspaceSidebar
-          name={profile.data?.details.name || session.user.name}
-          email={session.user.email}
-          collapsed={collapsed}
-          onSignOut={signOut}
-          signOutError={signOutError}
-        />
-      </aside>
-      <div
-        className={cn(
-          "min-w-0",
-          immersive ? "relative h-full" : "md:ml-[var(--sidebar-width)]",
+          "min-w-0 overflow-clip border border-border shadow-none!",
+          immersive
+            ? "m-0! h-full rounded-xl"
+            : "min-h-dvh md:min-h-[calc(100dvh-1rem)]",
         )}
       >
-        {immersive && navigation}
-        {!immersive && (
-          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-2 text-xs">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="-ml-2 mr-1 hidden md:inline-flex"
-                onClick={toggleSidebar}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-keyshortcuts="Control+B Meta+B"
-                title={`${collapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
-                aria-expanded={!collapsed}
-                aria-controls="workspace-sidebar"
-              >
-                {collapsed ? (
-                  <PanelLeftOpen className="size-[18px]" strokeWidth={1.7} />
-                ) : (
-                  <PanelLeftClose className="size-[18px]" strokeWidth={1.7} />
-                )}
-              </Button>
-              {navigation}
-              <div
-                id="workspace-context"
-                className="truncate text-sm leading-normal font-medium tracking-normal"
-              >
-                {context}
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">{actions}</div>
+        {immersive ? (
+          <SidebarTrigger
+            className="absolute top-2 left-3 z-20 sm:left-6"
+            aria-label="Open navigation"
+          />
+        ) : (
+          <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4 sm:px-6">
+            <h1
+              id="workspace-title"
+              className="min-w-0 flex-1 truncate text-sm leading-normal font-medium tracking-normal"
+            >
+              {context}
+            </h1>
+            {actions && (
+              <div className="flex shrink-0 items-center gap-2">{actions}</div>
+            )}
           </header>
         )}
         <main
@@ -293,10 +183,10 @@ export function Workspace({
               ? "h-full min-h-0 px-3 sm:px-6 lg:px-8"
               : voice
                 ? "px-4 pb-4 sm:px-8"
-                : "px-5 py-8 sm:px-8 sm:py-10 lg:px-10 xl:px-14",
+                : "flex-1 px-5 py-8 sm:px-8 sm:py-10 lg:px-10",
           )}
         >
-          {(immersive || voice) && (
+          {immersive && (
             <h1 id="workspace-title" className="sr-only">
               {context}
             </h1>
@@ -311,14 +201,6 @@ export function Workspace({
                   : "max-w-[1080px]",
             )}
           >
-            {!voice && !immersive && (
-              <h1
-                id="workspace-title"
-                className="mb-3 text-[30px] font-semibold tracking-[-0.035em] sm:text-[36px]"
-              >
-                {context}
-              </h1>
-            )}
             {sessionExpired ? (
               <div className="max-w-xl py-6 sm:py-8">
                 <ErrorState
@@ -396,8 +278,8 @@ export function Workspace({
             )}
           </div>
         </main>
-      </div>
+      </SidebarInset>
       <WorkspaceSearch beforeNavigate={beforeNavigate} />
-    </motion.div>
+    </SidebarProvider>
   );
 }

@@ -187,10 +187,12 @@ export function ProjectEditor({
   project,
   onChange,
   onClose,
+  validationErrors,
 }: {
   project: ProfileProject | null;
   onChange: (project: ProfileProject) => void;
   onClose: () => void;
+  validationErrors?: Record<string, string>;
 }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   function done() {
@@ -198,12 +200,18 @@ export function ProjectEditor({
     if (result.success) {
       setErrors({});
       onClose();
-    } else
+    } else {
       setErrors(
         Object.fromEntries(
           result.error.issues.map((x) => [String(x.path[0]), x.message]),
         ),
       );
+      const firstField = result.error.issues[0]?.path[0];
+      if (typeof firstField === "string")
+        requestAnimationFrame(() =>
+          document.getElementById(`project-${firstField}`)?.focus(),
+        );
+    }
   }
   const field = (
     key: "name" | "description" | "role" | "url" | "repositoryUrl",
@@ -226,7 +234,7 @@ export function ProjectEditor({
             : 100
       }
       multiline={multiline}
-      error={errors[key]}
+      error={errors[key] || validationErrors?.[key]}
       optional={key !== "name"}
     />
   );

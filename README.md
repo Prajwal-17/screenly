@@ -2,11 +2,9 @@
 
 A technical interview practice app built for learning and portfolio use. Choose a role, experience level, topics, and duration; practice by speaking to the agent; then review your saved transcript and feedback scored out of 10.
 
-![Screenly landing page](docs/screenshots/landing.png)
-
 ## What works
 
-- Warm-paper light workspace with fern actions, a fixed desktop sidebar, mobile navigation drawer, local Geist typography, and keyboard access.
+- White and neutral workspace with charcoal actions, semantic status colors, an expanded shadcn sidebar, live-interview navigation drawer, local Geist typography, and keyboard access.
 - Centered voice stage tied to real session states and microphone input, concise live captions, optional inline transcript, and a mute/interrupt/finish dock.
 - Google OAuth authentication through Better Auth.
 - Frontend, backend, and full-stack interviews at three experience levels.
@@ -95,7 +93,7 @@ Existing `storage/local.sqlite` files are left intact; the Worker uses D1. Back 
 
 ## Profile onboarding
 
-Onboarding has six compact steps: optional import, background, links, projects, practice focus, and final review. It uses the shared shadcn/Radix controls, with a desktop step rail and a pinned action footer. The working area scrolls when needed on small screens; the page stays within the viewport. Members can add an about section, personal links, extra labeled links, and multiple projects with descriptions, contributions, technologies, and live/repository URLs.
+Onboarding has six compact steps: optional import, background, links, projects, practice focus, and final review. It uses the shared shadcn/Radix controls, with a desktop step rail and a pinned action footer. The working area scrolls when needed in short desktop windows. Members can add an about section, personal links, extra labeled links, and multiple projects with descriptions, contributions, technologies, and live/repository URLs.
 
 Import supports PDF, DOCX, legacy DOC, and TXT resumes up to 5 MB, public GitHub/LinkedIn/portfolio links, and pasted text. Text-based PDFs support up to 20 pages; scanned or protected files offer a text/manual fallback. Upload, extraction, and AI analysis have separate visible statuses. The configured Chat Completions model returns a proposed profile; members inspect selectable fields or formatted JSON, then explicitly approve before anything is applied. A failed analysis leaves extracted text available for inspection and retry. YouTube, repository pages in the profile field, company LinkedIn pages, unsafe destinations, and other unsupported inputs receive specific errors. Login-only pages need a resume or pasted text instead.
 
@@ -105,7 +103,7 @@ Drafts autosave as members type, including unfinished values, projects, their cu
 
 Geist Sans and Geist Mono variable fonts are committed in `apps/web/app/fonts` under the SIL Open Font License 1.1 and served with `next/font/local`. Development, type checks, and builds need no font downloads. [License and provenance](apps/web/app/fonts/SOURCE.txt) are retained beside the font files. Geist Sans covers headings, reading text, and controls; Geist Mono is reserved for code.
 
-The approved **pale-paper / fern** light palette uses charcoal text, quiet white surfaces, and semantic status colors. Customized shadcn/ui primitives and Tailwind CSS 4 utilities apply shared tokens across every route. A fixed 256px sidebar becomes a keyboard-accessible drawer below 768px. The voice-first interview centers the speaker, keeps the current question readable, and starts with its read-only transcript open beside or below the stage. The live session fits from 320px through desktop widths without document scrolling. See [DESIGN.md](DESIGN.md) for tokens, typography, component states, and accessibility conventions.
+The approved Cal.com-inspired light palette uses white surfaces, neutral navigation, charcoal actions, and explicit success, warning, destructive, and information colors. The classic 256px inset sidebar stays expanded on normal pages, including preflight. During a live interview, navigation is available as a drawer. Screenly requires a window at least 1024 CSS pixels wide; a narrower window shows guidance without ending an active interview. Ctrl/Command+K opens workspace search, and Ctrl/Command+B opens the live drawer. The voice-first interview retains its orb, persistent question, candidate caption, transcript, and microphone/replay/audio/finish dock. See [DESIGN.md](DESIGN.md) and its tracked [.impeccable/design.json](.impeccable/design.json) sidecar for tokens and component contracts.
 
 ## Commands
 
@@ -114,23 +112,25 @@ bun run dev
 bun run check-types
 bun run lint
 bun run test
+bun run --cwd apps/web test:e2e:install
+bun run test:e2e
 bun run build
 bun run check
 bun run format
 bun run format:check
 ```
 
-The minimal Bun tests cover shared input/feedback validation, interview timing, and the generated database baseline.
+The Bun tests cover shared input/feedback validation, interview timing, and the generated database baseline. The Playwright suite starts an isolated frontend on port 3106 and intercepts HTTP/WebSocket requests using synthetic data. It needs no backend, Google account, or provider keys. The desktop project covers navigation, setup, profile import/autosave, review, and live recovery; layout tests exercise 1024–1920px, short laptop windows, and the narrower-window boundary. See the [browser-test guide](apps/web/tests/e2e/README.md) for commands, evidence, coverage, and the separate real-service gate. Run type checks, lint, Bun tests, build, then browser tests sequentially; frontend type generation and build share `.next/types`.
 
 ## Architecture
 
 - `apps/web`: Next.js, React, Tailwind CSS 4, shadcn/ui (Radix), React Hook Form, TanStack Query, Zustand.
 - `apps/backend`: Hono on Cloudflare Workers, D1 through Drizzle, Better Auth, Cloudflare WebSockets and Durable Objects, OpenAI library. Bun manages dependencies and CLI tooling.
 - `packages/shared`: Zod request/report schemas, domain types, and the audio frame contract.
-- [Implementation notes](docs/implementation.md): voice lifecycle, storage, protocol, and verification.
-- [Screenshots](docs/screenshots): landing, authentication, onboarding, overview, setup, preflight, voice interview, feedback, and history.
+- [UI implementation plan](UI_IMPLEMENTATION_PLAN.md): scope, boundaries, and delivery requirements.
+- [Browser-test guide](apps/web/tests/e2e/README.md): reproducible synthetic journeys and review captures. Generated screenshots, traces, and the HTML report stay ignored; attach them to a review instead of linking local-only documentation.
 
-The backend owns interview timing, conversation history, and provider requests. The browser owns microphone capture and ordered playback. Deepgram turn detection establishes answer boundaries; no browser VAD model assets are required.
+The backend owns interview timing, conversation history, and provider requests. The browser owns microphone capture, its local speech detector, and ordered playback. `build:audio` bundles the detector model, worker runtime, and playback worklet. Deepgram turn detection establishes answer boundaries.
 
 The installed Deepgram SDK's speech WebSocket implementation attempts to JSON-parse binary frames. The app uses native Workers WebSocket upgrades for both Deepgram channels, retaining SDK transcript types and separating binary PCM audio from JSON control events. One Durable Object owns each interview, its client/provider sockets, original deadline, and retryable feedback alarm. D1 stores accounts, profiles, interviews, and transcripts.
 

@@ -19,8 +19,26 @@ function RadioGroup({
 
 function RadioGroupItem({
   className,
+  variant = "default",
+  children,
   ...props
-}: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
+}: React.ComponentProps<typeof RadioGroupPrimitive.Item> & {
+  variant?: "default" | "segment";
+}) {
+  if (variant === "segment") {
+    return (
+      <RadioGroupPrimitive.Item
+        data-slot="radio-group-item"
+        className={cn(
+          "relative flex min-h-11 min-w-0 items-center justify-center border-r bg-card px-2 text-xs font-medium outline-none transition-colors last:border-r-0 hover:bg-muted focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:bg-muted data-[state=checked]:ring-1 data-[state=checked]:ring-inset data-[state=checked]:ring-choice-border sm:text-sm",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </RadioGroupPrimitive.Item>
+    );
+  }
   return (
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"

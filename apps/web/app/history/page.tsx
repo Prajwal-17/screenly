@@ -15,11 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
-import { api } from "@/lib/api";
+import { api, elapsed } from "@/lib/api";
 
 export default function History() {
   const { data: session } = authClient.useSession();
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
   const client = useQueryClient();
   const remove = useMutation({
     mutationFn: api.remove,
@@ -30,15 +31,21 @@ export default function History() {
     queryFn: api.list,
     enabled: !!session,
   });
-  const items = (query.data ?? []).filter((i) =>
-    `${i.role} ${i.level} ${i.topics.join(" ")}`
-      .toLowerCase()
-      .includes(search.trim().toLowerCase()),
+  const all = query.data ?? [];
+  const completed = all.filter((i) => i.status === "completed");
+  const scores = completed.flatMap((i) =>
+    i.feedback?.overallScore != null ? [i.feedback.overallScore] : [],
   );
+  const items = all
+    .filter((i) => status === "all" || i.status === status)
+    .filter((i) =>
+      `${i.role} ${i.level} ${i.topics.join(" ")}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()),
+    );
   return (
     <Workspace>
       <PageIntro
-        description="Your practice, saved. Pick up where you left off."
         action={
           query.data?.length ? (
             <Button asChild>
@@ -50,6 +57,53 @@ export default function History() {
           ) : undefined
         }
       />
+      {!!query.data?.length && (
+        <>
+          <dl className="mb-7 flex flex-wrap gap-x-7 gap-y-3 text-sm">
+            <div className="flex gap-1.5">
+              <dd className="font-medium tabular-nums">{completed.length}</dd>
+              <dt className="text-muted-foreground">completed</dt>
+            </div>
+            <div className="flex gap-1.5">
+              <dd className="font-medium tabular-nums">
+                {Math.round(all.reduce((sum, i) => sum + elapsed(i), 0) / 60)}
+              </dd>
+              <dt className="text-muted-foreground">minutes practiced</dt>
+            </div>
+            {scores.length > 0 && (
+              <div className="flex gap-1.5">
+                <dd className="font-medium tabular-nums">
+                  {(
+                    scores.reduce((sum, n) => sum + n, 0) / scores.length
+                  ).toFixed(1)}
+                </dd>
+                <dt className="text-muted-foreground">average score</dt>
+              </div>
+            )}
+          </dl>
+          <div
+            className="mb-5 flex gap-6 border-b"
+            role="group"
+            aria-label="Filter interviews by status"
+          >
+            {[
+              ["all", "All interviews"],
+              ["completed", "Completed"],
+              ["active", "In progress"],
+              ["draft", "Drafts"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setStatus(value!)}
+                aria-pressed={status === value}
+                className={`min-h-11 border-b-2 text-xs sm:text-sm ${status === value ? "border-foreground font-medium text-foreground" : "border-transparent text-muted-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {!!query.data?.length && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
@@ -94,7 +148,7 @@ export default function History() {
           retry={() => void query.refetch()}
           retrying={query.isFetching}
         />
-      ) : search && !items.length ? (
+      ) : (search || status !== "all") && !items.length ? (
         <div className="border-y px-5 py-16 text-center">
           <Search
             className="mx-auto mb-4 size-6 text-muted-foreground"
@@ -102,15 +156,18 @@ export default function History() {
           />
           <h3>No interviews match</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Try another role or topic.
+            Try another search or status.
           </p>
           <Button
             variant="outline"
             size="sm"
             className="mt-5"
-            onClick={() => setSearch("")}
+            onClick={() => {
+              setSearch("");
+              setStatus("all");
+            }}
           >
-            Clear search
+            Clear filters
           </Button>
         </div>
       ) : (

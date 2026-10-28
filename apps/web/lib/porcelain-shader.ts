@@ -1,4 +1,4 @@
-// A glazed porcelain body with slow, subsurface fern / mint currents.
+// A glazed porcelain body with slow, neutral subsurface currents.
 // Analytic fields keep the material light: no textures, raymarching or extra passes.
 export const vertexSource = `attribute vec2 aPosition;
 void main(){gl_Position=vec4(aPosition,0.0,1.0);}`;
@@ -43,7 +43,7 @@ void main(){
   body=mix(body,mix(uMint,uPaper,.8),seam*.2);
   float submerged=smoothstep(.12,.9,depth.x-flow.z*.4);
   body=mix(body,uFern,submerged*(1.-porcelain)*.1);
-  // A trace of candidate clay warms one reflected fold without replacing fern.
+  // A trace of candidate clay warms one reflected fold.
   float warmth=smoothstep(.12,.85,depth.z-q.y*.35)*(.045+uCandidate*.12);
   body=mix(body,mix(uClay,uPaper,.68),warmth*(1.-porcelain*.6));
 

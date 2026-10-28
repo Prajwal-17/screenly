@@ -12,8 +12,6 @@ import { InlineAlert } from "@/components/common";
 import { Brand } from "@/components/workspace";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
-import voiceStyles from "@/components/voice-visual.module.css";
-import styles from "./sign-in.module.css";
 
 // Next.js removes this branch and the local sign-in chunk from production builds.
 const DevelopmentLogin =
@@ -64,7 +62,7 @@ export default function SignIn() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-sidebar">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
         <Brand />
         <Link
@@ -76,31 +74,10 @@ export default function SignIn() {
         </Link>
       </header>
       <main className="flex flex-1 items-center justify-center px-6 py-10 sm:py-16">
-        <div className="w-full max-w-[520px]">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-[46px] leading-[1.02] tracking-[-0.04em] sm:text-[72px]">
-              Think
-              <br />
-              <span className="text-primary">out loud.</span>
-            </h1>
-            <div
-              className={`${voiceStyles.visual} ${styles.presence}`}
-              data-state="ready"
-              data-animated="false"
-              aria-hidden="true"
-            >
-              <div className={voiceStyles.outline} />
-              <div className={voiceStyles.reactive}>
-                <div className={voiceStyles.orb}>
-                  <div className={voiceStyles.surface} />
-                  <div className={voiceStyles.ribbons} />
-                </div>
-              </div>
-            </div>
-          </div>
-          <p className="mt-6 text-base text-muted-foreground">
-            Sign in to your practice space.
-          </p>
+        <div className="w-full max-w-[400px] rounded-xl border bg-card p-6 sm:p-8">
+          <h1 className="text-2xl font-semibold tracking-[-0.025em]">
+            Sign in
+          </h1>
           <div className="mt-8 flex flex-col gap-4" aria-label="Google sign-in">
             {error && <InlineAlert>{error}</InlineAlert>}
             {capabilities.isError ? (
@@ -137,7 +114,7 @@ export default function SignIn() {
             </Button>
           </div>
           <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
-            New here? Google creates your account automatically.
+            New accounts are created with Google.
           </p>
           {DevelopmentLogin && capabilities.data?.devLogin && (
             <DevelopmentLogin

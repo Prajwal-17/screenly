@@ -1,0 +1,76 @@
+{
+  "recordedAt": "2026-10-27T18:52:40.289863+00:00",
+  "baseCommit": "7c513b45b3cc6f1ab6affdb12a2063eef6780d4b",
+  "uncommittedWorkingTree": true,
+  "sourceFingerprint": {
+    "algorithm": "sha256",
+    "value": "2c73c958be250544317fc9a4aa9d331c806736c7e2885d85e3be1cab66e573c5",
+    "fileCount": 117,
+    "method": "Sorted git-listed cached/other nonignored apps/web files with ts/tsx/js/mjs/json/css/svg extensions plus package.json, bun.lock, turbo.json; verification.json excluded. Hash each path + NUL + content + NUL."
+  },
+  "environment": {
+    "node": "v24.20.0",
+    "bun": "1.4.1",
+    "playwright": "1.64.0"
+  },
+  "checks": {
+    "types": "passed",
+    "lint": "passed",
+    "bunTests": {
+      "passed": 7,
+      "failed": 0
+    },
+    "productionBuild": "passed (Next.js and Wrangler dry run)",
+    "formatting": "passed for follow-up files",
+    "diffWhitespace": "passed",
+    "detector": "no findings in tooltip and profile-fields follow-up scan"
+  },
+  "browser": {
+    "command": "bun run test:e2e",
+    "stats": {
+      "startTime": "2026-10-27T18:47:18.340Z",
+      "duration": 107107.616,
+      "expected": 40,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "reports": "apps/web/playwright-report/",
+    "captures": "apps/web/test-results/",
+    "projects": ["desktop Chromium"],
+    "widths": [1024, 1280, 1366, 1440, 1920],
+    "shortDesktop": {
+      "width": 1024,
+      "height": 600
+    },
+    "narrowBoundary": [360, 768, 1023],
+    "textReflow": "200% root text size at 1920px; not a physical browser-zoom test",
+    "transport": "intercepted synthetic HTTP/WebSocket",
+    "devices": "fake Chromium microphone/speaker preflight"
+  },
+  "interactiveReview": {
+    "surface": "T3 shared preview and fallback Brave computer-use browser; loopback frontend and test-only in-memory HTTP/WebSocket fixture",
+    "scope": "Synthetic text/file/URL import approval, JSON, cancellation, errors and retry; profile autosave failure/retry, skip, edit/save, repeated link and project validation; live transcript, captions, replay event, audio speed/default device menus, pause/resume, status/error, reconnect, exit guards, finish failure/retry, pending finish and both destinations; history deletion cancel/failure/success; profile error recovery, missing interview, sign-in availability error/retry; live-stage and Settings viewport samples. See UI_IMPLEMENTATION_PLAN.md section 11 for details and screenshot paths.",
+    "status": "partial direct computer-use coverage; synthetic fixture evidence does not verify physical audio, OAuth or real providers",
+    "fixture": "apps/web/tests/e2e/preview-fixture.mjs; loopback only, in-memory synthetic state; stopped after review",
+    "fallback": "Shared preview snapshots repeatedly timed out; fallback Brave exercised Back guard, pending finish and sign-in capability states."
+  },
+  "historicalEvidence": {
+    "previousBrowserRun": "77 passed, 1 skipped under superseded mobile/collapsible-sidebar policy",
+    "independentVisualReview": "ten desktop/touch resting captures under superseded policy; not validation of this revision"
+  },
+  "unverified": [
+    "Complete direct computer-use route/state matrix, including full route-by-route desktop width and browser zoom/text scaling, remaining targeted live/device failure and loading/deletion pending paths",
+    "Actual offline transport recovery; simulated socket disconnect and reconnect were exercised",
+    "Real Google OAuth/login/logout and origin/cookie/WebSocket integration",
+    "Physical microphone/speaker permission, capture, mute, interruption, actual audio replay and output-device switching",
+    "Full real-provider interview, feedback generation/retry, export and deletion",
+    "Manual screen-reader review",
+    "Production route/root-error fault injection",
+    "Performance comparison against a measured prior revision"
+  ],
+  "delivery": {
+    "committed": false,
+    "deployed": false
+  }
+}

@@ -34,7 +34,22 @@ export function WorkspaceSearch({
   };
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (
+        window.innerWidth >= 1024 &&
+        !event.defaultPrevented &&
+        !event.repeat &&
+        !event.isComposing &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !(
+          event.target instanceof HTMLElement &&
+          event.target.closest(
+            'input, textarea, select, [role="textbox"], [contenteditable="true"]',
+          )
+        ) &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
         setNavigationOpen(false);
         setSearchOpen(!useUIStore.getState().searchOpen);
@@ -69,13 +84,15 @@ export function WorkspaceSearch({
       }}
       onCloseAutoFocus={(event) => {
         event.preventDefault();
-        if (returnFocus.current?.isConnected) returnFocus.current.focus();
-        if (window.matchMedia("(max-width: 767px)").matches)
-          document
-            .querySelector<HTMLButtonElement>(
-              'button[aria-label="Open navigation"]',
-            )
-            ?.focus();
+        if (returnFocus.current?.isConnected) {
+          returnFocus.current.focus({ preventScroll: true });
+        }
+        if (document.activeElement !== returnFocus.current) {
+          const fallback = document.querySelector<HTMLElement>(
+            'button[data-sidebar="trigger"], #workspace-content',
+          );
+          fallback?.focus({ preventScroll: true });
+        }
       }}
     >
       <div className="flex items-center gap-3 border-b pl-4 pr-1">

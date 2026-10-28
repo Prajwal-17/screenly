@@ -116,25 +116,17 @@ export function LiveInterview({
                 : opening
                   ? "Ready when you are"
                   : "Listening to you";
-  const hint = finishing
-    ? "Saving your conversation and preparing the next step."
-    : state.error
-      ? "Use the recovery action above to continue."
-      : state.paused
-        ? "Your timer, microphone, and interviewer are paused."
-        : state.muted
-          ? "Unmute your microphone when you’re ready to answer."
-          : state.status === "thinking"
-            ? opening
-              ? "Preparing your interview."
-              : "Taking a moment with your answer."
-            : speaking
-              ? opening
-                ? "A quick overview before we begin. Your timer hasn’t started."
-                : "Listen to the question, or jump in when you’re ready."
-              : opening
-                ? "Say “ready” to begin. Your practice timer hasn’t started."
-                : "Take your time. Think out loud.";
+  const hint = state.error
+    ? "Use the recovery action above to continue."
+    : state.paused
+      ? "Your timer, microphone, and interviewer are paused."
+      : state.muted
+        ? "Unmute your microphone to answer."
+        : opening
+          ? speaking
+            ? "Your timer starts with the first technical question."
+            : "Say “ready” to begin."
+          : null;
   useLayoutEffect(() => {
     const stage = conversation.current;
     const surface = questionSurface.current;
@@ -269,12 +261,12 @@ export function LiveInterview({
               ) : (
                 <p className={styles.questionText}>
                   {finishing
-                    ? "A good place to reflect."
-                    : "Let’s start the conversation."}
+                    ? "Saving interview…"
+                    : "Connecting to your interviewer…"}
                 </p>
               )}
             </div>
-            <p className={styles.hint}>{hint}</p>
+            {hint && <p className={styles.hint}>{hint}</p>}
             {state.paused && (
               <Button
                 variant="secondary"
