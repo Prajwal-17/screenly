@@ -1,30 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app).
+# Screenly frontend
 
-## Getting Started
+React in Next.js App Router, Tailwind CSS 4, customized shadcn/ui (Radix), Motion, React Hook Form, TanStack Query, and Zustand.
 
-First, run the development server:
+Copy `.env.example` to `.env.local`, start the backend, and run:
 
-```bash
-bun dev
+```sh
+bun run --cwd apps/web dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The frontend runs on port 3000. `NEXT_PUBLIC_API_URL` selects the backend origin, including WebSocket and auth connections. Provider keys belong in the backend environment.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Interviews use microphone answers and spoken agent replies, with read-only transcripts and feedback. Production sign-in uses Google through Better Auth. The email entry is an explicitly enabled, loopback-only development bypass, excluded from the production frontend. Routes include landing, sign-in, six-step onboarding, dashboard, setup, live interview, feedback, history, settings, and Help. Library, plans, progress, saved answers, and team workspaces state their future availability. The legacy `/session` route redirects to setup. Root, route-error, and not-found surfaces offer safe recovery without exposing server details.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load Inter, a custom Google Font.
+See [the root README](../../README.md) for complete setup and check commands.
 
-## Learn More
+The UI uses white surfaces, neutral navigation, charcoal primary actions, and vivid semantic status colors. The classic shadcn inset sidebar stays expanded on normal workspace pages; the live interview uses a drawer. Windows narrower than 1024 CSS pixels show guidance while the underlying session remains mounted. Geist Sans/Mono fonts are bundled locally; development, type checks, and builds need no font downloads.
 
-To learn more about Next.js, take a look at the following resources:
+All presentation extends the customized shadcn primitives in `components/ui`; do not reinitialize them. `Workspace` owns auth/profile gates, the main landmark, route focus, and the compact page title. `WorkspaceSidebar` uses `ui/sidebar.tsx` and the transient `store/uiStore.ts` overlay state. `WorkspaceSearch` and navigation retain live-session exit protection.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Runtime tokens and typography live in `app/globals.css`. `LiveInterview` and `live-interview.module.css` own the preserved live composition; `PorcelainOrb` and `lib/porcelain-shader.ts` own its material. Session orchestration, capture/playback, and profile drafts remain in their existing libraries and stores. See [DESIGN.md](../../DESIGN.md), its [tracked sidecar](../../.impeccable/design.json), and [PRODUCT.md](PRODUCT.md).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Run deterministic browser checks from the repository root:
 
-## Deploy on Vercel
+```sh
+bun install
+bun run --cwd apps/web test:e2e:install
+bun run test:e2e
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The harness starts its own frontend and intercepts synthetic API/socket responses. See [tests/e2e/README.md](tests/e2e/README.md) for selective commands, screenshots, state coverage, and real-provider verification requirements.

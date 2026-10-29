@@ -1,151 +1,107 @@
-import { DeepgramClient } from "@deepgram/sdk";
-import { V2Socket } from "@deepgram/sdk/speak/v2";
-import { env } from "../config";
-
-type AudioHandler = (audio: Uint8Array<ArrayBuffer>) => void;
-
+import type { Config } from "../config";
+import {
+  DeepgramConnectionError,
+  DeepgramSocket,
+  type DeepgramKey,
+  type SocketFactory,
+} from "./deepgramSocket";
+// A separate connection per reply isolates late binary audio after cancellation.
+// The installed SDK's speech socket JSON-parses binary frames; use the wire protocol here.
 export class TTSService {
-  readonly DEEPGRAM_API_KEY = env.DEEPGRAM_API_KEY;
-  ttsClient: V2Socket | null = null;
-
-  private deepgramSpeakReady = false;
-  private deepgramConnecting: Promise<void> | null = null;
-  private textQueue: string[] = [];
-
-  constructor(private readonly onAudio: AudioHandler) {}
-
-  async connect(): Promise<void> {
-    if (this.ttsClient && this.deepgramSpeakReady) return;
-    if (this.deepgramConnecting) return this.deepgramConnecting;
-
-    const connectionPromise = this.openConnection();
-    this.deepgramConnecting = connectionPromise;
-
-    try {
-      await connectionPromise;
-    } finally {
-      if (this.deepgramConnecting === connectionPromise) {
-        this.deepgramConnecting = null;
-      }
-    }
-  }
-
-  async sendText(text: string): Promise<void> {
-    if (!text) return;
-
-    if (this.ttsClient && this.deepgramSpeakReady) {
-      this.ttsClient.sendSpeak({ type: "Speak", text });
-      return;
-    }
-
-    this.textQueue.push(text);
-
-    await this.connect();
-  }
-
-  async flush(): Promise<void> {
-    await this.connect();
-
-    if (this.ttsClient && this.deepgramSpeakReady) {
-      this.ttsClient.sendFlush({ type: "Flush" });
-    }
-  }
-
-  close() {
-    this.ttsClient?.close();
-    this.ttsClient = null;
-    this.deepgramSpeakReady = false;
-    this.textQueue = [];
-  }
-
-  private async openConnection(): Promise<void> {
-    const client = new DeepgramClient({
-      apiKey: this.DEEPGRAM_API_KEY,
-    });
-
-    const connection = await client.speak.v2.connect({
-      model: "flux-alexis-en",
+  private socket: DeepgramSocket | null = null;
+  private closed = false;
+  private failure: Error | null = null;
+  private resolveFlush: (() => void) | null = null;
+  private rejectFlush: ((error: Error) => void) | null = null;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  constructor(
+    private env: Config,
+    private onAudio: (data: Uint8Array) => void,
+    private makeSocket?: SocketFactory,
+    private key: DeepgramKey = env.DEEPGRAM_API_KEY ?? "",
+  ) {}
+  async connect() {
+    const url = new URL("/v2/speak", this.env.DEEPGRAM_WS_URL);
+    url.search = new URLSearchParams({
+      model: this.env.DEEPGRAM_TTS_MODEL,
+      expressivity: String(this.env.DEEPGRAM_TTS_EXPRESSIVITY),
       encoding: "linear16",
       sample_rate: "24000",
-    });
-
-    this.ttsClient = connection;
-
-    let resolveReady!: () => void;
-    let rejectReady!: (reason?: unknown) => void;
-    const readyPromise = new Promise<void>((resolve, reject) => {
-      resolveReady = resolve;
-      rejectReady = reject;
-    });
-
-    connection.on("open", () => {
-      console.log("Connected To Deepgram Speak");
-    });
-
-    connection.on("message", (event) => {
-      const message: unknown = event;
-
-      if (message instanceof Blob) {
-        void message
-          .arrayBuffer()
-          .then((buffer) => this.onAudio(new Uint8Array(buffer)))
-          .catch((error) => console.error("TTS audio handling failed", error));
-        return;
-      }
-
-      if (message instanceof ArrayBuffer) {
-        this.onAudio(new Uint8Array(message));
-        return;
-      }
-
-      if (!message || typeof message !== "object") {
-        console.log("Deepgram Speak message:", message);
-        return;
-      }
-
-      const type = "type" in message ? message.type : undefined;
-
-      if (type === "Connected") {
-        this.deepgramSpeakReady = true;
-
-        const queuedText = this.textQueue.splice(0);
-        for (const text of queuedText) {
-          connection.sendSpeak({ type: "Speak", text });
-        }
-
-        resolveReady();
-        return;
-      }
-
-      console.log("Deepgram Speak event:", message);
-    });
-
-    connection.on("error", (error) => {
-      console.error("Deepgram Speak error", error);
-      rejectReady(error);
-    });
-
-    connection.on("close", () => {
-      if (this.ttsClient === connection) {
-        this.ttsClient = null;
-        this.deepgramSpeakReady = false;
-      }
-
-      rejectReady(new Error("Deepgram Speak connection closed"));
-    });
-
+    }).toString();
+    this.socket = new DeepgramSocket(
+      url,
+      this.key,
+      {
+        json: (message) => {
+          if (message.type === "ConfigureFailure") {
+            this.failure = new Error(
+              "The voice provider rejected the speech speed.",
+            );
+            this.rejectFlush?.(this.failure);
+          }
+          // Flushed only acknowledges the text buffer; audio can still be arriving.
+          if (message.type === "SpeechMetadata") this.resolveFlush?.();
+        },
+        audio: (data) => {
+          if (!this.closed) {
+            if (data.byteLength > 0) this.refreshFlushTimeout();
+            this.onAudio(data);
+          }
+        },
+        error: (error) => {
+          this.failure = error;
+          this.rejectFlush?.(error);
+        },
+      },
+      this.makeSocket,
+    );
+    await this.socket.connect();
+    if (this.closed) this.socket.close();
+    else
+      this.socket.send({
+        type: "Configure",
+        speed: this.env.DEEPGRAM_TTS_SPEED,
+      });
+  }
+  sendText(text: string) {
+    if (!this.closed) this.socket?.send({ type: "Speak", text });
+  }
+  async flush() {
+    if (this.closed) return;
+    if (this.failure) throw this.failure;
     try {
-      connection.connect();
-      await connection.waitForOpen();
-      await readyPromise;
-    } catch (error) {
-      if (this.ttsClient === connection) {
-        this.ttsClient = null;
-        this.deepgramSpeakReady = false;
-      }
-
-      connection.close();
-      throw error;
+      await new Promise<void>((resolve, reject) => {
+        this.resolveFlush = resolve;
+        this.rejectFlush = reject;
+        this.refreshFlushTimeout();
+        this.socket?.send({ type: "Flush" });
+      });
+    } finally {
+      this.clearFlushTimeout();
+      this.resolveFlush = null;
+      this.rejectFlush = null;
     }
+  }
+  private refreshFlushTimeout() {
+    if (!this.rejectFlush) return;
+    // Longer replies can still be synthesizing after twenty seconds. Only
+    // time out a stalled stream; SpeechMetadata marks actual completion.
+    this.clearFlushTimeout();
+    this.flushTimer = setTimeout(() => {
+      this.failure = new DeepgramConnectionError("SPEECH_TIMEOUT");
+      this.rejectFlush?.(this.failure);
+    }, 20000);
+  }
+  private clearFlushTimeout() {
+    if (this.flushTimer !== null) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
+  }
+  close() {
+    this.closed = true;
+    this.clearFlushTimeout();
+    this.resolveFlush?.();
+    this.socket?.send({ type: "Interrupt" });
+    this.socket?.close();
+    this.socket = null;
   }
 }

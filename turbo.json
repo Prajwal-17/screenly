@@ -2,15 +2,30 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "globalEnv": [
+    "CI",
     "PORT",
     "FRONTEND_URL",
-    "DATABASE_PATH",
     "BETTER_AUTH_URL",
     "BETTER_AUTH_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "DEEPGRAM_API_KEY",
-    "OMNIROUTE_API_KEY"
+    "OMNIROUTE_API_KEY",
+    "LLM_API_KEY",
+    "LLM_BASE_URL",
+    "LLM_MODEL",
+    "DEEPGRAM_STT_MODEL",
+    "DEEPGRAM_TTS_MODEL",
+    "DEEPGRAM_TTS_EXPRESSIVITY",
+    "DEEPGRAM_TTS_SPEED",
+    "NEXT_PUBLIC_API_URL",
+    "DEEPGRAM_WS_URL",
+    "NODE_ENV",
+    "ENABLE_DEV_LOGIN",
+    "WEB_PORT",
+    "D1_PERSIST_PATH",
+    "CLOUDFLARE_DATABASE_ID",
+    "CLOUDFLARE_ACCOUNT_ID"
   ],
   "tasks": {
     "format": {
@@ -30,6 +45,22 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "test": {
+      "dependsOn": ["^test"]
+    },
+    "backend#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
     }
-  }
+  },
+  "globalPassThroughEnv": [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE",
+    "NODE_EXTRA_CA_CERTS",
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_D1_TOKEN"
+  ]
 }

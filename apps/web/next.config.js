@@ -1,13 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: (config) => {
-    // Treat .onnx files as static assets — do not bundle them
-    config.module.rules.push({
-      test: /\.onnx$/,
-      type: "asset/resource",
-    });
-    return config;
-  },
+  transpilePackages: ["@repo/shared"],
+  devIndicators: false,
+  allowedDevOrigins: ["127.0.0.1"],
 };
-
 export default nextConfig;
