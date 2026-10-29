@@ -205,3 +205,39 @@
     scroll-behavior: auto !important;
   }
 }
+
+@theme {
+  --ease-landing: cubic-bezier(0.23, 1, 0.32, 1);
+  --animate-landing-arrival: landing-arrival 650ms var(--ease-landing) both;
+
+  @keyframes landing-arrival {
+    from {
+      opacity: 0.65;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@utility landing-container {
+  @apply mx-auto w-[calc(100%_-_96px)] max-w-[1160px] max-[800px]:w-[calc(100%_-_48px)] max-[380px]:w-[calc(100%_-_36px)];
+}
+
+@utility text-landing-hero {
+  @apply text-[clamp(44px,5.1vw,74px)] leading-[1.1] font-medium tracking-[-0.04em] max-[1100px]:text-[clamp(44px,5.1vw,62px)] max-[800px]:text-[clamp(42px,7.8vw,64px)] max-[620px]:text-[clamp(34px,9.5vw,46px)];
+}
+
+@utility text-landing-section {
+  @apply text-[clamp(30px,3.2vw,42px)] leading-[1.18] font-medium tracking-[-0.035em] text-balance max-[1100px]:text-[34px] max-[800px]:text-[30px] max-[620px]:text-[34px];
+}
+
+@utility landing-nav-link {
+  @apply inline-flex min-h-11 items-center text-[13px] font-[450] text-muted-foreground transition-colors duration-160 ease-[ease] hover:text-foreground hover:underline hover:underline-offset-[5px];
+}
+
+@utility text-landing-description {
+  @apply mt-[22px] max-w-[350px] text-[15px] leading-[1.8] text-muted-foreground max-[800px]:mt-[18px] max-[800px]:text-[14px] max-[620px]:max-w-[390px];
+}

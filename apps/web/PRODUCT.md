@@ -8,7 +8,7 @@ web
 
 ## Users and purpose
 
-Candidates practice technical interviews by speaking, then review saved feedback grounded in their answers. Frontend, Backend, and Full-stack roles support selectable experience, topics, and duration.
+Screenly is an AI interviewing app where candidates have spoken technical interviews, then review saved feedback grounded in their answers. Frontend, Backend, and Full-stack interviews support Junior, Mid-level, and Senior experience, selectable topics, and duration.
 
 ## Stack
 
@@ -20,7 +20,7 @@ Preserve Google-only production authentication through Better Auth, an opt-in lo
 
 ## Brand commitments
 
-Screenly uses a text-only wordmark: local Geist Sans at 20px, weight 600, and -0.03em tracking. There is no brand icon or favicon. The user approved a full frontend replacement with a professional Cal.com-inspired white and neutral visual system, charcoal actions, and the classic shadcn/Radix inset sidebar. Normal workspace pages always show the full sidebar; only an active live interview uses a navigation drawer. The app requires a window at least 1024 CSS pixels wide and keeps an active session mounted during a narrower resize. This supersedes the earlier paper-and-fern direction. Every screen uses the same semantic tokens and shared primitives. Keep the existing live-interview composition and behavior: orb, persistent question, candidate caption, default-open transcript, and microphone/replay/audio/finish dock.
+Screenly uses a text-only wordmark: local Geist Sans at 20px, weight 600, and -0.03em tracking. There is no brand icon or favicon. The user approved a full frontend replacement with a professional Cal.com-inspired white and neutral visual system, charcoal actions, and the classic shadcn/Radix inset sidebar. Normal workspace pages always show the full sidebar; only an active live interview uses a navigation drawer. Workspace, authentication, onboarding, and live-interview routes require a window at least 1024 CSS pixels wide and keep an active session mounted during a narrower resize. The public `/` landing alone is responsive on phones and tablets. This supersedes the earlier paper-and-fern direction. Every screen uses the same semantic tokens and shared primitives. Keep the existing live-interview composition and behavior: orb, persistent question, candidate caption, default-open transcript, and microphone/replay/audio/finish dock.
 
 ## Evidence on hand
 
@@ -28,7 +28,11 @@ The implementation in `lib`, `store`, shared schemas, backend, the root `UI_IMPL
 
 ## Accessibility
 
-Visible keyboard focus, labeled controls, Radix focus management, reduced motion, readable contrast, desktop text reflow, and a clear wider-window boundary. Meaningful voice state is announced; partial spoken words are not repeatedly announced.
+Visible keyboard focus, labeled controls, Radix focus management, reduced motion, readable contrast, desktop text reflow, responsive public-landing text reflow, and a clear wider-window boundary on app routes. Meaningful voice state is announced; partial spoken words are not repeatedly announced.
+
+## Public landing
+
+The public `/` presents the spoken interview, supported roles and experience levels, setup-to-feedback journey, and requirements. Start an interview links to `/interviews/new`; Google sign-in remains unchanged. Shared Radix tabs switch the three explicitly illustrative role conversations, and a follow-up toggle demonstrates the next question. The existing PorcelainOrb is reused at rest. This preview requests no microphone or interview API, and illustrative feedback is labeled as an example. The responsive landing does not remove the desktop and microphone requirements for a real interview.
 
 ## Navigation previews
 
@@ -43,6 +47,8 @@ Six compact steps cover optional import, background/about, personal and extra li
 Practice choices lead Overview; empty statistics are omitted. Setup uses an open form, and feedback brings next practice steps before detailed scores. The main navigation is Overview, New interview, and Interviews. Help and Settings sit above the account menu. Planned features are grouped under Coming soon and remain accessible through workspace search. The compact workspace header names the page; avoid redundant page titles, slogans, and decorative labels. Keep meaningful errors, constraints, consent, confirmation, and recovery guidance.
 
 ## Shared implementation and agent operation
+
+Use Tailwind utilities for landing layouts, responsive variants, and component styling. Keep reusable typography/container utilities and animation theme definitions in `app/globals.css`; do not add a separate landing stylesheet.
 
 Use the adapted shadcn primitives, semantic runtime tokens, and existing domain components. Preserve the expanded sidebar, live-only drawer, keyboard shortcuts, route focus, dialog behavior, and live-session navigation guards. Controls retain accessible names, explicit form labels, radio-group semantics, current-page state, and meaningful asynchronous status so keyboard users and automation can operate the same interface. Style changes must preserve auth, API, shared-schema, ownership, audio-engine, session-state, profile import, and autosave contracts. `DESIGN.md` and `.impeccable/design.json` describe the implemented system together.
 

@@ -5,13 +5,14 @@ import {
   DEEPGRAM_CONNECT_TIMEOUT_MS,
   DeepgramConnectionError,
   DeepgramSocket,
+  type DeepgramKey,
   type SocketFactory,
 } from "./deepgramSocket";
 
 // The upgrade and Connected acknowledgement each have a bounded deadline.
-// Retain speech for that whole interval (768 KB), not just its first 3 seconds.
+// Retain speech across both handshake attempts, including one transient retry.
 const MAX_PENDING_BYTES =
-  16000 * 2 * ((2 * DEEPGRAM_CONNECT_TIMEOUT_MS) / 1000);
+  16000 * 2 * ((4 * DEEPGRAM_CONNECT_TIMEOUT_MS) / 1000);
 
 const vocabulary: Record<InterviewSettings["topics"][number], string[]> = {
   JavaScript: [
@@ -64,17 +65,33 @@ export class STTService {
     private onError: (error: Error) => void,
     private topics: InterviewSettings["topics"] = [],
     private makeSocket?: SocketFactory,
+    private key: DeepgramKey = env.DEEPGRAM_API_KEY ?? "",
   ) {}
   connect(): Promise<void> {
     if (this.closed)
       return Promise.reject(new Error("Transcription is closed."));
     if (this.opening) return this.opening;
     if (this.socket) return Promise.resolve();
-    const task = this.open().finally(() => {
+    const task = this.openWithRetry().finally(() => {
       if (this.opening === task) this.opening = null;
     });
     this.opening = task;
     return task;
+  }
+  private async openWithRetry() {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.open();
+        return;
+      } catch (error) {
+        if (
+          this.closed ||
+          attempt >= 1 ||
+          !(error instanceof DeepgramConnectionError && error.retryable)
+        )
+          throw error;
+      }
+    }
   }
   private async open() {
     const url = new URL("/v2/listen", this.env.DEEPGRAM_WS_URL);
@@ -94,9 +111,10 @@ export class STTService {
     // silent PCM, and reopen on demand while the caller buffers speech frames.
     // Provider turn indices restart at zero on each connection.
     const turnOffset = this.latestTurn + 1;
+    let connected = false;
     const socket = new DeepgramSocket(
       url,
-      this.env.DEEPGRAM_API_KEY ?? "",
+      this.key,
       {
         json: (message) => {
           if (this.socket !== socket || this.closed) return;
@@ -104,7 +122,10 @@ export class STTService {
             const turn = message as unknown as ListenV2TurnInfo;
             const turnIndex = turn.turn_index + turnOffset;
             this.latestTurn = Math.max(this.latestTurn, turnIndex);
-            if (turn.event === "StartOfTurn" || turn.event === "Update")
+            if (
+              turn.event === "StartOfTurn" ||
+              (turn.event === "Update" && turn.transcript.trim())
+            )
               this.activeTurn = true;
             if (turn.event === "EndOfTurn") {
               this.activeTurn = false;
@@ -118,7 +139,8 @@ export class STTService {
           }
         },
         error: (error) => {
-          if (this.socket !== socket || this.closed) return;
+          // Opening failures belong to connect(), which retries before reporting.
+          if (!connected || this.socket !== socket || this.closed) return;
           this.socket = null;
           this.clearTimers();
           // A quiet prewarmed socket can be reopened on the next microphone
@@ -138,6 +160,7 @@ export class STTService {
     this.socket = socket;
     try {
       await socket.connect();
+      connected = true;
     } catch (error) {
       if (this.socket === socket) this.socket = null;
       socket.close();

@@ -10,6 +10,7 @@ import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
 import type { InterviewStore } from "../db/interviews";
 
 import { STTService } from "./sttService";
+import { InvalidOpeningReplyError } from "./llmService";
 import { DeepgramConnectionError } from "./deepgramSocket";
 import { TTSService } from "./ttsService";
 import { interviewWelcome, type OpeningReply } from "./interviewOpening";
@@ -19,6 +20,7 @@ export type SessionDependencies = {
   background: (task: Promise<unknown>) => void;
   scheduleDeadline: (deadline: number) => Promise<void>;
   cancelDeadline: () => Promise<void>;
+  closeVoice: () => Promise<void>;
   speechEnabled: boolean;
   reply: (
     interview: InterviewDetail,
@@ -322,6 +324,9 @@ export class InterviewSession {
       this.finishing ||
       !this.voice ||
       !this.active ||
+      // Flux also emits empty Updates for the next idle turn. They are not
+      // new candidate speech and must not cancel a reply or advance the turn.
+      (event.event === "Update" && !event.transcript.trim()) ||
       event.turn_index < this.latestTurn ||
       event.turn_index <= this.finalizedTurn
     )
@@ -686,15 +691,41 @@ export class InterviewSession {
       const [, spoken] = await Promise.all([saving, flushing]);
       if (spoken && current.savedId && !current.controller.signal.aborted)
         this.playback = { id: current.id, messageId: current.savedId };
-    } catch {
+    } catch (error) {
       if (!current.controller.signal.aborted && !this.closed) {
+        // Keep provider diagnostics out of the UI and transcript. Do not log
+        // raw provider messages: they can contain prompts or credentials.
+        console.warn(
+          JSON.stringify({
+            event: "interviewer_reply_failed",
+            phase: current.phase,
+            name: error instanceof Error ? error.name : "UnknownError",
+            code:
+              error instanceof InvalidOpeningReplyError
+                ? error.code
+                : undefined,
+            model:
+              error instanceof InvalidOpeningReplyError
+                ? error.model
+                : undefined,
+            status:
+              error &&
+              typeof error === "object" &&
+              "status" in error &&
+              typeof error.status === "number"
+                ? error.status
+                : undefined,
+          }),
+        );
         await this.persist(current, "interrupted");
         this.send({
           type: "error",
           scope: speechFailed ? "speech" : "llm",
           message: speechFailed
             ? "Speech is unavailable. Check the Deepgram key and model, then retry speech."
-            : "The interviewer could not respond. Retry the interviewer or speak another answer.",
+            : error instanceof InvalidOpeningReplyError
+              ? "The interviewer could not check your readiness. Retry the interviewer to continue."
+              : "The interviewer could not respond. Retry the interviewer or speak another answer.",
         });
       }
     } finally {
@@ -832,6 +863,7 @@ export class InterviewSession {
       this.stt?.close();
       this.stt = null;
       await this.deps.store.finish(this.id, generateFeedback);
+      await this.deps.closeVoice();
       if (generateFeedback) await this.deps.feedback(this.id);
       else await this.deps.cancelDeadline();
       this.send({ type: "finished", id: this.id, generateFeedback });
