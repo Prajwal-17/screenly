@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { profileRoutes } from "./routes/profile";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { settingsSchema, finishInterviewSchema } from "@repo/shared";
+import { createInterviewSchema, finishInterviewSchema } from "@repo/shared";
+import { MissingExperienceLevelError } from "./db/interviews";
 import { readConfig, getCapabilities } from "./config";
 import { createServices, type AppEnv } from "./context";
 
@@ -51,16 +52,21 @@ app.get("/api/interviews", async (c) =>
 );
 app.post("/api/interviews", async (c) => {
   const body = await c.req.json().catch(() => null);
-  const parsed = settingsSchema.safeParse(body);
+  const parsed = createInterviewSchema.safeParse(body);
   if (!parsed.success)
+    return c.json({ error: "Choose a role preset to begin." }, 400);
+  try {
     return c.json(
-      { error: "Choose a role, experience level, topics, and duration." },
-      400,
+      await c
+        .get("services")
+        .interviews.create(c.get("userId"), parsed.data.role),
+      201,
     );
-  return c.json(
-    await c.get("services").interviews.create(c.get("userId"), parsed.data),
-    201,
-  );
+  } catch (error) {
+    if (error instanceof MissingExperienceLevelError)
+      return c.json({ error: error.message }, 409);
+    throw error;
+  }
 });
 app.use("/api/interviews/:id/*", async (c, next) => {
   if (

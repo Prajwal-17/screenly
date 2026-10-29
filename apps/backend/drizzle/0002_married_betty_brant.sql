@@ -1,0 +1,1 @@
+ALTER TABLE `interview_session` ADD `memory_status` text DEFAULT 'pending' NOT NULL;

@@ -10,6 +10,7 @@ import {
 import { getCapabilities } from "../config";
 import type { AppEnv } from "../context";
 import { analyzeProfile } from "../lib/profileAnalysis";
+import { createMemory } from "../db/memory";
 import {
   ImportError,
   MAX_SOURCE_CHARS,
@@ -35,6 +36,17 @@ profileRoutes.use("*", async (c, next) => {
 });
 profileRoutes.get("/", async (c) =>
   c.json(await c.get("services").profiles.get(c.get("userId"))),
+);
+profileRoutes.get("/memory", async (c) =>
+  c.json(await createMemory(c.get("services").db).active(c.get("userId"))),
+);
+profileRoutes.delete("/memory/:id", async (c) =>
+  (await createMemory(c.get("services").db).dismiss(
+    c.get("userId"),
+    c.req.param("id"),
+  ))
+    ? c.body(null, 204)
+    : c.json({ error: "Finding not found." }, 404),
 );
 profileRoutes.put("/", bodyLimit({ maxSize: 128 * 1024 }), async (c) => {
   const result = profileSaveSchema.safeParse(
@@ -185,6 +197,7 @@ profileRoutes.post(
         source.text,
         signal,
         c.get("config"),
+        { label: source.source, link: source.link },
       );
       signal.throwIfAborted();
       return {

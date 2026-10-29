@@ -1,39 +1,20 @@
 import OpenAI from "openai";
 import {
   feedbackSchema,
-  interviewElapsedMs,
+  LIVE_CONTEXT_CHARACTER_LIMIT,
   type InterviewDetail,
   type InterviewMessage,
 } from "@repo/shared";
 import type { Config } from "../config";
-import { feedbackPrompt, interviewPrompt } from "../constants";
 import { openingPrompt, openingReplySchema } from "./interviewOpening";
+import { liveMessages, LiveContextBudgetError } from "./interviewContext";
+import {
+  EndToolStream,
+  endInterviewTool,
+  type ReplyPart,
+} from "./interviewerTools";
 
-// A pause is a transcription boundary, not necessarily a conversational one.
-// Keep persisted segments intact for feedback; join adjacent speech for replies.
-function conversationMessages(messages: InterviewMessage[]) {
-  const result: { role: "user" | "assistant"; content: string }[] = [];
-  let phase: InterviewMessage["phase"];
-  for (const message of messages) {
-    const content =
-      (message.phase === "opening" ? "[Opening phase] " : "") +
-      message.content +
-      (message.status === "interrupted"
-        ? " [This reply was interrupted.]"
-        : "");
-    const previous = result.at(-1);
-    if (
-      message.role === "user" &&
-      previous?.role === "user" &&
-      phase === message.phase
-    )
-      previous.content += `\n\n${content}`;
-    else result.push({ role: message.role, content });
-    phase = message.phase;
-  }
-  return result;
-}
-
+// Legacy numeric feedback parsing remains for compatibility with historical tests.
 export function parseFeedback(raw: string, messages: InterviewMessage[]) {
   const feedback = feedbackSchema.parse(
     JSON.parse(
@@ -83,6 +64,25 @@ export class LLMService {
     });
   }
   async openingReply(interview: InterviewDetail, signal: AbortSignal) {
+    const messages = [
+      { role: "system" as const, content: openingPrompt },
+      {
+        role: "user" as const,
+        content: JSON.stringify({
+          settings: {
+            role: interview.role,
+            level: interview.level,
+            duration: interview.duration,
+            promptVersion: interview.preparation?.promptVersion ?? null,
+          },
+          candidateContext: interview.candidate ?? null,
+          transcript: interview.messages,
+        }),
+      },
+    ];
+    const characters = JSON.stringify(messages).length;
+    if (characters > LIVE_CONTEXT_CHARACTER_LIMIT)
+      throw new LiveContextBudgetError(characters);
     const result = await this.client.chat.completions.create(
       {
         model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,
@@ -93,22 +93,7 @@ export class LLMService {
           ? { max_tokens: this.env.LLM_INTERVIEW_MAX_TOKENS }
           : {}),
         response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: openingPrompt },
-          {
-            role: "user",
-            content: JSON.stringify({
-              settings: {
-                role: interview.role,
-                level: interview.level,
-                topics: interview.topics,
-                duration: interview.duration,
-              },
-              candidateContext: interview.candidate ?? null,
-              transcript: interview.messages,
-            }),
-          },
-        ],
+        messages,
       },
       { signal },
     );
@@ -127,9 +112,17 @@ export class LLMService {
   async *generateReply(
     interview: InterviewDetail,
     signal: AbortSignal,
-  ): AsyncGenerator<string> {
-    const remaining =
-      interview.duration - interviewElapsedMs(interview) / 60000;
+  ): AsyncGenerator<ReplyPart> {
+    const assemblyStarted = performance.now();
+    const { messages, characters } = liveMessages(interview);
+    console.info(
+      JSON.stringify({
+        event: "interviewer_context_assembled",
+        elapsedMs: Math.round(performance.now() - assemblyStarted),
+        inputCharacters: characters,
+      }),
+    );
+    const requestStarted = performance.now();
     const stream = await this.client.chat.completions.create(
       {
         model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,
@@ -139,53 +132,50 @@ export class LLMService {
         ...(this.env.LLM_INTERVIEW_MAX_TOKENS
           ? { max_tokens: this.env.LLM_INTERVIEW_MAX_TOKENS }
           : {}),
-        messages: [
-          {
-            role: "system",
-            content: interviewPrompt(interview, Math.ceil(remaining)),
-          },
-          ...(interview.candidate
-            ? [
-                {
-                  role: "user" as const,
-                  content: JSON.stringify({
-                    candidateContext: interview.candidate,
-                  }),
-                },
-              ]
-            : []),
-          ...conversationMessages(interview.messages),
-        ],
+        messages,
+        ...(interview.preparation
+          ? { tools: [endInterviewTool], tool_choice: "auto" as const }
+          : {}),
         stream: true,
       },
       { signal },
     );
+    const tool = new EndToolStream();
+    let finishReason: string | null = null;
+    let firstOutputLogged = false;
+    const logFirstOutput = () => {
+      if (firstOutputLogged) return;
+      firstOutputLogged = true;
+      console.info(
+        JSON.stringify({
+          event: "interviewer_first_model_output",
+          elapsedMs: Math.round(performance.now() - requestStarted),
+          inputCharacters: characters,
+          model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL,
+        }),
+      );
+    };
     for await (const chunk of stream) {
+      if (signal.aborted) return;
+      const reason = chunk.choices[0]?.finish_reason;
+      if (reason) finishReason = reason;
       const text = chunk.choices[0]?.delta?.content;
+      const deltas = chunk.choices[0]?.delta?.tool_calls;
+      if (text || deltas?.length) logFirstOutput();
+      tool.add(deltas);
       if (text) yield text;
     }
-  }
-  async evaluate(interview: InterviewDetail) {
-    const result = await this.client.chat.completions.create({
-      model: this.env.LLM_MODEL!,
-      messages: [
-        { role: "system", content: feedbackPrompt },
-        {
-          role: "user",
-          content: JSON.stringify({
-            settings: {
-              role: interview.role,
-              level: interview.level,
-              topics: interview.topics,
-            },
-            transcript: interview.messages.filter(
-              (message) => message.phase !== "opening",
-            ),
-          }),
-        },
-      ],
-    });
-    const raw = result.choices[0]?.message.content ?? "";
-    return parseFeedback(raw, interview.messages);
+    if (finishReason !== "stop" && finishReason !== "tool_calls")
+      throw new Error("The interviewer response did not complete normally.");
+    const request = tool.finish();
+    if (finishReason === "tool_calls" && !request)
+      throw new Error(
+        "The provider marked a tool call without a valid tool request.",
+      );
+    if (request && finishReason !== "tool_calls")
+      throw new Error(
+        "The tool response ended without a tool completion marker.",
+      );
+    if (request) yield { type: "end_interview", request };
   }
 }

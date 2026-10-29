@@ -3,7 +3,7 @@ import { clientEventSchema } from "@repo/shared";
 import { readConfig, getCapabilities } from "./config";
 import { createDB } from "./db";
 import { createInterviews } from "./db/interviews";
-import { InterviewSession } from "./lib/interviewSession";
+import { InterviewSession, type ClosingIntent } from "./lib/interviewSession";
 import { generateFeedback } from "./lib/feedbackService";
 import { LLMService } from "./lib/llmService";
 import { STTService } from "./lib/sttService";
@@ -90,6 +90,19 @@ export class InterviewRoom extends DurableObject<Env> {
           openingReply: (interview, signal) =>
             new LLMService(config).openingReply(interview, signal),
           feedback: (id) => this.queueFeedback(id),
+          closing: {
+            load: async () =>
+              (await this.ctx.storage.get<ClosingIntent>("closingIntent")) ??
+              null,
+            save: async (intent) => {
+              await this.ctx.storage.put("closingIntent", intent);
+              await this.scheduleAlarm();
+            },
+            clear: async () => {
+              await this.ctx.storage.delete("closingIntent");
+              await this.scheduleAlarm();
+            },
+          },
           stt: (turn, error, topics) =>
             new STTService(voiceConfig, turn, error, topics, undefined, key),
           tts: (audio) => new TTSService(voiceConfig, audio, undefined, key),
@@ -150,6 +163,7 @@ export class InterviewRoom extends DurableObject<Env> {
       "interviewId",
       "deadline",
       "feedbackPending",
+      "closingIntent",
     ]);
     await this.scheduleAlarm();
   }
@@ -157,15 +171,17 @@ export class InterviewRoom extends DurableObject<Env> {
     // One alarm services all durable work. Serialize rescheduling so a pause
     // or feedback update cannot accidentally cancel a revocation retry.
     const task = this.alarmTask.then(async () => {
-      const [deadline, feedback, credential] = await Promise.all([
+      const [deadline, feedback, credential, closing] = await Promise.all([
         this.ctx.storage.get<number>("deadline"),
-        this.ctx.storage.get<boolean>("feedbackPending"),
+        this.ctx.storage.get<boolean | string>("feedbackPending"),
         this.credentials.nextAlarm(),
+        this.ctx.storage.get<ClosingIntent>("closingIntent"),
       ]);
       const times = [
         deadline,
         feedback ? Date.now() + 1 : null,
         credential,
+        closing?.deadlineAt,
       ].filter((time): time is number => time != null);
       if (times.length) await this.ctx.storage.setAlarm(Math.min(...times));
       else await this.ctx.storage.deleteAlarm();
@@ -187,6 +203,7 @@ export class InterviewRoom extends DurableObject<Env> {
       const interview = await this.store().get(id);
       if (interview?.status === "active")
         await this.store().finish(id, generateFeedback);
+      await this.ctx.storage.delete("closingIntent");
       await this.closeVoice();
       const saved = await this.store().get(id);
       if (saved?.feedbackStatus === "skipped") await this.cancelDeadline();
@@ -194,19 +211,26 @@ export class InterviewRoom extends DurableObject<Env> {
     }
   }
   async queueFeedback(id: string, allowSkipped = false) {
-    const interview = await this.store().get(id);
+    const store = this.store();
+    const interview = await store.get(id);
     if (
       !interview ||
       interview.status !== "completed" ||
-      interview.feedbackStatus === "ready" ||
       (interview.feedbackStatus === "skipped" && !allowSkipped)
     )
       return;
+    if (interview.review) {
+      // A ready review is immutable here; retries only repair derived memory.
+      if (!(await store.pendingMemory(id))) return;
+    } else if (interview.feedbackStatus === "ready" && !allowSkipped) {
+      // Reading or reopening legacy history must never trigger a paid review.
+      return;
+    }
     // Expose the queued state before returning so feedback polling starts immediately.
-    await this.store().feedbackState(id, "generating");
+    if (!interview.review) await store.feedbackState(id, "generating");
     await this.ctx.storage.put("interviewId", id);
     await this.ctx.storage.delete("deadline");
-    await this.ctx.storage.put("feedbackPending", true);
+    await this.ctx.storage.put("feedbackPending", crypto.randomUUID());
     await this.scheduleAlarm();
   }
   async alarm() {
@@ -224,9 +248,17 @@ export class InterviewRoom extends DurableObject<Env> {
         await this.ctx.storage.delete("deadline");
       else await this.finish(id);
     }
-    if (await this.ctx.storage.get<boolean>("feedbackPending")) {
+    const closing = await this.ctx.storage.get<ClosingIntent>("closingIntent");
+    if (closing?.interviewId === id && closing.deadlineAt <= Date.now())
+      await this.finish(id);
+    const pending = await this.ctx.storage.get<boolean | string>(
+      "feedbackPending",
+    );
+    if (pending) {
       await generateFeedback(id, this.store(), this.config());
-      await this.ctx.storage.delete("feedbackPending");
+      // A request arriving during provider I/O must retain its own work token.
+      if ((await this.ctx.storage.get("feedbackPending")) === pending)
+        await this.ctx.storage.delete("feedbackPending");
     }
     await this.scheduleAlarm();
   }

@@ -1,31 +1,60 @@
 import type { InterviewStore } from "../db/interviews";
 import type { Config } from "../config";
-import { LLMService } from "./llmService";
+import type { SessionReview } from "@repo/shared";
+import { ReviewService } from "./reviewService";
+
+async function deriveMemory(
+  id: string,
+  store: InterviewStore,
+  review: SessionReview,
+) {
+  if (!(await store.pendingMemory(id))) return;
+  try {
+    if (await store.deriveMemory(id, review))
+      await store.memoryState(id, review, "ready");
+  } catch {
+    // Review remains ready. A later explicit queue invocation retries only
+    // this deterministic DB step, without another paid model call.
+    await store.memoryState(id, review, "failed").catch(() => {});
+    console.error(
+      JSON.stringify({ event: "review_memory_failed", interviewId: id }),
+    );
+  }
+}
+
 export async function generateFeedback(
   id: string,
   store: InterviewStore,
   env: Config,
 ) {
   const interview = await store.get(id);
-  if (
-    !interview ||
-    interview.status !== "completed" ||
-    interview.feedbackStatus === "ready" ||
-    interview.feedbackStatus === "skipped"
-  )
+  if (!interview || interview.status !== "completed") return;
+  if (interview.review) {
+    await deriveMemory(id, store, interview.review);
     return;
-  await store.feedbackState(id, "generating");
+  }
+  if (interview.feedbackStatus === "skipped") return;
+  const claim = await store.claimReview(id);
+  if (!claim) return;
   try {
-    const report = await new LLMService(env).evaluate(interview);
-    await store.saveFeedback(id, report, env.LLM_MODEL!);
+    const fresh = await store.get(id);
+    if (!fresh || fresh.status !== "completed") return;
+    const report = await new ReviewService(env).generate(fresh);
+    if (await store.commitReview(id, claim, report, env.LLM_MODEL!))
+      await deriveMemory(id, store, report);
+    else await store.failReview(id, claim);
   } catch (error) {
+    // Never log provider output, transcript, profile text or untrusted errors.
     console.error(
       JSON.stringify({
-        event: "feedback_failed",
+        event: "review_failed",
         interviewId: id,
-        message: error instanceof Error ? error.message : "Unknown error",
+        code:
+          error instanceof Error && "code" in error
+            ? String(error.code)
+            : "PROVIDER_OR_VALIDATION",
       }),
     );
-    await store.feedbackState(id, "failed");
+    await store.failReview(id, claim);
   }
 }

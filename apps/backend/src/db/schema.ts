@@ -7,6 +7,11 @@ import type {
   InterviewCandidate,
   ProfileDetails,
   OnboardingState,
+  SessionPreparation,
+  SessionReview,
+  SessionEvent,
+  SessionControlState,
+  PracticeFinding,
 } from "@repo/shared";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -139,8 +144,50 @@ export const interviewSession = sqliteTable(
       .default("pending"),
     feedback: text("feedback", { mode: "json" }).$type<Feedback>(),
     feedbackModel: text("feedback_model"),
+    preparation: text("preparation", {
+      mode: "json",
+    }).$type<SessionPreparation>(),
+    review: text("review", { mode: "json" }).$type<SessionReview>(),
+    events: text("events", { mode: "json" })
+      .$type<SessionEvent[]>()
+      .notNull()
+      .default([]),
+    control: text("control", { mode: "json" }).$type<SessionControlState>(),
+    reviewClaim: text("review_claim"),
+    reviewClaimedAt: integer("review_claimed_at"),
+    memoryStatus: text("memory_status")
+      .$type<"pending" | "ready" | "failed">()
+      .notNull()
+      .default("pending"),
   },
   (table) => [index("interview_session_user_id_idx").on(table.userId)],
+);
+
+export const practiceFinding = sqliteTable(
+  "practice_finding",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sourceInterviewId: text("source_interview_id")
+      .notNull()
+      .references(() => interviewSession.id, { onDelete: "cascade" }),
+    sourceReviewVersion: text("source_review_version").notNull(),
+    role: text("role").$type<PracticeFinding["role"]>().notNull(),
+    criterionId: text("criterion_id").notNull(),
+    observation: text("observation").notNull(),
+    practiceFocus: text("practice_focus").notNull(),
+    evidence: text("evidence", { mode: "json" })
+      .$type<PracticeFinding["evidence"]>()
+      .notNull(),
+    createdAt: integer("created_at").notNull(),
+    dismissedAt: integer("dismissed_at"),
+  },
+  (table) => [
+    index("practice_finding_owner_idx").on(table.userId, table.createdAt),
+    index("practice_finding_source_idx").on(table.sourceInterviewId),
+  ],
 );
 
 export const interviewMessage = sqliteTable(

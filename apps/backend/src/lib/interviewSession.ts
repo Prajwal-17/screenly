@@ -1,5 +1,9 @@
 import {
+  CLOSING_TIMEOUT_MS,
+  interviewElapsedMs,
   packAudio,
+  type EndInterviewRequest,
+  type SessionEvent,
   type ClientEvent,
   type InterviewDetail,
   type InterviewPhase,
@@ -14,6 +18,20 @@ import { InvalidOpeningReplyError } from "./llmService";
 import { DeepgramConnectionError } from "./deepgramSocket";
 import { TTSService } from "./ttsService";
 import { interviewWelcome, type OpeningReply } from "./interviewOpening";
+import {
+  advanceControl,
+  LiveContextBudgetError,
+  transcriptIdentity,
+} from "./interviewContext";
+import type { ReplyPart } from "./interviewerTools";
+
+export type ClosingIntent = {
+  interviewId: string;
+  responseId: number;
+  reason: EndInterviewRequest["reason"];
+  deadlineAt: number;
+  messageId: string | null;
+};
 
 export type SessionDependencies = {
   store: InterviewStore;
@@ -25,12 +43,17 @@ export type SessionDependencies = {
   reply: (
     interview: InterviewDetail,
     signal: AbortSignal,
-  ) => AsyncGenerator<string>;
+  ) => AsyncGenerator<ReplyPart>;
   openingReply: (
     interview: InterviewDetail,
     signal: AbortSignal,
   ) => Promise<OpeningReply>;
   feedback: (id: string) => Promise<void>;
+  closing?: {
+    load: () => Promise<ClosingIntent | null>;
+    save: (intent: ClosingIntent) => Promise<void>;
+    clear: () => Promise<void>;
+  };
   stt: (
     turn: (event: ListenV2TurnInfo) => void,
     error: (error: Error) => void,
@@ -43,10 +66,11 @@ export type SessionDependencies = {
 type PreparedReply = {
   turn: number;
   transcript: string;
+  priorFindingIds: string;
   controller: AbortController;
   ready: Promise<{
-    output: AsyncGenerator<string>;
-    first: IteratorResult<string>;
+    output: AsyncGenerator<ReplyPart>;
+    first: IteratorResult<ReplyPart>;
   } | null>;
 };
 export class InterviewSession {
@@ -67,6 +91,8 @@ export class InterviewSession {
     saved: boolean;
     savedId: string | null;
     phase: InterviewPhase;
+    sourceIdentity: string;
+    createdAt: number;
     saving?: Promise<void>;
   } | null = null;
   private deadline: ReturnType<typeof setTimeout> | null = null;
@@ -85,21 +111,72 @@ export class InterviewSession {
   private interruptionTask: Promise<void> = Promise.resolve();
   private preparedReply: PreparedReply | null = null;
   private speechRevision = 0;
+  private closing: ClosingIntent | null = null;
+  private closingTimer: ReturnType<typeof setTimeout> | null = null;
+  private speechStartedAt: number | null = null;
+  private firstAudioForResponse = new Set<number>();
+  private acceptingFinalTurns = false;
 
   constructor(
     readonly id: string,
     private emit: (event: ServerEvent | Uint8Array) => void,
     private deps: SessionDependencies,
   ) {}
+  private async liveContext(): Promise<InterviewDetail | null> {
+    try {
+      return await this.deps.store.liveContext(this.id);
+    } catch {
+      // A memory lookup failure must not re-inject stale or dismissed findings.
+      const detail = await this.deps.store.get(this.id);
+      if (!detail?.preparation) return detail;
+      return {
+        ...detail,
+        preparation: {
+          ...detail.preparation,
+          priorFindings: [],
+          memoryDegraded: true,
+        },
+      };
+    }
+  }
   async ready() {
     const interview = await this.deps.store.get(this.id);
     if (interview && !this.closed) {
       this.paused = interview.pausedAt != null;
       this.send({ type: "ready", interview });
+      if (interview.status === "active") {
+        const closing = await this.deps.closing?.load();
+        if (closing?.interviewId === this.id) {
+          this.closing = closing;
+          this.finishing = true;
+          this.active = false;
+          this.send({ type: "status", status: "finishing" });
+          this.armClosingTimeout(closing);
+        }
+      }
     }
   }
   async handle(event: ClientEvent) {
-    if (this.closed || this.finishing) return;
+    if (this.closed) return;
+    if (this.closing) {
+      if (
+        event.type === "played" &&
+        this.playback?.id === event.responseId &&
+        this.closing.responseId === event.responseId
+      ) {
+        this.playback = null;
+        await this.finish();
+      } else if (
+        (event.type === "speech-start" || event.type === "interrupt") &&
+        this.closing.reason === "coverage_complete"
+      ) {
+        await this.cancelCoverageClosing();
+        await this.interrupt();
+      } else if (event.type === "finish")
+        await this.finish(event.generateFeedback ?? true);
+      return;
+    }
+    if (this.finishing) return;
     if (event.type === "pause") {
       await this.setPaused(event.paused, event.requestId);
       return;
@@ -111,6 +188,7 @@ export class InterviewSession {
     if (event.type === "speech-start") {
       if (this.voice && this.active && !this.paused) {
         this.speechRevision++;
+        this.speechStartedAt = performance.now();
         await this.interrupt();
       }
       return;
@@ -173,6 +251,15 @@ export class InterviewSession {
     try {
       const saved = await this.deps.store.get(this.id);
       if (!saved || saved.status === "completed") return;
+      const closing = await this.deps.closing?.load();
+      if (closing?.interviewId === this.id) {
+        this.closing = closing;
+        this.finishing = true;
+        this.active = false;
+        this.send({ type: "status", status: "finishing" });
+        this.armClosingTimeout(closing);
+        return;
+      }
       if (!this.stt) {
         this.connectionId = crypto.randomUUID();
         this.latestTurn = this.finalizedTurn = -1;
@@ -314,11 +401,36 @@ export class InterviewSession {
     phase: InterviewPhase,
   ) {
     if (audio.byteLength < 2) return;
+    if (!this.firstAudioForResponse.has(responseId)) {
+      this.firstAudioForResponse.add(responseId);
+      console.info(
+        JSON.stringify({
+          event: "interviewer_first_audio",
+          responseId,
+          elapsedMs:
+            this.current?.id === responseId
+              ? Math.round(performance.now() - this.current.createdAt)
+              : undefined,
+        }),
+      );
+    }
     if (!this.clockStarted && phase === "questions")
       this.awaitingPlaybackStart.add(responseId);
     this.send(packAudio(responseId, audio));
   }
   private turn(event: ListenV2TurnInfo): Promise<void> {
+    if (
+      this.finishing &&
+      this.acceptingFinalTurns &&
+      !this.closed &&
+      event.event === "EndOfTurn" &&
+      event.transcript.trim() &&
+      event.turn_index > this.finalizedTurn &&
+      !this.pendingTurns.some((turn) => turn.turn_index === event.turn_index)
+    ) {
+      this.pendingTurns.push(event);
+      return Promise.resolve();
+    }
     if (
       this.closed ||
       this.finishing ||
@@ -345,6 +457,7 @@ export class InterviewSession {
       event.event === "TurnResumed" ||
       (event.event === "Update" && event.turn_index > this.latestTurn);
     if (resumed) this.speechRevision++;
+    if (resumed) this.speechStartedAt = performance.now();
     this.latestTurn = event.turn_index;
     if (
       event.event === "StartOfTurn" ||
@@ -373,6 +486,15 @@ export class InterviewSession {
       return interrupted;
     }
     if (event.event === "EndOfTurn" && event.transcript.trim()) {
+      if (this.speechStartedAt != null) {
+        console.info(
+          JSON.stringify({
+            event: "transcription_final",
+            elapsedMs: Math.round(performance.now() - this.speechStartedAt),
+          }),
+        );
+        this.speechStartedAt = null;
+      }
       this.finalizedTurn = event.turn_index;
       const revision = this.speechRevision;
       const key = `stt:${this.connectionId}:${event.turn_index}`;
@@ -438,6 +560,7 @@ export class InterviewSession {
     const prepared: PreparedReply = {
       turn: event.turn_index,
       transcript: event.transcript,
+      priorFindingIds: "",
       controller: new AbortController(),
       ready: Promise.resolve(null),
     };
@@ -446,13 +569,13 @@ export class InterviewSession {
       await this.turnTask;
       await this.interruptionTask;
       if (prepared.controller.signal.aborted || this.closed) return null;
-      let interview = await this.deps.store.get(this.id);
+      let interview = await this.liveContext();
       const finalized = this.finalizedTurn >= event.turn_index;
       if (finalized) {
         // A final write can win this read race. Wait for it, then use its saved
         // message once. Repeated words in a later segment are still new speech.
         await this.turnTask;
-        interview = await this.deps.store.get(this.id);
+        interview = await this.liveContext();
       }
       if (
         !interview ||
@@ -464,6 +587,9 @@ export class InterviewSession {
         this.paused
       )
         return null;
+      prepared.priorFindingIds = JSON.stringify(
+        interview.preparation?.priorFindings.map((finding) => finding.id) ?? [],
+      );
       const output = this.deps.reply(
         {
           ...interview,
@@ -550,6 +676,25 @@ export class InterviewSession {
           if (message && !this.closed) this.send({ type: "message", message });
         }
       }
+      const messageIds = [
+        ...new Set(
+          [playback?.messageId, current?.savedId].filter((id): id is string =>
+            Boolean(id),
+          ),
+        ),
+      ];
+      if (messageIds.length) {
+        const event: SessionEvent = {
+          id: `interruption:${this.connectionId}:${current?.id ?? playback?.id}`,
+          type: "interruption",
+          messageIds,
+          detail:
+            "Interviewer playback was interrupted; exact audio exposure is unknown.",
+          exposure: "unknown",
+          createdAt: Date.now(),
+        };
+        await this.deps.store.addEvent?.(this.id, event);
+      }
     })();
     this.interruptionTask = task.catch(() => {});
     return task;
@@ -595,11 +740,13 @@ export class InterviewSession {
     }
     const current = {
       id: ++this.responseId,
+      createdAt: performance.now(),
       text: "",
       controller: prepared?.controller ?? new AbortController(),
       saved: false,
       savedId: null as string | null,
       phase: interview?.phase ?? "questions",
+      sourceIdentity: "",
     };
     this.current = current;
     this.send({ type: "status", status: "thinking" });
@@ -636,7 +783,37 @@ export class InterviewSession {
         return false;
       });
     try {
-      let detail = interview ?? (await this.deps.store.get(this.id))!;
+      let detail = (await this.liveContext()) ?? interview;
+      if (!detail || detail.status !== "active") return;
+      if (
+        interview &&
+        transcriptIdentity(interview.messages) !==
+          transcriptIdentity(detail.messages)
+      ) {
+        // A speculative draft is never adopted over a changed canonical turn.
+        if (prepared) this.discardPreparedReply(prepared);
+        prepared = null;
+      }
+      if (prepared) await prepared.ready;
+      if (
+        prepared &&
+        prepared.priorFindingIds !==
+          JSON.stringify(
+            detail.preparation?.priorFindings.map((finding) => finding.id) ??
+              [],
+          )
+      ) {
+        this.discardPreparedReply(prepared);
+        prepared = null;
+      }
+      if (!prepared && detail.phase === "questions" && detail.preparation) {
+        const control = advanceControl(detail);
+        if (control) {
+          await this.deps.store.saveControl(this.id, control);
+          detail = (await this.liveContext()) ?? detail;
+        }
+      }
+      current.sourceIdentity = transcriptIdentity(detail.messages);
       current.phase = detail.phase ?? "questions";
       let openingText: string | null = null;
       if (detail.phase === "opening") {
@@ -650,6 +827,13 @@ export class InterviewSession {
             detail = await this.deps.store.beginQuestions(this.id);
             current.phase = detail.phase ?? "questions";
             this.send({ type: "ready", interview: detail });
+            detail = (await this.liveContext()) ?? detail;
+            const control = advanceControl(detail);
+            if (control) {
+              await this.deps.store.saveControl(this.id, control);
+              detail = (await this.liveContext()) ?? detail;
+            }
+            current.sourceIdentity = transcriptIdentity(detail.messages);
           } else openingText = decision.text;
         } else openingText = interviewWelcome(detail);
       }
@@ -667,15 +851,23 @@ export class InterviewSession {
           : (async function* () {
               yield openingText;
             })();
-      for await (const text of output) {
+      let proposedEnd: EndInterviewRequest | null = null;
+      for await (const part of output) {
         if (current.controller.signal.aborted || this.closed) return;
+        if (typeof part !== "string") {
+          if (part.type !== "end_interview" || proposedEnd)
+            throw new Error("Unexpected model tool output.");
+          proposedEnd = part.request;
+          continue;
+        }
+        const text = part;
         current.text += text;
         this.send({ type: "delta", responseId: current.id, text });
         if (speechConnected) speech?.sendText(text);
         else if (speech && !speechFailed) pendingSpeech.push(text);
       }
       if (current.controller.signal.aborted || this.closed) return;
-      if (!current.text.trim())
+      if (!current.text.trim() && !proposedEnd)
         throw new Error("The interviewer returned an empty response.");
       const saving = this.persist(current, "complete");
       const flushing = speechReady?.then(async (ready) => {
@@ -691,6 +883,20 @@ export class InterviewSession {
       const [, spoken] = await Promise.all([saving, flushing]);
       if (spoken && current.savedId && !current.controller.signal.aborted)
         this.playback = { id: current.id, messageId: current.savedId };
+      if (proposedEnd && !current.controller.signal.aborted && !this.closed) {
+        const accepted = await this.acceptEnd(
+          current,
+          proposedEnd,
+          Boolean(spoken),
+        );
+        if (!accepted)
+          this.send({
+            type: "error",
+            scope: "llm",
+            message:
+              "The interviewer could not finish this conversation. You can continue or use Finish.",
+          });
+      }
     } catch (error) {
       if (!current.controller.signal.aborted && !this.closed) {
         // Keep provider diagnostics out of the UI and transcript. Do not log
@@ -725,7 +931,9 @@ export class InterviewSession {
             ? "Speech is unavailable. Check the Deepgram key and model, then retry speech."
             : error instanceof InvalidOpeningReplyError
               ? "The interviewer could not check your readiness. Retry the interviewer to continue."
-              : "The interviewer could not respond. Retry the interviewer or speak another answer.",
+              : error instanceof LiveContextBudgetError
+                ? "This conversation is too long for the interviewer to process safely. Your transcript is saved; use Finish to request the review."
+                : "The interviewer could not respond. Retry the interviewer or speak another answer.",
         });
       }
     } finally {
@@ -736,7 +944,8 @@ export class InterviewSession {
         this.tts = null;
         if (!this.closed) {
           this.send({ type: "audio-end", responseId: current.id });
-          this.send({ type: "status", status: "listening" });
+          if (!this.finishing)
+            this.send({ type: "status", status: "listening" });
         }
       }
     }
@@ -765,11 +974,13 @@ export class InterviewSession {
     await this.interrupt();
     const current = {
       id: ++this.responseId,
+      createdAt: performance.now(),
       text: "",
       controller: new AbortController(),
       saved: true,
       savedId: null as string | null,
       phase: message.phase ?? "questions",
+      sourceIdentity: "",
     };
     this.current = current;
     const speech = this.deps.tts((audio) => {
@@ -828,16 +1039,145 @@ export class InterviewSession {
             : "Microphone transcription stopped. Retry the microphone to reconnect.",
       });
   }
+  private endEligible(
+    interview: InterviewDetail,
+    reason: EndInterviewRequest["reason"],
+  ) {
+    if (reason === "time_reached")
+      return (
+        interview.startedAt != null &&
+        interviewElapsedMs(interview) >= interview.duration * 60_000
+      );
+    const candidate = interview.messages.filter(
+      (message) =>
+        message.role === "user" &&
+        message.phase === "questions" &&
+        message.status === "complete",
+    );
+    if (reason === "coverage_complete") {
+      const assistant = interview.messages.filter(
+        (message) =>
+          message.role === "assistant" &&
+          message.phase === "questions" &&
+          message.status === "complete",
+      );
+      return (
+        candidate.length >= 2 &&
+        assistant.length >= 2 &&
+        candidate.reduce(
+          (length, message) => length + message.content.trim().length,
+          0,
+        ) >= 120
+      );
+    }
+    const last = candidate.at(-1)?.content.trim() ?? "";
+    if (
+      !last ||
+      last.length > 600 ||
+      /\b(don't|do not|not yet|how would|what if|hypothetical|example|quoted)\b/i.test(
+        last,
+      )
+    )
+      return false;
+    return (
+      /\b(please\s+)?(stop|end|finish|quit)\s+(this\s+|the\s+|our\s+)?(interview|session|conversation|call)\b/i.test(
+        last,
+      ) ||
+      /\b(i\s+(want|need|would like|have)\s+to|let's|can we)\s+(stop|end|finish|quit)\b/i.test(
+        last,
+      )
+    );
+  }
+  private async acceptEnd(
+    current: NonNullable<InterviewSession["current"]>,
+    request: EndInterviewRequest,
+    spoken: boolean,
+  ): Promise<boolean> {
+    if (
+      this.current !== current ||
+      current.controller.signal.aborted ||
+      this.finishing ||
+      this.closing
+    )
+      return false;
+    const detail = await this.deps.store.get(this.id);
+    if (
+      !detail ||
+      detail.status !== "active" ||
+      detail.phase !== "questions" ||
+      !detail.preparation
+    )
+      return false;
+    const source = detail.messages.filter(
+      (message) => message.id !== current.savedId,
+    );
+    if (
+      transcriptIdentity(source) !== current.sourceIdentity ||
+      !this.endEligible(detail, request.reason)
+    )
+      return false;
+    const closing: ClosingIntent = {
+      interviewId: this.id,
+      responseId: current.id,
+      reason: request.reason,
+      messageId: current.savedId,
+      deadlineAt: Date.now() + CLOSING_TIMEOUT_MS,
+    };
+    await this.deps.closing?.save(closing);
+    this.closing = closing;
+    this.finishing = true;
+    this.cancelPreparedReply();
+    this.send({ type: "status", status: "finishing" });
+    if (!spoken || !current.savedId) this.deps.background(this.finish());
+    else this.armClosingTimeout(closing);
+    return true;
+  }
+  private armClosingTimeout(closing: ClosingIntent) {
+    if (this.closingTimer) clearTimeout(this.closingTimer);
+    this.closingTimer = setTimeout(
+      () => {
+        if (this.closing === closing && !this.closed)
+          this.deps.background(this.finish());
+      },
+      Math.max(0, closing.deadlineAt - Date.now()),
+    );
+  }
+  private async cancelCoverageClosing() {
+    const closing = this.closing;
+    if (closing?.reason !== "coverage_complete" || this.finishTask) return;
+    await this.deps.closing?.clear();
+    if (this.closing !== closing || this.finishTask) return;
+    if (this.closingTimer) clearTimeout(this.closingTimer);
+    this.closingTimer = null;
+    this.closing = null;
+    this.finishing = false;
+    this.active = true;
+    this.send({ type: "status", status: "listening" });
+  }
   finish(generateFeedback = true): Promise<void> {
     if (this.finishTask) return this.finishTask;
     if (this.closed) return Promise.resolve();
     const wasActive = this.active;
+    if (this.closingTimer) clearTimeout(this.closingTimer);
+    this.closingTimer = null;
     this.finishing = true;
     this.active = false;
+    this.acceptingFinalTurns = true;
     let completed = false;
     this.finishTask = (async () => {
       await this.clockTask;
       await this.turnTask;
+      // Ask the already-connected STT stream for its last turn, then retain a
+      // short bounded window for a final callback before freezing evidence.
+      if (this.voice && this.stt) {
+        try {
+          this.stt.endSpeech();
+        } catch {
+          /* An unavailable STT stream must not block finishing. */
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      this.acceptingFinalTurns = false;
       // Pause may receive the final transcript for speech already uploaded.
       // Ending must retain those answers without starting another reply.
       if (this.pendingTurns.length) {
@@ -856,23 +1196,62 @@ export class InterviewSession {
         this.pendingTurns = [];
       }
       const interview = await this.deps.store.get(this.id);
-      if (!interview || interview.status !== "active") return;
+      if (!interview) {
+        await this.deps.closing?.clear();
+        this.closing = null;
+        return;
+      }
+      if (interview.status === "completed") {
+        // A manual API finish or deadline can win while this socket is closing.
+        // Retire the durable intent and expose the already-frozen transcript.
+        await this.deps.closing?.clear();
+        this.closing = null;
+        this.send({
+          type: "finished",
+          id: this.id,
+          generateFeedback: interview.feedbackStatus !== "skipped",
+        });
+        completed = true;
+        return;
+      }
       await this.interrupt();
       this.send({ type: "status", status: "finishing" });
       if (this.deadline) clearTimeout(this.deadline);
       this.stt?.close();
       this.stt = null;
       await this.deps.store.finish(this.id, generateFeedback);
-      await this.deps.closeVoice();
-      if (generateFeedback) await this.deps.feedback(this.id);
-      else await this.deps.cancelDeadline();
+      await this.deps.closing?.clear();
+      this.closing = null;
+      try {
+        await this.deps.closeVoice();
+      } catch {
+        console.error(
+          JSON.stringify({ event: "interview_voice_close_failed" }),
+        );
+      }
+      try {
+        if (generateFeedback) await this.deps.feedback(this.id);
+        else await this.deps.cancelDeadline();
+      } catch {
+        console.error(
+          JSON.stringify({ event: "interview_review_queue_failed" }),
+        );
+        this.send({
+          type: "error",
+          scope: "session",
+          message:
+            "The transcript was saved, but review scheduling failed. Reopen the interview to retry the review.",
+        });
+      }
       this.send({ type: "finished", id: this.id, generateFeedback });
       completed = true;
     })().finally(() => {
       if (!completed) {
         this.active = wasActive;
         this.finishing = false;
+        this.acceptingFinalTurns = false;
         this.finishTask = null;
+        if (this.closing) this.armClosingTimeout(this.closing);
       }
     });
     return this.finishTask;
@@ -882,6 +1261,7 @@ export class InterviewSession {
     this.closed = true;
     this.pauseOutput = [];
     this.pendingTurns = [];
+    if (this.closingTimer) clearTimeout(this.closingTimer);
     await this.interrupt();
     await this.turnTask;
     if (this.deadline) clearTimeout(this.deadline);

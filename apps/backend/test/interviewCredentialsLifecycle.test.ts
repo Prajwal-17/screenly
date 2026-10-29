@@ -76,7 +76,9 @@ for (const feedback of [false, true]) {
 
 test("feedback scheduling failure cannot leave the completed interview key usable", async () => {
   const { session, calls } = fixture(true);
-  await expect(session.finish()).rejects.toThrow("Feedback scheduling failed");
+  // Completion remains successful and recoverable even when the separate
+  // review queue fails after the transcript and key revocation commit.
+  await expect(session.finish()).resolves.toBeUndefined();
   expect(calls).toEqual(["persist-completed", "revoke-key", "queue-feedback"]);
   await session.close();
 });

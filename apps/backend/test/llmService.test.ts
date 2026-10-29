@@ -2,6 +2,10 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import type { InterviewDetail } from "@repo/shared";
 import { readConfig } from "../src/config";
 import { InvalidOpeningReplyError, LLMService } from "../src/lib/llmService";
+import {
+  liveMessages,
+  LiveContextBudgetError,
+} from "../src/lib/interviewContext";
 
 const config = readConfig({
   BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
@@ -80,4 +84,111 @@ test("an invalid readiness shape cannot accidentally start the interview", async
       new AbortController().signal,
     ),
   ).rejects.toBeInstanceOf(InvalidOpeningReplyError);
+});
+
+test("streamed end tool arguments stay separate from spoken text", async () => {
+  const prepared: InterviewDetail = {
+    ...interview,
+    phase: "questions",
+    messages: [
+      {
+        ...interview.messages[0]!,
+        phase: "questions",
+        content: "Please end this interview now.",
+      },
+    ],
+    preparation: {
+      schemaVersion: 2,
+      role: "Frontend",
+      level: "Mid-level",
+      rubricVersion: "screenly-rubric-2.0",
+      promptVersion: "screenly-prompts-2.0",
+      objectives: ["State and asynchronous UI"],
+      priorFindings: [],
+      warnings: [],
+      memoryDegraded: false,
+    },
+  };
+  const chunks = [
+    { choices: [{ delta: { content: "Thanks for the conversation." } }] },
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call-1",
+                type: "function",
+                function: {
+                  name: "end_interview",
+                  arguments: '{"reason":"candidate_',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              { index: 0, function: { arguments: 'requested_stop"}' } },
+            ],
+          },
+        },
+      ],
+    },
+    { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+  ];
+  const body =
+    chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
+    "data: [DONE]\n\n";
+  fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(body, {
+      headers: { "content-type": "text/event-stream" },
+    }),
+  );
+  const parts = [];
+  for await (const part of new LLMService(config).generateReply(
+    prepared,
+    new AbortController().signal,
+  ))
+    parts.push(part);
+  expect(parts).toEqual([
+    "Thanks for the conversation.",
+    { type: "end_interview", request: { reason: "candidate_requested_stop" } },
+  ]);
+});
+
+test("malformed streamed end tool cannot become lifecycle authority", async () => {
+  const { EndToolStream } = await import("../src/lib/interviewerTools");
+  const tool = new EndToolStream();
+  tool.add([
+    {
+      index: 0,
+      id: "call-1",
+      type: "function",
+      function: {
+        name: "end_interview",
+        arguments: '{"reason":"coverage_complete","interviewId":"other"}',
+      },
+    },
+  ]);
+  expect(() => tool.finish()).toThrow();
+});
+
+test("oversize live context fails without truncating the saved explanation", () => {
+  const explanation = "x".repeat(96_000);
+  const oversized: InterviewDetail = {
+    ...interview,
+    phase: "questions",
+    messages: [
+      { ...interview.messages[0]!, phase: "questions", content: explanation },
+    ],
+  };
+  expect(() => liveMessages(oversized)).toThrow(LiveContextBudgetError);
+  expect(oversized.messages[0]?.content).toBe(explanation);
 });
