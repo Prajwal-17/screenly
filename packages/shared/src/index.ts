@@ -1,8 +1,15 @@
 import { z } from "zod";
 import type { ProfileDetails } from "./profile";
+import { roles, levels } from "./roles";
+import type {
+  SessionPreparation,
+  SessionReview,
+  SessionEvent,
+  SessionControlState,
+} from "./revamp";
 
-export const roles = ["Frontend", "Backend", "Full-stack"] as const;
-export const levels = ["Junior", "Mid-level", "Senior"] as const;
+export * from "./roles";
+export * from "./revamp";
 export const topics = [
   "JavaScript",
   "React",
@@ -111,10 +118,14 @@ export type Interview = InterviewSettings & {
   feedbackStatus: FeedbackStatus;
   feedback: Feedback | null;
   feedbackModel: string | null;
+  review?: SessionReview | null;
+  preparation?: SessionPreparation | null;
 };
 export type InterviewDetail = Interview & {
   messages: InterviewMessage[];
   candidate?: InterviewCandidate | null;
+  events?: SessionEvent[];
+  control?: SessionControlState | null;
 };
 export function interviewElapsedMs(
   interview: Pick<Interview, "startedAt" | "endedAt" | "pausedAt" | "pausedMs">,

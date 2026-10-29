@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roles, levels } from "./roles";
 
 const hostIs = (host: string, domain: string) =>
   host === domain || host.endsWith(`.${domain}`);
@@ -147,8 +148,8 @@ export const profileDetailsSchema = z
     headline: z.string().trim().max(120),
     location: z.string().trim().max(120),
     about: z.string().trim().max(1500).default(""),
-    role: z.enum(["", "Frontend", "Backend", "Full-stack"]),
-    level: z.enum(["", "Junior", "Mid-level", "Senior"]),
+    role: z.enum(["", ...roles]),
+    level: z.enum(["", ...levels]),
     stack,
     githubUrl: profileLink("github"),
     linkedinUrl: profileLink("linkedin"),

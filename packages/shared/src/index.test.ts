@@ -4,9 +4,61 @@ import {
   feedbackSchema,
   finishInterviewSchema,
   interviewElapsedMs,
+  sessionReviewSchema,
+  createInterviewSchema,
 } from "./index";
 
 describe("shared contracts", () => {
+  test("new sessions cannot override saved experience or submit legacy setup", () => {
+    expect(
+      createInterviewSchema.safeParse({ role: "Data Engineering" }).success,
+    ).toBe(true);
+    expect(
+      createInterviewSchema.safeParse({ role: "Frontend", level: "Senior" })
+        .success,
+    ).toBe(false);
+  });
+
+  test("qualitative reviews reject scores and unsupported assessments", () => {
+    const report = {
+      schemaVersion: 2,
+      role: "Backend",
+      level: "Junior",
+      rubricVersion: "test",
+      promptVersion: "test",
+      transcriptRevision: "test",
+      summary: "Insufficient evidence.",
+      findings: [],
+      practicePriority: {
+        title: "Explain a bounded API",
+        action: "Practise a complete example.",
+        strongerExplanation: "Explain ownership and validation.",
+      },
+      notAssessed: ["Data integrity"],
+      limitations: ["No substantive technical explanation."],
+    };
+    expect(sessionReviewSchema.safeParse(report).success).toBe(true);
+    expect(
+      sessionReviewSchema.safeParse({ ...report, overallScore: 5 }).success,
+    ).toBe(false);
+    expect(
+      sessionReviewSchema.safeParse({
+        ...report,
+        findings: [
+          {
+            id: "one",
+            criterionId: "Backend:technical-understanding",
+            dimension: "technical-understanding",
+            label: "Needs work",
+            observation: "Unsupported claim",
+            evidence: [],
+            improvement: "Explain the mechanism.",
+            assistance: "independent",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
   test("finishing defaults to feedback and accepts an explicit skip", () => {
     expect(finishInterviewSchema.parse({}).generateFeedback).toBe(true);
     expect(
