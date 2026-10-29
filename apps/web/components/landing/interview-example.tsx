@@ -1,189 +1,142 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ArrowRight,
-  AudioLines,
-  CornerDownRight,
-  RotateCcw,
-} from "lucide-react";
-import { PorcelainOrb, type VoiceSignal } from "@/components/porcelain-orb";
-import { Button } from "@/components/ui/button";
+import { roles, type InterviewRole } from "@repo/shared";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const examples = [
-  {
-    role: "Frontend",
-    topic: "React",
-    question:
-      "When would you choose server-side rendering over client-side rendering?",
-    answer:
-      "I’d look at what the page needs. For a public product page, I’d lean toward server rendering for discoverability and a faster first load.",
+const examples: Record<
+  InterviewRole,
+  { interviewer: string; candidate: string; followUp: string; review: string }
+> = {
+  Frontend: {
+    interviewer: "How would you keep this page usable while data is loading?",
+    candidate:
+      "I’d keep the current content visible, mark the update as pending, and provide a retry if it fails.",
     followUp:
-      "How would your approach change if that page also included personalized content?",
+      "How would you announce the update to a screen reader without repeating every change?",
+    review:
+      "The explanation considered loading and recovery. A stronger answer would specify how focus and announcements behave.",
   },
-  {
-    role: "Backend",
-    topic: "APIs",
-    question: "How would you make sure a payment isn’t processed twice?",
-    answer:
-      "I’d use an idempotency key for each payment request and store the result. A retry with the same key would return the original response.",
+  Backend: {
+    interviewer: "How would you prevent a payment from being processed twice?",
+    candidate:
+      "I’d require an idempotency key and persist the first result so retries return it.",
+    followUp: "What if two requests with the same key arrive at once?",
+    review:
+      "The explanation identified idempotency. It left concurrent requests unresolved.",
+  },
+  "Full-stack": {
+    interviewer:
+      "A dashboard stops updating after a reconnect. Where would you investigate?",
+    candidate:
+      "I’d check whether the client missed an event, then compare its cursor with the server’s latest version.",
     followUp:
-      "What would happen if two requests with the same key arrived at the same time?",
+      "How would the UI recover if the missing events are no longer available?",
+    review:
+      "The explanation connected client and server state. The recovery path needs a clearer fallback.",
   },
-  {
-    role: "Full-stack",
-    topic: "System design",
-    question:
-      "How would you keep a dashboard up to date without refreshing the page?",
-    answer:
-      "I’d start with how fresh the data needs to be. Polling might be enough for a summary, but I’d consider server-sent events for live updates.",
-    followUp:
-      "How would you handle updates that were missed while the connection was offline?",
+  "Mobile Engineering": {
+    interviewer:
+      "How would an offline edit reach the server after connectivity returns?",
+    candidate:
+      "I’d queue the change locally and retry it after reconnecting, keeping its status visible.",
+    followUp: "How would you resolve a conflicting edit from another device?",
+    review:
+      "The explanation covered queuing and user visibility. Conflict resolution remains to be explored.",
   },
-] as const;
-
-const restingSignal: VoiceSignal = {
-  level: 0,
-  low: 0,
-  high: 0,
-  candidate: false,
-  inactive: true,
+  "DevOps / Platform Engineering": {
+    interviewer: "A deploy raises error rates. What do you do first?",
+    candidate:
+      "I’d pause the rollout, compare the new and old versions, and roll back if the change is causing failures.",
+    followUp: "What evidence would tell you rollback worked?",
+    review:
+      "The explanation gave a safe first response. Verification after rollback needs more detail.",
+  },
+  "Data Engineering": {
+    interviewer:
+      "A source sends the same batch twice. How should the pipeline respond?",
+    candidate:
+      "I’d identify batches and make writes repeatable, then check the output row count and key uniqueness.",
+    followUp: "What changes when a backfill arrives out of order?",
+    review:
+      "The explanation covered repeatable writes and quality checks. Out-of-order recovery was not assessed.",
+  },
 };
-const readSignal = () => restingSignal;
 
 export function InterviewExample() {
-  const [role, setRole] = useState<string>("Frontend");
-  const [showFollowUp, setShowFollowUp] = useState(false);
-
+  const [role, setRole] = useState<InterviewRole>("Frontend");
   return (
     <section
-      id="experience"
-      className="overflow-hidden rounded-xl border"
-      aria-label="Interactive interview example"
+      id="example"
+      className="rounded-xl border bg-card"
+      aria-label="Illustrative transcript and review"
     >
-      <div className="flex min-h-[58px] items-center justify-between gap-4 border-b px-6 py-3 max-[620px]:px-[18px] max-[620px]:py-3.5 [&>span:first-child]:flex [&>span:first-child]:items-center [&>span:first-child]:gap-[9px] [&>span:first-child]:text-[13px] [&>span:first-child]:font-medium max-[620px]:[&>span:first-child]:gap-[7px] max-[620px]:[&>span:first-child]:text-[12px] [&_svg]:size-[17px] max-[620px]:[&_svg]:hidden">
-        <span>
-          <AudioLines aria-hidden="true" /> The Screenly experience
-        </span>
-        <span className="shrink-0 rounded-sm border px-[9px] py-[3px] text-[11px] leading-[1.6] font-normal text-muted-foreground max-[620px]:px-[7px] max-[620px]:text-[10px]">
-          Interactive example
-        </span>
+      <div className="border-b px-5 py-4 text-sm font-medium">
+        Illustrative conversation and review
       </div>
       <Tabs
         value={role}
         onValueChange={(value) => {
-          setRole(value);
-          setShowFollowUp(false);
+          const next = roles.find((item) => item === value);
+          if (next) setRole(next);
         }}
       >
-        <div className="flex min-h-16 items-center justify-between gap-5 border-b px-6 py-2.5 max-[620px]:justify-center max-[620px]:px-4">
+        <div className="overflow-x-auto border-b px-3 py-2">
           <TabsList
             aria-label="Example interview role"
-            className="min-h-9 gap-[3px] rounded-md p-[3px] max-[620px]:w-full [&:has(:focus-visible)_[role=tab]]:transition-none"
+            className="h-auto min-w-max flex-wrap justify-start"
           >
-            {examples.map((example) => (
+            {roles.map((item) => (
               <TabsTrigger
-                key={example.role}
-                value={example.role}
-                className="min-h-[30px] rounded-sm px-[15px] py-[5px] text-[12px] leading-[1.4285714286] font-[450] transition-[color,background-color] duration-150 ease-[ease] max-[620px]:min-h-11 max-[620px]:px-3 [@media(pointer:coarse)]:min-h-11"
+                key={item}
+                value={item}
+                className="min-h-10 px-3 text-xs"
               >
-                {example.role}
+                {item}
               </TabsTrigger>
             ))}
           </TabsList>
-          <p className="text-[12px] text-muted-foreground max-[800px]:hidden">
-            A different role. A different conversation.
-          </p>
         </div>
-        {examples.map((example) => (
+        {roles.map((item) => (
           <TabsContent
-            key={example.role}
-            value={example.role}
-            className="mt-0 grid grid-cols-[minmax(0,1fr)_330px] max-[1100px]:grid-cols-[minmax(0,1fr)_290px] max-[800px]:grid-cols-[minmax(0,1fr)_260px] max-[620px]:grid-cols-1 [&[hidden]]:hidden"
+            key={item}
+            value={item}
+            aria-label={`${item} example`}
+            className="mt-0 p-5 sm:p-7"
           >
-            <div className="flex min-h-[398px] min-w-0 flex-col px-7 pt-[22px] pb-[18px] max-[800px]:p-5 max-[620px]:min-h-[350px] max-[620px]:px-[18px] max-[620px]:pt-5 max-[620px]:pb-4">
-              <div className="flex items-center justify-between gap-4 text-[11px] text-muted-foreground [&>span:first-child]:flex [&>span:first-child]:items-center [&>span:first-child]:gap-2.5 [&>span:first-child>span]:text-input">
-                <span>
-                  {example.role} <span aria-hidden="true">/</span>{" "}
-                  {example.topic}
-                </span>
-                <span>Mid-level</span>
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.7fr)]">
+              <div
+                className="space-y-5"
+                aria-label={`${item} example transcript`}
+              >
+                <h2 className="text-base font-medium">Transcript excerpt</h2>
+                {[
+                  ["Interviewer", examples[item].interviewer],
+                  ["You", examples[item].candidate],
+                  ["Interviewer", examples[item].followUp],
+                ].map(([speaker, content], index) => (
+                  <div key={index}>
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">
+                      {speaker}
+                    </p>
+                    <p className="max-w-[65ch] text-sm leading-relaxed">
+                      {content}
+                    </p>
+                  </div>
+                ))}
               </div>
-              <div className="flex flex-1 flex-col items-center justify-center px-3 pt-1 pb-6 max-[800px]:px-0 max-[620px]:pt-1.5">
-                <div className="h-[132px] w-[154px] shrink-0 max-[620px]:h-[126px] max-[620px]:w-[140px]">
-                  <PorcelainOrb readSignal={readSignal} />
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Your AI interviewer
+              <aside
+                className="border-t pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7"
+                aria-label={`${item} example review`}
+              >
+                <h2 className="text-base font-medium">
+                  Qualitative review example
+                </h2>
+                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  {examples[item].review}
                 </p>
-                <p
-                  className="mt-3.5 min-h-16 max-w-[540px] text-center text-[clamp(19px,1.8vw,24px)] leading-[1.45] font-[450] tracking-[-0.025em] text-balance max-[800px]:text-[20px] max-[620px]:mt-3 max-[620px]:min-h-[87px] max-[620px]:max-w-[390px] max-[620px]:text-[21px]"
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  {showFollowUp ? example.followUp : example.question}
-                </p>
-              </div>
-              <div className="flex items-center justify-between gap-4 max-[800px]:justify-center max-[620px]:justify-between max-[620px]:gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-[7px] [&>span]:text-[11px] [&>span]:text-muted-foreground max-[800px]:[&>span]:hidden max-[620px]:[&>span]:flex max-[620px]:[&>span]:text-[10px] [&_svg]:size-3.5 max-[620px]:[&>span>svg]:hidden">
-                <span>
-                  <AudioLines aria-hidden="true" /> Made for your voice
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="min-w-[156px] px-2 text-[12px] leading-[1.4] font-[450] text-foreground max-[620px]:min-w-[143px] max-[620px]:text-[11px] transition-[background-color,transform] duration-[160ms,140ms] ease-[ease,var(--ease-landing)] active:scale-[0.97] focus-visible:transition-none focus-visible:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100"
-                  aria-pressed={showFollowUp}
-                  onClick={() => setShowFollowUp((current) => !current)}
-                >
-                  {showFollowUp ? (
-                    <>
-                      First question{" "}
-                      <RotateCcw className="size-3.5" aria-hidden="true" />
-                    </>
-                  ) : (
-                    <>
-                      See the follow-up{" "}
-                      <ArrowRight className="size-3.5" aria-hidden="true" />
-                    </>
-                  )}
-                </Button>
-              </div>
+              </aside>
             </div>
-            <aside
-              className="flex flex-col gap-[22px] border-l bg-sidebar p-[26px] max-[1100px]:p-6 max-[800px]:p-[22px] max-[620px]:gap-5 max-[620px]:border-t max-[620px]:border-l-0 max-[620px]:p-[23px] [&>h2]:mb-0.5 [&>h2]:text-[12px] [&>h2]:font-medium [&>h2]:tracking-normal max-[620px]:[&>h2]:text-[13px]"
-              aria-label={`${example.role} example transcript`}
-            >
-              <h2>In the conversation</h2>
-              <div className="[&>p:last-child]:text-[12px] [&>p:last-child]:leading-[1.75] max-[620px]:[&>p:last-child]:text-[13px]">
-                <p className="mb-[5px] text-[10px] font-medium text-muted-foreground max-[620px]:text-[11px]">
-                  Interviewer
-                </p>
-                <p>{example.question}</p>
-              </div>
-              <div className="[&>p:last-child]:text-[12px] [&>p:last-child]:leading-[1.75] max-[620px]:[&>p:last-child]:text-[13px] pl-4">
-                <p className="mb-[5px] text-[10px] font-medium text-muted-foreground max-[620px]:text-[11px]">
-                  You
-                </p>
-                <p>{example.answer}</p>
-              </div>
-              <div className="mt-auto flex items-start gap-2 border-t pt-4 max-[620px]:pt-[18px] [&>svg]:mt-0.5 [&>svg]:size-3.5 [&>svg]:shrink-0 [&>svg]:text-muted-foreground [&>div>p:first-child]:text-foreground [&>div>p:last-child]:text-[12px] [&>div>p:last-child]:leading-[1.75] [&>div>p:last-child]:text-muted-foreground max-[620px]:[&>div>p:last-child]:text-[13px]">
-                <CornerDownRight aria-hidden="true" />
-                <div>
-                  <p className="mb-[5px] text-[10px] font-medium text-muted-foreground max-[620px]:text-[11px]">
-                    {showFollowUp
-                      ? "A relevant follow-up"
-                      : "A conversation that follows you"}
-                  </p>
-                  <p>
-                    {showFollowUp
-                      ? example.followUp
-                      : "Your answer shapes the next question."}
-                  </p>
-                </div>
-              </div>
-            </aside>
           </TabsContent>
         ))}
       </Tabs>

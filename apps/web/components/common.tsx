@@ -234,7 +234,6 @@ export function InterviewRows({
                   {item.role} · {item.level}
                 </span>
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  {item.topics.slice(0, 2).join(", ")} ·{" "}
                   {formatDate(item.createdAt)}
                 </span>
               </span>
@@ -243,9 +242,9 @@ export function InterviewRows({
                   ? "Resume"
                   : item.status === "draft"
                     ? "Continue setup"
-                    : item.feedback?.overallScore != null
-                      ? `${item.feedback.overallScore} / 10`
-                      : "View"}
+                    : item.review || item.feedback
+                      ? "View review"
+                      : "View transcript"}
               </span>
               <ChevronRight
                 className="size-4 shrink-0 text-muted-foreground"
@@ -271,7 +270,7 @@ export function InterviewRows({
               Date
             </TableHead>
             <TableHead className="w-28 text-xs text-muted-foreground">
-              Status / score
+              Status
             </TableHead>
             {onDelete && (
               <TableHead className="w-14">
@@ -289,9 +288,6 @@ export function InterviewRows({
                   className="block rounded-sm text-sm font-medium hover:text-primary"
                 >
                   {item.role} interview
-                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                    {item.topics.slice(0, 3).join(" · ")}
-                  </span>
                   <span className="mt-1 block text-xs font-normal text-muted-foreground min-[1100px]:hidden">
                     {formatDate(item.createdAt)}
                   </span>
@@ -319,9 +315,14 @@ export function InterviewRows({
                     <>
                       <Check aria-hidden="true" />
                       <span className="sr-only">Completed: </span>
-                      {item.feedback?.overallScore != null
-                        ? `${item.feedback.overallScore}/10`
-                        : "Completed"}
+                      {item.review || item.feedback
+                        ? "Review ready"
+                        : item.feedbackStatus === "failed"
+                          ? "Review failed"
+                          : item.feedbackStatus === "generating" ||
+                              item.feedbackStatus === "pending"
+                            ? "Review pending"
+                            : "Completed"}
                     </>
                   ) : item.status === "active" ? (
                     "Resume"

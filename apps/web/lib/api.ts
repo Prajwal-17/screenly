@@ -3,7 +3,8 @@ import type {
   Capabilities,
   Interview,
   InterviewDetail,
-  InterviewSettings,
+  CreateInterviewInput,
+  PracticeFinding,
 } from "@repo/shared";
 export const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787"
@@ -38,7 +39,7 @@ export const api = {
   capabilities: () => request<Capabilities>("/capabilities"),
   list: () => request<Interview[]>("/interviews"),
   detail: (id: string) => request<InterviewDetail>(`/interviews/${id}`),
-  create: (settings: InterviewSettings) =>
+  create: (settings: CreateInterviewInput) =>
     request<Interview>("/interviews", {
       method: "POST",
       body: JSON.stringify(settings),
@@ -51,6 +52,11 @@ export const api = {
   retryFeedback: (id: string) =>
     request(`/interviews/${id}/feedback`, { method: "POST" }),
   remove: (id: string) => request(`/interviews/${id}`, { method: "DELETE" }),
+  memory: () => request<PracticeFinding[]>("/profile/memory"),
+  dismissMemory: (id: string) =>
+    request<void>(`/profile/memory/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };
 export function interviewLink(interview: Interview) {
   return `/interviews/${interview.id}${interview.status === "completed" ? "/feedback" : ""}`;

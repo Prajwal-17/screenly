@@ -30,7 +30,7 @@ export default function SignIn() {
     queryFn: api.capabilities,
   });
   useEffect(() => {
-    if (!isPending && session) router.replace("/dashboard");
+    if (!isPending && session) router.replace("/interviews/new");
   }, [isPending, session, router]);
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has("error")) {
@@ -45,7 +45,7 @@ export default function SignIn() {
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: `${window.location.origin}/dashboard`,
+        callbackURL: `${window.location.origin}/interviews/new`,
         newUserCallbackURL: `${window.location.origin}/onboarding`,
         errorCallbackURL: `${window.location.origin}/auth/sign-in?error=oauth`,
       });

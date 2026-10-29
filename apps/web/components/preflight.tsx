@@ -146,14 +146,11 @@ export function Preflight({
             : "Check your audio"}
         </h2>
         <p className="mt-4 text-sm text-ink-secondary">
-          {interview.level}{" "}
+          {interview.role} · {interview.level}{" "}
           <span className="px-1 text-muted-foreground" aria-hidden="true">
             ·
           </span>{" "}
           {interview.duration} min
-        </p>
-        <p className="mt-1.5 max-w-[40ch] text-sm leading-relaxed text-muted-foreground">
-          {interview.topics.join(" · ")}
         </p>
         {interview.status === "active" && (
           <p className="mt-4 max-w-[36ch] text-xs leading-relaxed text-muted-foreground">

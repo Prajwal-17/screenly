@@ -1,5 +1,4 @@
-import { WorkspaceComingSoon } from "@/components/workspace-coming-soon";
-
-export default function Page() {
-  return <WorkspaceComingSoon section="plans" />;
+import { redirect } from "next/navigation";
+export default function RetiredPage() {
+  redirect("/interviews/new");
 }

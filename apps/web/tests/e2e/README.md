@@ -1,6 +1,6 @@
 # Browser verification
 
-[verification.json](verification.json) records the current source fingerprint, commands, deterministic evidence, and unverified integration gates. Generated reports are local artifacts for the run. Earlier counts and desktop/touch captures belong to the superseded mobile-and-collapse policy.
+`verification.json` is a historical ledger; regenerate it only after a complete integrated verification run. Generated reports are local artifacts for the run. Earlier counts and desktop/touch captures belong to the superseded mobile-and-collapse policy.
 
 An earlier independent review covered ten desktop/touch resting captures under the superseded policy. Those captures are historical, not validation of the desktop-only revision.
 
@@ -39,18 +39,20 @@ git diff --check
 
 Next type generation and build share `.next/types`; do not run them together. The test server uses `.next/dev`, and Playwright owns its lifetime. Avoid a second development server in the same checkout. Browser-test timeouts allow first-run compilation on slower filesystems; assertions wait for accessible state rather than sleeping.
 
-## Coverage
+## Current deterministic coverage
 
-| Area           | Deterministic evidence                                                                                                                                                                                                                                     |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shell          | Current page/title/main focus, expanded sidebar despite stale preference, editable shortcut protection, search focus, live drawer and resize, sign-out failure/retry                                                                                       |
-| Auth and gates | Google availability/retry, OAuth error copy, development form hidden unless enabled, existing-session redirect, profile recovery/expiry, missing interview, unknown page                                                                                   |
-| Practice       | Query/profile role defaults, blank-role fallback, 1–6 topics, 30-minute payload, pending-submit lock, failed creation/retry, empty/error dashboard                                                                                                         |
-| Preflight      | Microphone denial/retry with a fake device, speaker test, unavailable voice/interviewer disables start                                                                                                                                                     |
-| Profile        | Six manual steps, repeated links/projects, field error focus, file/text/URL import, selective approval and JSON, invalid input, cancellation/failure, device draft recovery, autosave retry, skip, complete-profile edit                                   |
-| History/review | Status/search/reset, delete cancel/failure/success, feedback pending/generating polling, failed/skipped retry, null scores, answer evidence and transcript export                                                                                          |
-| Live           | Persistent question, partial/saved captions/transcript, pause acknowledgement/resume, audio-menu dismissal/focus, targeted microphone/speech/interviewer errors, reconnect, finish cancellation/failure/retry, guarded navigation, finish without feedback |
-| Responsive     | Main route inventory at 1024, 1280, 1366, 1440, 1920px; long content; short desktop controls; narrow-window boundary and live session preservation                                                                                                         |
+| Area               | Evidence                                                                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell              | Three-destination sidebar, route title/main focus, retired-route redirects, live drawer and resize, sign-out failure/retry.                                            |
+| Auth and gates     | Google availability/retry, OAuth error copy, development form gating, existing-session redirect, profile recovery/expiry, missing interview and unknown page.          |
+| Entry              | Six roles, profile suggestion, saved explicit experience requirement, strict `{ role }` payload, duplicate-submit lock and create retry.                               |
+| Preflight          | Microphone denial/retry with a fake device, speaker test and unavailable voice/interviewer gate.                                                                       |
+| Profile and memory | Manual editing, repeated links/projects, selective import approval, device draft/autosave recovery, active finding source and dismissal.                               |
+| History and review | Real status/search, export/delete, schema-v2 qualitative findings with exact evidence anchor, safe legacy summary, pending/generating/failed/skipped retry states.     |
+| Live               | Continuous transcript, partial-to-saved reconciliation, pause, replay, audio-menu focus, targeted recovery, reconnect, finish cancellation/retry and navigation guard. |
+| Responsive         | Main routes at desktop widths, long content, short-window controls, narrow-window boundary and live session preservation, public landing at phone/tablet widths.       |
+
+The orb stage test was removed because the live orb and separate question surface are no longer shipped. `preview-fixture.mjs` models the current strict create, review and memory routes for later manual browser review; it remains synthetic only.
 
 These checks do not establish full screen-reader compatibility, real output-device routing, provider latency, offline transport recovery, or a performance comparison against a measured prior revision. The 200% text-size check exercises reflow, rather than a physical browser-zoom gesture. Route/root error recovery is provider-independent by construction; actual route/root-layout failures still require production-mode fault injection. Keep untested integration states explicit in review evidence.
 

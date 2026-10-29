@@ -8,50 +8,32 @@ web
 
 ## Users and purpose
 
-Screenly is an AI interviewing app where candidates have spoken technical interviews, then review saved feedback grounded in their answers. Frontend, Backend, and Full-stack interviews support Junior, Mid-level, and Senior experience, selectable topics, and duration.
+Screenly helps developers rehearse a spoken technical conversation and leave with an evidence-linked session review and one practice priority. The six presets are Frontend, Backend, Full-stack, Mobile Engineering, DevOps / Platform Engineering, and Data Engineering. Experience comes from the saved profile, not a session setup guess.
 
 ## Stack
 
-React in Next.js App Router, TypeScript, Zustand, Tailwind CSS 4, customized shadcn/Radix primitives, Motion, TanStack Query, React Hook Form, and shared Zod validation. Fonts are bundled locally.
+React in Next.js App Router, TypeScript, Zustand, Tailwind CSS 4, customized shadcn/Radix primitives, TanStack Query, React Hook Form, shared Zod contracts, and locally bundled Geist. The existing Hono/Durable Objects/D1/Drizzle backend and configured providers remain the runtime.
 
 ## Capabilities and constraints
 
-Preserve Google-only production authentication through Better Auth, an opt-in local email entry excluded from production, real API data, ownership, microphone preflight, spoken responses, interruption, mute, reconnect, server timing, feedback/retry, transcript export, history, and deletion. Answers are voice-only. No fabricated sessions, metrics, or feedback in production. The static landing example is explicitly labeled.
+Preserve production Google authentication, local development email entry, real owned API data, onboarding/import approval and autosave, microphone preflight, voice interruption and cancellation, mute, pause, replay, audio devices, reconnect, server timing, review retry, transcript export, history, and deletion. No synthetic session or profile data enters production. New sessions require an explicit saved experience level and use a 20 minute duration. Legacy feedback is shown only as safe unscored session summary text.
 
 ## Brand commitments
 
-Screenly uses a text-only wordmark: local Geist Sans at 20px, weight 600, and -0.03em tracking. There is no brand icon or favicon. The user approved a full frontend replacement with a professional Cal.com-inspired white and neutral visual system, charcoal actions, and the classic shadcn/Radix inset sidebar. Normal workspace pages always show the full sidebar; only an active live interview uses a navigation drawer. Workspace, authentication, onboarding, and live-interview routes require a window at least 1024 CSS pixels wide and keep an active session mounted during a narrower resize. The public `/` landing alone is responsive on phones and tablets. This supersedes the earlier paper-and-fern direction. Every screen uses the same semantic tokens and shared primitives. Keep the existing live-interview composition and behavior: orb, persistent question, candidate caption, default-open transcript, and microphone/replay/audio/finish dock.
+The text-only wordmark and neutral white/gray/charcoal shadcn system remain. No new brand icon, ornament, or decorative live stage. Normal workspace pages show the inset sidebar; a live session uses the existing navigation drawer. Authenticated workspace and onboarding keep the 1024 CSS pixel desktop boundary, including when a live session is resized narrower. The public landing remains responsive.
 
-## Evidence on hand
+## Interface hierarchy
 
-The implementation in `lib`, `store`, shared schemas, backend, the root `UI_IMPLEMENTATION_PLAN.md`, and checked-in `tests/e2e` journeys. Runtime tokens in `app/globals.css` and shared components define the shipped visual system; the approved Cal.com reference and classic shadcn sidebar direction establish its identity. Generate current captures with `bun run test:e2e`; screenshots and traces attach to the ignored Playwright report. Older local mockups are historical references, not shipping code or durable evidence.
+New interview selects one of six roles and shows saved experience and meaningful profile warnings. The live page leads with one continuous transcript and keeps voice status and essential controls visible. Completed sessions show a short synthesis, qualitative findings linked to exact transcript messages, one practice priority, limits, and the original transcript. History shows real sessions, status and review availability without scores. Settings contains profile editing, active practice memory, playback preference and account access. Navigation contains only New interview, Interviews and Settings. Help remains in the account menu. Retired workspace routes redirect to New interview.
 
-## Accessibility
+## Public presentation
 
-Visible keyboard focus, labeled controls, Radix focus management, reduced motion, readable contrast, desktop text reflow, responsive public-landing text reflow, and a clear wider-window boundary on app routes. Meaningful voice state is announced; partial spoken words are not repeatedly announced.
+The public example is explicitly illustrative. Six role tabs show a transcript excerpt and qualitative review. It requests no microphone or interview API and never implies a personal result. The landing links to `/interviews/new` and states the desktop and microphone requirements for real sessions.
 
-## Public landing
+## Accessibility and recovery
 
-The public `/` presents the spoken interview, supported roles and experience levels, setup-to-feedback journey, and requirements. Start an interview links to `/interviews/new`; Google sign-in remains unchanged. Shared Radix tabs switch the three explicitly illustrative role conversations, and a follow-up toggle demonstrates the next question. The existing PorcelainOrb is reused at rest. This preview requests no microphone or interview API, and illustrative feedback is labeled as an example. The responsive landing does not remove the desktop and microphone requirements for a real interview.
+Use visible focus, named semantic controls, current-page state, Radix focus management, readable contrast, reduced-motion support, and responsive text. Announce meaningful voice status without repeatedly announcing partial words. Keep loading, empty, error, retry, and destructive confirmation states. The live transcript follows latest only while the reader is at the bottom and offers Jump to latest. Preserve provider-independent route recovery.
 
-## Navigation previews
+## Verification boundary
 
-The user authorized additional preview pages to evaluate the navigation. Question library, Practice plans, Progress, and Saved answers are now single coming-soon screens that describe what each will contain and point to a real action. They do not fabricate personal session data or results. Settings and Help expose real local preferences and documented behavior.
-
-## Profile onboarding
-
-Six compact steps cover optional import, background/about, personal and extra links, repeatable projects, practice focus, and final review. Shared shadcn/Radix controls replace native selects. The action footer remains visible; short desktop windows scroll the working area. PDF/DOCX/DOC/TXT imports stream extraction/analysis status, then show selectable formatted AI fields and JSON for explicit approval. Irrelevant or unsafe URLs and unreadable documents have actionable errors. Sources are sent to the configured AI provider but never stored. Unfinished fields, projects, current step, and unapproved formatted suggestions autosave per account, with device recovery and visible sync/retry status. Manual entry and skip remain available. Settings edits the full profile; role/experience seed interview setup. Existing accounts retain workspace access.
-
-## Workspace hierarchy
-
-Practice choices lead Overview; empty statistics are omitted. Setup uses an open form, and feedback brings next practice steps before detailed scores. The main navigation is Overview, New interview, and Interviews. Help and Settings sit above the account menu. Planned features are grouped under Coming soon and remain accessible through workspace search. The compact workspace header names the page; avoid redundant page titles, slogans, and decorative labels. Keep meaningful errors, constraints, consent, confirmation, and recovery guidance.
-
-## Shared implementation and agent operation
-
-Use Tailwind utilities for landing layouts, responsive variants, and component styling. Keep reusable typography/container utilities and animation theme definitions in `app/globals.css`; do not add a separate landing stylesheet.
-
-Use the adapted shadcn primitives, semantic runtime tokens, and existing domain components. Preserve the expanded sidebar, live-only drawer, keyboard shortcuts, route focus, dialog behavior, and live-session navigation guards. Controls retain accessible names, explicit form labels, radio-group semantics, current-page state, and meaningful asynchronous status so keyboard users and automation can operate the same interface. Style changes must preserve auth, API, shared-schema, ownership, audio-engine, session-state, profile import, and autosave contracts. `DESIGN.md` and `.impeccable/design.json` describe the implemented system together.
-
-## Verification and recovery
-
-The tracked Playwright harness intercepts synthetic HTTP and WebSocket contracts, runs a desktop project across supported widths and short laptop windows, and verifies the narrow-window boundary. Fixtures stay outside production bundles. Provider/device checks remain separate: deterministic UI success does not verify Google OAuth, physical microphone/speakers, real speech interruption, output-device routing, or provider feedback. Route errors and unknown addresses use provider-independent `PageRecovery`; `app/global-error.tsx` carries a self-contained recovery document that does not depend on providers, external fonts, or error details. See the [browser-verification guide](tests/e2e/README.md) for the recorded checks, independent finish review, and outstanding manual/integration gates.
+The tracked Playwright harness uses synthetic HTTP/WebSocket contracts and desktop widths. Its result is deterministic UI evidence, not proof of Google OAuth, physical devices, provider quality, or real interruption timing. See `tests/e2e/README.md` for the remaining manual and integration gates.

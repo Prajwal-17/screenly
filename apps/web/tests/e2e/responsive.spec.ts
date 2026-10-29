@@ -15,16 +15,11 @@ test("desktop routes fit the supported widths with long content", async ({
     await page.setViewportSize({ width, height: 768 });
     for (const path of [
       "/",
-      "/dashboard",
       "/interviews/new",
       "/history",
       "/interviews/completed/feedback",
       "/settings",
       "/help",
-      "/library",
-      "/plans",
-      "/progress",
-      "/saved",
       "/onboarding?edit=1",
     ]) {
       await page.goto(path);
@@ -33,7 +28,9 @@ test("desktop routes fit the supported widths with long content", async ({
       if (path !== "/" && !path.startsWith("/onboarding")) {
         await expect(page.locator("#workspace-content")).toBeFocused();
         await expect(
-          page.getByRole("link", { name: "Overview", exact: true }),
+          page
+            .getByRole("navigation", { name: "Main navigation" })
+            .getByRole("link", { name: "New interview", exact: true }),
         ).toBeVisible();
       }
       expect(
@@ -123,7 +120,7 @@ test("narrow boundary preserves a live session and reconnects its visible contro
   await expect(finish).toBeVisible();
   await expect(
     page
-      .getByRole("region", { name: "Current conversation" })
+      .getByRole("region", { name: "Conversation" })
       .getByText("A synthetic answer while the window is narrow."),
   ).toBeVisible();
   expect(api.sockets.has(socket!)).toBe(true);
@@ -167,7 +164,9 @@ test("narrow screens show desktop guidance and text scaling reflows history", as
       page.getByRole("heading", { name: "Use a wider window" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Overview", exact: true }),
+      page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("link", { name: "New interview", exact: true }),
     ).toBeHidden();
   }
   await page.setViewportSize({ width: 1920, height: 900 });

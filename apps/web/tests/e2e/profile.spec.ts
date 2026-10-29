@@ -242,7 +242,7 @@ test("failed autosave recovers device draft across refresh and retries", async (
   ).toBeVisible();
   expect(api.profile.details.name).toBe("Recovered Alex");
   await page.getByRole("button", { name: "Skip for now", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/interviews\/new$/);
   expect(api.profile.status).toBe("skipped");
 });
 

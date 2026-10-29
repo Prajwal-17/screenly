@@ -7,71 +7,39 @@ test("opening, thinking, speaking, and replay retain timing and saved context", 
   api.interviews[1]!.phase = "opening";
   api.interviews[1]!.startedAt = null;
   await page.goto("/interviews/active");
-  const conversation = page.getByRole("region", {
-    name: "Current conversation",
-    exact: true,
-  });
-  await expect(conversation).toBeVisible();
+  const transcript = page.getByRole("region", { name: "Conversation" });
+  await expect(transcript).toBeVisible();
   api.send({ type: "status", status: "thinking" });
-  await expect(conversation.getByRole("status")).toHaveText(
-    "Interviewer is thinking",
-  );
+  await expect(
+    page.getByText("Interviewer is thinking", { exact: true }),
+  ).toBeVisible();
   api.send({ type: "status", status: "speaking" });
-  await expect(conversation.getByRole("status")).toHaveText(
-    "Introducing your interview",
-  );
+  await expect(
+    page.getByText("Interviewer speaking", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("timer")).toContainText("00:00");
-  await page
-    .getByRole("button", { name: "Replay question", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Replay interviewer" }).click();
   await expect
     .poll(() => api.clients.some((event) => event.type === "speak"))
     .toBe(true);
-  await expect(page.locator('[data-slot="live-caption"]')).toContainText(
+  await expect(transcript).toContainText(
     "How would you identify unnecessary re-renders",
   );
 });
 
-test("WebGL fallback retains the stage and controls", async ({ page }) => {
-  await page.addInitScript(() => {
-    const getContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (
-      this: HTMLCanvasElement,
-      ...args: Parameters<typeof getContext>
-    ) {
-      if (String(args[0]).startsWith("webgl")) return null;
-      return getContext.apply(this, args);
-    } as typeof getContext;
-  });
-  await page.goto("/interviews/active");
-  await expect(page.locator('[data-renderer="fallback"]')).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Finish interview", exact: true }),
-  ).toBeVisible();
-  await expect(page.locator('[data-slot="live-caption"]')).toContainText(
-    "How would you identify unnecessary re-renders",
-  );
-});
-
-test("live transcript and captions update while the question stays readable", async ({
+test("live transcript reconciles temporary candidate speech into a saved turn", async ({
   page,
   api,
 }) => {
   await page.goto("/interviews/active");
-  await expect(
-    page.getByRole("button", { name: "Finish interview", exact: true }),
-  ).toBeVisible();
-  const question = page.locator('[data-slot="live-caption"]');
-  await expect(question).toContainText(
+  const transcript = page.locator("#live-transcript");
+  await expect(transcript).toContainText(
     "How would you identify unnecessary re-renders",
   );
   api.send({ type: "partial", text: "I would measure before optimizing." });
-  await expect(page.locator('[data-slot="candidate-caption"]')).toHaveText(
-    "I would measure before optimizing.",
-  );
-  await expect(question).toContainText(
-    "How would you identify unnecessary re-renders",
-  );
+  await expect(
+    transcript.locator('[data-live-message="candidate"]'),
+  ).toContainText("I would measure before optimizing.");
   api.send({
     type: "message",
     message: {
@@ -83,18 +51,14 @@ test("live transcript and captions update while the question stays readable", as
     },
   });
   api.send({ type: "partial", text: "" });
-  const transcript = page.locator("#live-transcript");
+  await expect(
+    transcript.locator('[data-live-message="candidate"]'),
+  ).toHaveCount(0);
   await expect(
     transcript.getByText("I would measure before optimizing.", { exact: true }),
-  ).toBeVisible();
-  await expect(page.locator('[data-slot="candidate-caption"]')).toHaveAttribute(
-    "aria-live",
-    "off",
-  );
-  await page.getByRole("button", { name: /^Transcript/ }).click();
-  await expect(transcript).toHaveCount(0);
+  ).toHaveCount(1);
   await page.keyboard.press("t");
-  await expect(transcript).toBeVisible();
+  await expect(page.locator('#live-transcript [role="log"]')).toBeFocused();
 });
 
 test("audio pause acknowledgement and playback speed menu retain focus and state", async ({
@@ -154,9 +118,9 @@ for (const scope of ["voice", "speech", "llm"] as const) {
         exact: true,
       }),
     ).toBeEnabled();
-    await expect(page.locator('[data-slot="live-caption"]')).toContainText(
-      "How would you identify unnecessary re-renders",
-    );
+    await expect(
+      page.locator('[data-slot="transcript-content"]'),
+    ).toContainText("How would you identify unnecessary re-renders");
   });
 }
 
@@ -175,7 +139,7 @@ test("disconnect reconnects to saved state and finish failure can retry", async 
   await expect(
     page.getByRole("button", { name: "Finish interview", exact: true }),
   ).toBeVisible();
-  await expect(page.locator('[data-slot="live-caption"]')).toContainText(
+  await expect(page.locator('[data-slot="transcript-content"]')).toContainText(
     "How would you identify unnecessary re-renders",
   );
   api.failures.set("POST /api/interviews/active/finish", {
@@ -210,7 +174,7 @@ test("finish cancellation and guarded navigation preserve a live interview", asy
   await page
     .getByRole("button", { name: "Open navigation", exact: true })
     .click();
-  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.getByRole("link", { name: "New interview", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page
     .getByRole("button", { name: "Keep interviewing", exact: true })

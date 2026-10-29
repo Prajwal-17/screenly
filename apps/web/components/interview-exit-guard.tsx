@@ -79,7 +79,7 @@ export function useInterviewExitGuard({
     // Only the first requested destination may continue after confirmation.
     if (pending.current) return Promise.resolve(false);
     returnFocus.current = document.activeElement as HTMLElement | null;
-    useUIStore.setState({ navigationOpen: false, searchOpen: false });
+    useUIStore.setState({ navigationOpen: false });
     setError("");
     setOpen(true);
     return new Promise((resolve) => {

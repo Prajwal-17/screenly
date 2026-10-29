@@ -29,7 +29,7 @@ export default function DevelopmentLogin({
         body: JSON.stringify({ email: email.trim() }),
       });
       // A new document fetches the cookie-backed session before entering the workspace.
-      window.location.assign("/dashboard");
+      window.location.assign("/interviews/new");
     } catch (cause) {
       setError(
         cause instanceof Error

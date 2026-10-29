@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
-import { api, elapsed } from "@/lib/api";
+import { api } from "@/lib/api";
 
 export default function History() {
   const { data: session } = authClient.useSession();
@@ -32,14 +32,10 @@ export default function History() {
     enabled: !!session,
   });
   const all = query.data ?? [];
-  const completed = all.filter((i) => i.status === "completed");
-  const scores = completed.flatMap((i) =>
-    i.feedback?.overallScore != null ? [i.feedback.overallScore] : [],
-  );
   const items = all
     .filter((i) => status === "all" || i.status === status)
     .filter((i) =>
-      `${i.role} ${i.level} ${i.topics.join(" ")}`
+      `${i.role} ${i.level}`
         .toLowerCase()
         .includes(search.trim().toLowerCase()),
     );
@@ -59,28 +55,6 @@ export default function History() {
       />
       {!!query.data?.length && (
         <>
-          <dl className="mb-7 flex flex-wrap gap-x-7 gap-y-3 text-sm">
-            <div className="flex gap-1.5">
-              <dd className="font-medium tabular-nums">{completed.length}</dd>
-              <dt className="text-muted-foreground">completed</dt>
-            </div>
-            <div className="flex gap-1.5">
-              <dd className="font-medium tabular-nums">
-                {Math.round(all.reduce((sum, i) => sum + elapsed(i), 0) / 60)}
-              </dd>
-              <dt className="text-muted-foreground">minutes practiced</dt>
-            </div>
-            {scores.length > 0 && (
-              <div className="flex gap-1.5">
-                <dd className="font-medium tabular-nums">
-                  {(
-                    scores.reduce((sum, n) => sum + n, 0) / scores.length
-                  ).toFixed(1)}
-                </dd>
-                <dt className="text-muted-foreground">average score</dt>
-              </div>
-            )}
-          </dl>
           <div
             className="mb-5 flex gap-6 border-b"
             role="group"
@@ -122,7 +96,7 @@ export default function History() {
             <Input
               id="history-search"
               className="pr-10 pl-9"
-              placeholder="Search role or topic…"
+              placeholder="Search role or experience…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

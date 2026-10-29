@@ -50,29 +50,22 @@ test("rendered status text and destructive hover retain readable contrast", asyn
   ).toBeGreaterThanOrEqual(4.5);
 });
 
-test("search traps focus and setup radios support arrow keys", async ({
+test("role radios support arrow keys without a workspace search overlay", async ({
   page,
 }) => {
   await page.goto("/interviews/new");
   const role = page.getByRole("radio", { name: "Frontend", exact: true });
+  await expect(role).toBeChecked();
   await role.focus();
-  await page.keyboard.down("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("radio", { name: "Backend", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Space");
   await expect(
     page.getByRole("radio", { name: "Backend", exact: true }),
   ).toBeChecked();
-  await page.keyboard.up("ArrowRight");
-  await page.getByRole("main").focus();
   await page.keyboard.press("Control+k");
-  const search = page.getByRole("combobox", {
-    name: "Search workspace",
-    exact: true,
-  });
-  await expect(search).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("dialog").locator(":focus")).toHaveCount(1);
-  await page.keyboard.press("Tab");
-  await expect(search).toBeFocused();
-  await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
@@ -82,7 +75,7 @@ test("settings omit the old collapse preference and the legacy route redirects",
   await page.goto("/settings");
   await expect(page.getByText("Keep sidebar collapsed")).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: "Overview", exact: true }),
+    page.getByRole("link", { name: "Settings", exact: true }),
   ).toBeVisible();
   await page.goto("/session");
   await expect(page).toHaveURL(/\/interviews\/new$/);

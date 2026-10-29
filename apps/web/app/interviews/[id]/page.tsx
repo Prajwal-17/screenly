@@ -1,8 +1,8 @@
 "use client";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Square, Phone, RefreshCw, FileText } from "lucide-react";
+import { Square, Phone, RefreshCw } from "lucide-react";
 import { Workspace } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
 import { LiveInterview } from "@/components/live-interview";
@@ -51,29 +51,6 @@ export default function InterviewPage() {
     timerPaused: interview?.pausedAt != null,
     endInterview: () => finish.mutateAsync(true),
   });
-  const [transcriptOpen, setTranscriptOpen] = useState(true);
-  const transcriptTrigger = useRef<HTMLButtonElement>(null);
-  const closeTranscript = useCallback(() => {
-    setTranscriptOpen(false);
-    requestAnimationFrame(() => {
-      transcriptTrigger.current?.focus({ preventScroll: true });
-    });
-  }, []);
-  const toggleTranscript = useCallback(() => {
-    if (transcriptOpen) closeTranscript();
-    else setTranscriptOpen(true);
-  }, [transcriptOpen, closeTranscript]);
-  useEffect(() => {
-    const shortWindow = matchMedia(
-      "(max-width: 767px) and (max-height: 500px)",
-    );
-    const adapt = () => {
-      if (shortWindow.matches) setTranscriptOpen(false);
-    };
-    adapt();
-    shortWindow.addEventListener("change", adapt);
-    return () => shortWindow.removeEventListener("change", adapt);
-  }, []);
   const [now, setNow] = useState(() => Date.now());
   const finish = useMutation({
     mutationFn: (generateFeedback: boolean) => api.finish(id, generateFeedback),
@@ -215,24 +192,6 @@ export default function InterviewPage() {
       )}
     </>
   );
-  const transcriptControl =
-    started || interview?.status === "active" || state.messages.length > 0 ? (
-      <Button
-        ref={transcriptTrigger}
-        variant={transcriptOpen ? "secondary" : "outline"}
-        size="sm"
-        aria-expanded={transcriptOpen}
-        aria-controls="live-transcript"
-        aria-keyshortcuts="T"
-        onClick={toggleTranscript}
-      >
-        <FileText />
-        Transcript
-        <span className="hidden text-muted-foreground sm:inline">
-          {state.messages.length}
-        </span>
-      </Button>
-    ) : undefined;
   return (
     <Workspace
       voice
@@ -256,10 +215,6 @@ export default function InterviewPage() {
             interview={interview}
             controller={controller}
             now={now}
-            transcriptOpen={transcriptOpen}
-            transcriptControl={transcriptControl}
-            closeTranscript={closeTranscript}
-            toggleTranscript={toggleTranscript}
             notices={notices}
             finishControl={finishTrigger("Finish interview")}
           />
@@ -274,27 +229,24 @@ export default function InterviewPage() {
               secondaryAction={
                 interview.status === "active" ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    {transcriptControl}
                     {finishTrigger("Finish saved interview", true)}
                   </div>
                 ) : undefined
               }
               onStart={() => void controller.current?.start()}
             />
-            {transcriptOpen &&
-              (interview.status === "active" || state.messages.length > 0) && (
-                <div
-                  id="live-transcript"
-                  className="mx-auto max-w-3xl scroll-mt-20 border-t pt-6"
-                >
-                  <LiveTranscript
-                    messages={state.messages}
-                    streaming={state.streaming}
-                    partial={state.partial}
-                    onClose={closeTranscript}
-                  />
-                </div>
-              )}
+            {(interview.status === "active" || state.messages.length > 0) && (
+              <div
+                id="live-transcript"
+                className="mx-auto max-w-3xl scroll-mt-20 border-t pt-6"
+              >
+                <LiveTranscript
+                  messages={state.messages}
+                  streaming={state.streaming}
+                  partial={state.partial}
+                />
+              </div>
+            )}
           </div>
         ))
       )}

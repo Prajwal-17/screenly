@@ -2,7 +2,7 @@ import type { InterviewDetail } from "@repo/shared";
 export function exportTranscript(interview: InterviewDetail) {
   const text = [
     `Screenly · ${interview.role} interview`,
-    `${interview.level} · ${interview.topics.join(", ")}`,
+    `${interview.role} · ${interview.level}`,
     "",
     ...interview.messages.flatMap((m) => [
       `${m.role === "assistant" ? "Screenly" : "You"}${m.status === "interrupted" ? " (interrupted)" : ""}:`,

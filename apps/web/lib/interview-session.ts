@@ -3,6 +3,7 @@ import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
 import { initialState, useInterviewStore } from "@/store/interviewStore";
 import { API_URL } from "./api";
 import { AudioPlayer } from "./audio-player";
+import { preferredPlaybackRate, savePlaybackRate } from "./audio/playback-rates";
 
 export class Session {
   private socket: WebSocket | null = null;
@@ -22,6 +23,9 @@ export class Session {
     private finished: (id: string, generateFeedback: boolean) => void,
   ) {
     useInterviewStore.setState(initialState);
+    const savedRate = preferredPlaybackRate();
+    this.player.setPlaybackRate(savedRate);
+    useInterviewStore.setState({ playbackRate: savedRate });
   }
   connect() {
     if (
@@ -520,6 +524,7 @@ export class Session {
   setPlaybackRate(rate: number) {
     this.player.setPlaybackRate(rate);
     useInterviewStore.setState({ playbackRate: rate });
+    savePlaybackRate(rate);
   }
   getVoiceSignal() {
     const state = useInterviewStore.getState();

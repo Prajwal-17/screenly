@@ -103,12 +103,18 @@ function MessageBubble({
 
 export function TranscriptMessage({ message }: { message: InterviewMessage }) {
   return (
-    <MessageBubble
-      role={message.role}
-      content={message.content}
-      createdAt={message.createdAt}
-      interrupted={message.status === "interrupted"}
-    />
+    <div
+      id={`message-${message.id}`}
+      className="scroll-mt-20 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring target:ring-2 target:ring-ring"
+      tabIndex={-1}
+    >
+      <MessageBubble
+        role={message.role}
+        content={message.content}
+        createdAt={message.createdAt}
+        interrupted={message.status === "interrupted"}
+      />
+    </div>
   );
 }
 
@@ -123,11 +129,12 @@ const TranscriptLine = memo(function TranscriptLine({
   const candidate = message.role === "user";
   return (
     <Message
+      id={message.id ? `message-${message.id}` : undefined}
       from={message.role}
       className={candidate ? "max-w-[90%]" : "max-w-full"}
       data-speaker={message.role}
       role="article"
-      aria-label={candidate ? "Your message" : "AI message"}
+      aria-label={candidate ? "Your message" : "Interviewer message"}
     >
       <MessageContent>
         {candidate ? (
@@ -145,6 +152,11 @@ const TranscriptLine = memo(function TranscriptLine({
           </MessageResponse>
         )}
       </MessageContent>
+      {live && (
+        <span className="text-[11px] text-muted-foreground">
+          {candidate ? "Transcribing…" : "Responding…"}
+        </span>
+      )}
       {message.status === "interrupted" && (
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <CornerDownLeft className="size-3" aria-hidden="true" />
@@ -209,7 +221,7 @@ export function LiveTranscript({
             fit ? "pb-2" : "pb-12",
           )}
         >
-          {messages.length === 0 && !streaming && (
+          {messages.length === 0 && !streaming && !partial && (
             <ConversationEmptyState
               className={cn(
                 "text-muted-foreground",
@@ -226,7 +238,7 @@ export function LiveTranscript({
             <TranscriptLine key={message.id} message={message} />
           ))}
           {streaming && (
-            <div aria-hidden="true" data-live-message="interviewer">
+            <div aria-live="off" data-live-message="interviewer">
               <TranscriptLine
                 message={{ role: "assistant", content: streaming }}
                 live
@@ -234,7 +246,7 @@ export function LiveTranscript({
             </div>
           )}
           {partial && (
-            <div aria-hidden="true" data-live-message="candidate">
+            <div aria-live="off" data-live-message="candidate">
               <TranscriptLine
                 message={{ role: "user", content: partial }}
                 live

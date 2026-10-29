@@ -1,7 +1,7 @@
 /* global Bun */
 /** Loopback-only synthetic API for manual shared-preview review; never imported by the app. */
 import { emptyProfile } from "@repo/shared";
-import { feedback, interview, profile } from "./fixtures";
+import { interview, memoryFinding, profile, review } from "./fixtures";
 const now = Date.now();
 let state = reset();
 const sockets = new Set();
@@ -15,6 +15,7 @@ function reset() {
       { ...interview("active", "active"), startedAt: Date.now() - 180_000 },
       interview("draft", "draft"),
     ],
+    memory: [structuredClone(memoryFinding)],
     failures: {},
     importMode: "success",
     events: [],
@@ -170,8 +171,26 @@ const server = Bun.serve({
       return new Response(stream, {
         headers: { ...headers, "content-type": "application/x-ndjson" },
       });
+    } else if (path === "/api/profile/memory" && method === "GET") {
+      data = state.memory;
+    } else if (path.startsWith("/api/profile/memory/") && method === "DELETE") {
+      state.memory = state.memory.filter(
+        (finding) => finding.id !== path.split("/").at(-1),
+      );
+      return new Response(null, { status: 204, headers });
     } else if (path === "/api/interviews" && method === "POST") {
-      data = { ...interview("created", "draft"), ...body };
+      if (!state.profile.details.level)
+        return Response.json(
+          { error: "Save an experience level in your profile first." },
+          { status: 409, headers },
+        );
+      data = {
+        ...interview("created", "draft"),
+        role: body.role,
+        level: state.profile.details.level,
+        topics: [],
+        duration: 20,
+      };
       state.interviews.push(data);
     } else if (path === "/api/interviews") data = state.interviews;
     else if (detail && method === "DELETE") {
@@ -187,7 +206,7 @@ const server = Bun.serve({
       data = detail;
     } else if (detail && path.endsWith("/feedback")) {
       detail.feedbackStatus = "ready";
-      detail.feedback = structuredClone(feedback);
+      detail.review = structuredClone(review);
       data = { ok: true };
     } else if (detail) data = detail;
     else

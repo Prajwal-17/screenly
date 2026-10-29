@@ -1,40 +1,20 @@
-import { test, expect } from "./fixtures";
+import { test, expect, feedback, review } from "./fixtures";
 
-test("dashboard role, setup validation, exact payload, and duplicate prevention", async ({
+test("role entry uses saved experience and sends only the selected role", async ({
   page,
   api,
 }) => {
-  await page.goto("/dashboard");
-  await page
-    .getByRole("button", { name: "Practice role: Frontend", exact: true })
-    .click();
-  await page
-    .getByRole("menuitemradio", { name: "Backend", exact: true })
-    .click();
-  await page
-    .getByRole("link", { name: "Configure Backend interview", exact: true })
-    .click();
+  await page.goto("/interviews/new?role=Backend");
   await expect(
     page.getByRole("radio", { name: "Backend", exact: true }),
   ).toBeChecked();
-  for (const box of await page.getByRole("checkbox").all()) await box.uncheck();
-  const submit = page.getByRole("button", {
+  await expect(
+    page.getByText("Mid-level", { exact: false }).first(),
+  ).toBeVisible();
+  const start = page.getByRole("button", {
     name: "Check microphone",
     exact: true,
   });
-  await submit.click();
-  await expect(
-    page.getByText("Choose at least one topic.", { exact: true }),
-  ).toBeVisible();
-  for (const box of await page.getByRole("checkbox").all()) await box.check();
-  await submit.click();
-  await expect(
-    page.getByText("Choose up to six topics.", { exact: true }),
-  ).toBeVisible();
-  for (const box of await page.getByRole("checkbox").all()) await box.uncheck();
-  await page.getByRole("checkbox", { name: "APIs", exact: true }).check();
-  await page.getByRole("radio", { name: "Senior", exact: true }).click();
-  await page.getByRole("radio", { name: "30 min", exact: true }).click();
   let release!: () => void;
   api.holds.set(
     "POST /api/interviews",
@@ -42,89 +22,79 @@ test("dashboard role, setup validation, exact payload, and duplicate prevention"
       release = resolve;
     }),
   );
-  await submit.click();
-  await expect(submit).toBeDisabled();
-  await expect(submit).toHaveAttribute("aria-busy", "true");
+  await start.click();
+  await expect(start).toBeDisabled();
   expect(
     api.requests.filter(
-      (r) => r.method === "POST" && r.path === "/api/interviews",
+      (request) =>
+        request.method === "POST" && request.path === "/api/interviews",
     ),
   ).toHaveLength(1);
   release();
   await expect(page).toHaveURL(/\/interviews\/created$/);
   expect(
     api.requests.find(
-      (r) => r.method === "POST" && r.path === "/api/interviews",
+      (request) =>
+        request.method === "POST" && request.path === "/api/interviews",
     )?.body,
-  ).toEqual({
-    role: "Backend",
-    level: "Senior",
-    topics: ["APIs"],
-    duration: 30,
-  });
+  ).toEqual({ role: "Backend" });
   await expect(
     page.getByRole("heading", { name: "Check your audio" }),
   ).toBeVisible();
 });
 
-test("setup failure preserves choices and retries; profile defaults remain valid", async ({
+test("missing saved experience blocks creation; profile and service failures retain recovery", async ({
   page,
   api,
 }) => {
-  api.profile.details.role = "Full-stack";
-  api.profile.details.level = "Senior";
-  api.failures.set("POST /api/interviews", {
-    status: 503,
-    error: "Could not save your setup.",
-  });
+  api.profile.details.level = "";
   await page.goto("/interviews/new");
   await expect(
-    page.getByRole("radio", { name: "Full-stack", exact: true }),
-  ).toBeChecked();
+    page.getByText(
+      "Add an experience level to your saved profile before starting.",
+    ),
+  ).toBeVisible();
   await expect(
-    page.getByRole("radio", { name: "Senior", exact: true }),
-  ).toBeChecked();
-  await page
-    .getByRole("button", { name: "Check microphone", exact: true })
-    .click();
-  await expect(page.getByText("Could not save your setup.")).toBeVisible();
+    page.getByRole("button", { name: "Check microphone" }),
+  ).toBeDisabled();
   await expect(
-    page.getByRole("radio", { name: "Full-stack", exact: true }),
+    page.getByRole("link", { name: "Complete profile" }),
+  ).toBeVisible();
+  api.profile.details.level = "Senior";
+  api.failures.set("GET /api/profile", {
+    status: 503,
+    error: "Private detail",
+  });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "We couldn’t load your profile" }),
+  ).toBeVisible();
+  await expect(page.getByText("Private detail")).toHaveCount(0);
+  api.failures.delete("GET /api/profile");
+  await page.getByRole("button", { name: "Retry loading profile" }).click();
+  await expect(
+    page.getByRole("button", { name: "Check microphone" }),
+  ).toBeEnabled();
+});
+
+test("create failure preserves role and retries", async ({ page, api }) => {
+  api.failures.set("POST /api/interviews", {
+    status: 503,
+    error: "Could not create interview.",
+  });
+  await page.goto("/interviews/new");
+  await page.getByRole("radio", { name: "Data Engineering" }).click();
+  await page.getByRole("button", { name: "Check microphone" }).click();
+  await expect(page.getByText("Could not create interview.")).toBeVisible();
+  await expect(
+    page.getByRole("radio", { name: "Data Engineering" }),
   ).toBeChecked();
   api.failures.delete("POST /api/interviews");
-  await page
-    .getByRole("button", { name: "Check microphone", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Check microphone" }).click();
   await expect(page).toHaveURL(/\/interviews\/created$/);
 });
 
-test("blank profile role, empty dashboard, and failed list recover", async ({
-  page,
-  api,
-}) => {
-  api.profile.details.role = "";
-  api.interviews = [];
-  await page.goto("/dashboard");
-  await expect(
-    page.getByRole("button", { name: "Practice role: Frontend" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("No interviews yet.", { exact: true }),
-  ).toBeVisible();
-  api.failures.set("GET /api/interviews", {
-    status: 503,
-    error: "Could not load interviews.",
-  });
-  await page.reload();
-  await expect(page.getByText("Could not load interviews.")).toBeVisible();
-  api.failures.delete("GET /api/interviews");
-  await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect(
-    page.getByText("No interviews yet.", { exact: true }),
-  ).toBeVisible();
-});
-
-test("preflight mic permission denial retries and unavailable services block starting", async ({
+test("preflight microphone denial retries and service unavailability blocks starting", async ({
   page,
   api,
 }) => {
@@ -133,40 +103,29 @@ test("preflight mic permission denial retries and unavailable services block sta
       navigator.mediaDevices,
     );
     let deny = true;
-    navigator.mediaDevices.getUserMedia = (constraints) => {
-      if (deny) {
-        deny = false;
-        return Promise.reject(new DOMException("Denied", "NotAllowedError"));
-      }
-      return original(constraints);
-    };
+    navigator.mediaDevices.getUserMedia = (constraints) =>
+      deny
+        ? ((deny = false),
+          Promise.reject(new DOMException("Denied", "NotAllowedError")))
+        : original(constraints);
   });
   await page.goto("/interviews/draft");
-  await page
-    .getByRole("button", { name: "Check microphone", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Check microphone" }).click();
   await expect(
     page.getByText("Allow microphone access in your browser, then retry."),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Check microphone", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Check microphone" }).click();
   await expect(
-    page.getByRole("button", { name: "Check microphone again", exact: true }),
+    page.getByRole("button", { name: "Check microphone again" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Test sound", exact: true }).click();
   api.capabilities.voice = false;
-  api.capabilities.llm = false;
   await page.reload();
   await expect(
-    page.getByText("Voice interviews are unavailable. Try again later."),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Start interview", exact: true }),
+    page.getByRole("button", { name: "Start interview" }),
   ).toBeDisabled();
 });
 
-test("history filters and destructive recovery preserve data on cancel and failure", async ({
+test("history filters, export and deletion retain real sessions", async ({
   page,
   api,
 }) => {
@@ -174,108 +133,126 @@ test("history filters and destructive recovery preserve data on cancel and failu
   await page.getByRole("button", { name: "Completed", exact: true }).click();
   await expect(page.locator("tbody tr")).toHaveCount(1);
   await page
-    .getByRole("textbox", { name: "Search interviews", exact: true })
+    .getByRole("textbox", { name: "Search interviews" })
     .fill("no-match");
   await expect(
     page.getByRole("heading", { name: "No interviews match" }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Clear filters", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(3);
   await page
-    .getByRole("button", { name: "Delete Frontend interview", exact: true })
+    .getByRole("button", { name: "Delete Frontend interview" })
     .first()
     .click();
-  await page.getByRole("button", { name: "Keep it", exact: true }).click();
-  expect(api.requests.filter((r) => r.method === "DELETE")).toHaveLength(0);
-  api.failures.set("DELETE /api/interviews/completed", {
-    status: 503,
-    error: "Could not delete interview.",
-  });
+  await page.getByRole("button", { name: "Keep it" }).click();
+  expect(
+    api.requests.filter((request) => request.method === "DELETE"),
+  ).toHaveLength(0);
+  await page.goto("/interviews/completed/feedback");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Transcript", exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.txt$/);
   await page
-    .getByRole("button", { name: "Delete Frontend interview", exact: true })
+    .getByRole("button", { name: "Delete interview", exact: true })
     .first()
     .click();
   await page
     .getByRole("button", { name: "Delete interview", exact: true })
+    .last()
     .click();
-  await expect(page.getByText("Could not delete interview.")).toBeVisible();
-  await expect(page.locator("tbody tr")).toHaveCount(3);
-  api.failures.delete("DELETE /api/interviews/completed");
-  await page
-    .getByRole("button", { name: "Delete Frontend interview", exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole("button", { name: "Delete interview", exact: true })
-    .click();
-  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page).toHaveURL(/\/history$/);
+  expect(
+    api.interviews.find((item) => item.id === "completed"),
+  ).toBeUndefined();
+});
+
+test("review findings link exact saved evidence and legacy report stays unscored", async ({
+  page,
+  api,
+}) => {
+  await page.goto("/interviews/completed/feedback");
+  await expect(page.getByText(review.summary)).toBeVisible();
+  await page.getByRole("link", { name: /View evidence 1/ }).click();
+  await expect(page).toHaveURL(/#message-answer$/);
+  await expect(page.locator("#message-answer")).toContainText(
+    "I would profile the application",
+  );
+  await expect(page.getByText(/\/ 10|score breakdown|Answer 1/i)).toHaveCount(
+    0,
+  );
+  api.interviews[0]!.review = null;
+  api.interviews[0]!.feedback = structuredClone(feedback);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Earlier review" }),
+  ).toBeVisible();
+  await expect(page.getByText(feedback.summary)).toBeVisible();
+  await expect(page.getByText(/\/ 10|score breakdown|Answer 1/i)).toHaveCount(
+    0,
+  );
 });
 
 for (const status of ["pending", "generating", "failed", "skipped"] as const) {
-  test(`feedback ${status} retains transcript and supports its next action`, async ({
+  test(`review ${status} retains transcript and recovery`, async ({
     page,
     api,
   }) => {
     const completed = api.interviews[0]!;
-    completed.feedback = null;
+    completed.review = null;
     completed.feedbackStatus = status;
     await page.goto("/interviews/completed/feedback");
-    await page.getByRole("button", { name: /^Full conversation/ }).click();
     await expect(
       page.getByText(completed.messages[0]!.content, { exact: true }),
     ).toBeVisible();
     if (status === "pending" || status === "generating") {
       await expect(
-        page.getByRole("heading", { name: "Generating feedback…" }),
+        page.getByRole("heading", { name: "Review in progress" }),
       ).toBeVisible();
-      completed.feedback = (await import("./fixtures")).feedback;
+      completed.review = structuredClone(review);
       completed.feedbackStatus = "ready";
-      await expect(
-        page.getByText(completed.feedback.summary, { exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText(review.summary)).toBeVisible();
     } else {
       api.failures.set("POST /api/interviews/completed/feedback", {
         status: 503,
-        error: "Feedback service unavailable.",
+        error: "Review unavailable.",
       });
-      const retry = page.getByRole("button", {
-        name: status === "skipped" ? "Generate feedback" : "Retry feedback",
-        exact: true,
+      const button = page.getByRole("button", {
+        name: status === "failed" ? "Retry review" : "Generate review",
       });
-      await retry.click();
-      await expect(
-        page.getByText("Feedback service unavailable."),
-      ).toBeVisible();
+      await button.click();
+      await expect(page.getByText("Review unavailable.")).toBeVisible();
       api.failures.delete("POST /api/interviews/completed/feedback");
-      await retry.click();
-      await expect(
-        page.getByText(
-          "You explained the rendering lifecycle clearly. Compare alternatives with a concrete example.",
-        ),
-      ).toBeVisible();
+      await button.click();
+      await expect(page.getByText(review.summary)).toBeVisible();
     }
   });
 }
 
-test("feedback evidence, null scores, and transcript download", async ({
+test("settings lists owned practice memory and dismisses it without deleting source", async ({
   page,
   api,
 }) => {
-  api.interviews[0]!.feedback!.overallScore = null;
-  api.interviews[0]!.feedback!.dimensions[0]!.score = null;
-  await page.goto("/interviews/completed/feedback");
-  await expect(page.getByText("NaN")).toHaveCount(0);
-  await page.getByRole("button", { name: "Strengths", exact: true }).click();
+  await page.goto("/settings");
   await expect(
-    page.getByText("Clear explanation of component rendering."),
+    page.getByText("Explain a concrete profiler trace."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Answer 1", exact: true }).click();
   await expect(
-    page.getByText("You identified unnecessary renders."),
-  ).toBeVisible();
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Transcript", exact: true }).click();
-  expect((await download).suggestedFilename()).toMatch(/\.txt$/);
+    page.getByRole("link", { name: "Source interview" }),
+  ).toHaveAttribute("href", "/interviews/completed/feedback");
+  await page.getByRole("button", { name: /Remove practice finding/ }).click();
+  await page.getByRole("button", { name: "Remove finding" }).click();
+  await expect(page.getByText("No retained findings yet.")).toBeVisible();
+  expect(api.interviews.find((item) => item.id === "completed")).toBeDefined();
+});
+
+test("playback preference persists from Settings into the live audio menu", async ({
+  page,
+}) => {
+  await page.goto("/settings");
+  await page.getByLabel("Interviewer playback speed").selectOption("1.5");
+  await page.goto("/interviews/active");
+  await page.getByRole("button", { name: "Audio settings" }).click();
+  await expect(
+    page.getByRole("menuitem", { name: /Interviewer playback speed/ }),
+  ).toContainText("1.5×");
 });

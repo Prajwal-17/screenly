@@ -5,6 +5,8 @@ import {
   type ClientEvent,
   type Feedback,
   type InterviewDetail,
+  type PracticeFinding,
+  type SessionReview,
   type ProfileImport,
   type ServerEvent,
   type UserProfile,
@@ -55,6 +57,52 @@ export const feedback: Feedback = {
     "Explain a performance trade-off aloud.",
   ],
 };
+export const review: SessionReview = {
+  schemaVersion: 2,
+  role: "Frontend",
+  level: "Mid-level",
+  rubricVersion: "screenly-rubric-2.0",
+  promptVersion: "screenly-prompts-2.0",
+  transcriptRevision: "synthetic-revision",
+  summary:
+    "The candidate described a way to investigate rendering behavior. The conversation did not explore implementation trade-offs.",
+  findings: [
+    {
+      id: "finding-1",
+      criterionId: "Frontend:problem-solving",
+      dimension: "problem-solving",
+      label: "Partially demonstrated",
+      observation: "The candidate proposed profiling before changing code.",
+      evidence: [
+        { messageId: "answer", quote: "I would profile the application" },
+      ],
+      improvement:
+        "Explain which profiler signal would distinguish expected from unnecessary renders.",
+      assistance: "independent",
+    },
+  ],
+  practicePriority: {
+    title: "Explain a diagnosis",
+    action: "Walk through a specific profiler trace.",
+    strongerExplanation:
+      "Connect a measured render to its cause and a verified fix.",
+  },
+  notAssessed: ["Adaptability"],
+  limitations: [],
+};
+export const memoryFinding: PracticeFinding = {
+  id: "memory-1",
+  sourceInterviewId: "completed",
+  sourceReviewVersion: "synthetic-revision",
+  role: "Frontend",
+  criterionId: "Frontend:problem-solving",
+  observation:
+    "In this session, the candidate proposed profiling before changing code.",
+  practiceFocus: "Explain a concrete profiler trace.",
+  evidence: [{ messageId: "answer", quote: "I would profile the application" }],
+  createdAt: now,
+  dismissedAt: null,
+};
 export function interview(
   id: string,
   status: InterviewDetail["status"],
@@ -73,7 +121,8 @@ export function interview(
     pausedAt: null,
     pausedMs: 0,
     feedbackStatus: status === "completed" ? "ready" : "pending",
-    feedback: status === "completed" ? structuredClone(feedback) : null,
+    feedback: null,
+    review: status === "completed" ? structuredClone(review) : null,
     feedbackModel: status === "completed" ? "synthetic-fixture" : null,
     messages:
       status === "draft"
@@ -106,6 +155,7 @@ export type FixtureApi = {
   capabilities: Capabilities;
   profile: UserProfile;
   interviews: InterviewDetail[];
+  memory: PracticeFinding[];
   requests: RequestRecord[];
   unexpected: string[];
   failures: Map<string, Failure>;
@@ -134,6 +184,7 @@ export const test = base.extend<{ api: FixtureApi }>({
           interview("active", "active"),
           interview("draft", "draft"),
         ],
+        memory: [structuredClone(memoryFinding)],
         requests: [],
         unexpected: [],
         failures: new Map(),
@@ -260,10 +311,32 @@ export const test = base.extend<{ api: FixtureApi }>({
             body:
               events.map((event) => JSON.stringify(event)).join("\n") + "\n",
           });
+        } else if (path === "/api/profile/memory" && method === "GET") {
+          data = api.memory;
+        } else if (
+          path.startsWith("/api/profile/memory/") &&
+          method === "DELETE"
+        ) {
+          api.memory = api.memory.filter(
+            (finding) => finding.id !== path.split("/").at(-1),
+          );
+          status = 204;
         } else if (path === "/api/interviews" && method === "POST") {
+          if (!api.profile.details.level) {
+            return route.fulfill({
+              status: 409,
+              headers,
+              json: {
+                error: "Save an experience level in your profile first.",
+              },
+            });
+          }
           const created = {
             ...interview("created", "draft"),
             ...(body as object),
+            level: api.profile.details.level,
+            topics: [],
+            duration: 20 as const,
           };
           api.interviews.push(created);
           data = created;
@@ -282,7 +355,7 @@ export const test = base.extend<{ api: FixtureApi }>({
           data = detail;
         } else if (detail && path.endsWith("/feedback")) {
           detail.feedbackStatus = "ready";
-          detail.feedback = structuredClone(feedback);
+          detail.review = structuredClone(review);
           data = { ok: true };
         } else if (detail) data = detail;
         else if (path.startsWith("/api/interviews/")) {

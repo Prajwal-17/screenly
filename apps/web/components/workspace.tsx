@@ -19,7 +19,6 @@ import { WorkspaceSidebar } from "@/components/workspace-sidebar";
 import { useUserProfile } from "@/lib/profile";
 import { ErrorState } from "@/components/common";
 import { ApiError } from "@/lib/api";
-import { WorkspaceSearch } from "@/components/workspace-search";
 import { workspaceDestinations } from "@/lib/workspace-navigation";
 
 export function Brand() {
@@ -102,15 +101,13 @@ export function Workspace({
   const context =
     title ??
     workspaceDestinations.find((item) => item.href === path)?.label ??
-    (path === "/dashboard"
-      ? "Overview"
-      : path === "/history"
-        ? "History"
-        : path === "/interviews/new"
-          ? "New interview"
-          : path.endsWith("/feedback")
-            ? "Feedback"
-            : "Interview");
+    (path === "/history"
+      ? "History"
+      : path === "/interviews/new"
+        ? "New interview"
+        : path.endsWith("/feedback")
+          ? "Interview review"
+          : "Interview");
   useEffect(() => {
     document.title = `${context} · Screenly`;
   }, [context]);
@@ -232,13 +229,13 @@ export function Workspace({
                   retryLabel="Retry loading profile"
                   retrying={profile.isFetching}
                   action={
-                    path !== "/dashboard" && (
+                    path !== "/interviews/new" && (
                       <Button
                         variant="outline"
                         className="w-full sm:w-auto"
                         asChild
                       >
-                        <Link href="/dashboard">Go to overview</Link>
+                        <Link href="/interviews/new">New interview</Link>
                       </Button>
                     )
                   }
@@ -279,7 +276,6 @@ export function Workspace({
           </div>
         </main>
       </SidebarInset>
-      <WorkspaceSearch beforeNavigate={beforeNavigate} />
     </SidebarProvider>
   );
 }

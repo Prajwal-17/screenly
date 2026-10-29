@@ -32,7 +32,7 @@ export function PageRecovery({
         <div className="mt-7 flex flex-wrap gap-3">
           {retry && <Button onClick={retry}>Try again</Button>}
           <Button asChild variant={retry ? "outline" : "default"}>
-            <a href="/dashboard">Go to overview</a>
+            <a href="/interviews/new">New interview</a>
           </Button>
           <Button asChild variant="ghost">
             <a href="/">Screenly home</a>

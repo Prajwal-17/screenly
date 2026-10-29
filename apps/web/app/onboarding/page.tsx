@@ -127,7 +127,7 @@ export default function Onboarding() {
       return;
     admitted.current = session.user.id;
     if (!editing && ["complete", "skipped"].includes(profile.data.status))
-      router.replace("/dashboard");
+      router.replace("/interviews/new");
   }, [profile.data, modeReady, editing, router, session]);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -280,7 +280,7 @@ export default function Onboarding() {
         );
       clear();
       if (editing) router.replace("/settings");
-      else await openWorkspace("/dashboard");
+      else await openWorkspace("/interviews/new");
     } catch {
       setSettingUp(false);
       setError(
