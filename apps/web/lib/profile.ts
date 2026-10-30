@@ -7,6 +7,7 @@ import type {
   OnboardingState,
   ProfileImportEvent,
   ProfileImportStage,
+  ExperienceLevel,
 } from "@repo/shared";
 import { authClient } from "./auth-client";
 import { API_URL, ApiError, request } from "./api";
@@ -21,6 +22,11 @@ export class ProfileImportFailure extends ApiError {
   }
 }
 export const profileApi = {
+  saveExperience: (level: ExperienceLevel) =>
+    request<UserProfile>("/profile/experience", {
+      method: "POST",
+      body: JSON.stringify({ level }),
+    }),
   get: (signal?: AbortSignal) =>
     request<UserProfile>("/profile", {
       signal: signal

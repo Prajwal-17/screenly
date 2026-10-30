@@ -1,6 +1,38 @@
 import type { ServerEvent } from "@repo/shared";
 import { test, expect, now } from "./fixtures";
 
+test("previous live orb and dock remain visible with a togglable side transcript", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/interviews/active");
+  const visual = page.locator('[data-slot="voice-visual"]');
+  await expect(visual.locator("canvas")).toBeVisible();
+  await expect(visual.locator("[data-renderer]")).toHaveAttribute(
+    "data-renderer",
+    /webgl|fallback/,
+  );
+  await expect(page.locator('[data-slot="live-caption"]')).toContainText(
+    "How would you identify unnecessary re-renders",
+  );
+  await expect(page.locator("#live-transcript")).toBeVisible();
+  await page.getByRole("button", { name: "Transcript", exact: true }).click();
+  await expect(page.locator("#live-transcript")).toHaveCount(0);
+  await expect(visual.locator("canvas")).toBeVisible();
+  await page.keyboard.press("t");
+  await expect(page.locator("#live-transcript")).toBeVisible();
+  await page.screenshot({ path: "/tmp/screenly-restored-live.png" });
+  await testInfo.attach("restored-live", {
+    path: "/tmp/screenly-restored-live.png",
+    contentType: "image/png",
+  });
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await expect(visual.locator("canvas")).toBeInViewport();
+  await expect(
+    page.getByRole("button", { name: "Finish interview", exact: true }),
+  ).toBeInViewport();
+  await page.screenshot({ path: "/tmp/screenly-restored-live-short.png" });
+});
+
 test("closing playback acknowledges the response without clearing the saving state", async ({
   page,
   api,
@@ -57,7 +89,10 @@ test("opening, thinking, speaking, and replay retain timing and saved context", 
   api.interviews[1]!.phase = "opening";
   api.interviews[1]!.startedAt = null;
   await page.goto("/interviews/active");
-  const transcript = page.getByRole("region", { name: "Conversation" });
+  const transcript = page.getByRole("region", {
+    name: "Conversation",
+    exact: true,
+  });
   await expect(transcript).toBeVisible();
   api.send({ type: "status", status: "thinking" });
   await expect(
@@ -65,7 +100,7 @@ test("opening, thinking, speaking, and replay retain timing and saved context", 
   ).toBeVisible();
   api.send({ type: "status", status: "speaking" });
   await expect(
-    page.getByText("Interviewer speaking", { exact: true }),
+    page.getByText("Introducing your interview", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("timer")).toContainText("00:00");
   await page.getByRole("button", { name: "Replay interviewer" }).click();
@@ -108,7 +143,12 @@ test("live transcript reconciles temporary candidate speech into a saved turn", 
     transcript.getByText("I would measure before optimizing.", { exact: true }),
   ).toHaveCount(1);
   await page.keyboard.press("t");
-  await expect(page.locator('#live-transcript [role="log"]')).toBeFocused();
+  await expect(page.locator("#live-transcript")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Transcript", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("t");
+  await expect(page.locator("#live-transcript")).toBeVisible();
 });
 
 test("audio pause acknowledgement and playback speed menu retain focus and state", async ({

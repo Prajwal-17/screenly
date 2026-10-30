@@ -294,6 +294,11 @@ export const test = base.extend<{ api: FixtureApi }>({
                 : api.profile.status,
           };
           data = api.profile;
+        } else if (path === "/api/profile/experience" && method === "POST") {
+          api.profile.details.level = (
+            body as { level: UserProfile["details"]["level"] }
+          ).level;
+          data = api.profile;
         } else if (path === "/api/profile/skip") {
           api.profile.status = "skipped";
           data = api.profile;

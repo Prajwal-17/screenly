@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { stream } from "hono/streaming";
+import { z } from "zod";
 import {
   profileDetailsSchema,
   profileSaveSchema,
+  levels,
   type ProfileImportEvent,
   type ProfileImportStage,
 } from "@repo/shared";
@@ -37,6 +39,19 @@ profileRoutes.use("*", async (c, next) => {
 profileRoutes.get("/", async (c) =>
   c.json(await c.get("services").profiles.get(c.get("userId"))),
 );
+profileRoutes.post("/experience", bodyLimit({ maxSize: 1024 }), async (c) => {
+  const parsed = z
+    .object({ level: z.enum(levels) })
+    .strict()
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    return c.json({ error: "Choose your experience level." }, 400);
+  return c.json(
+    await c
+      .get("services")
+      .profiles.saveExperience(c.get("userId"), parsed.data.level),
+  );
+});
 profileRoutes.get("/memory", async (c) =>
   c.json(await createMemory(c.get("services").db).active(c.get("userId"))),
 );

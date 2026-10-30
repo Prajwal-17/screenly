@@ -65,7 +65,7 @@ Deployment creates the `INTERVIEWS` Durable Object binding and its SQLite-backed
 
 ## Local development authentication
 
-Set `ENABLE_DEV_LOGIN=true` in the ignored `.env`, use localhost frontend/backend URLs, and run `bun run dev`. `POST /api/auth/sign-in/development` accepts `{ "email": "developer@example.com" }` and creates a normal Better Auth session. It validates email and origin, leaves email unverified, and reuses the local account on subsequent visits.
+Local `bun run dev` enables email-only login by default with localhost frontend/backend URLs. Set `ENABLE_DEV_LOGIN=false` in the ignored `.env` to disable it. `POST /api/auth/sign-in/development` accepts `{ "email": "developer@example.com" }` and creates a normal Better Auth session. It validates email and origin, leaves email unverified, and reuses the local account on subsequent visits.
 
 `bun run --cwd apps/backend start` runs local Workers emulation with production authentication semantics: the development endpoint is absent even if the flag is set. Unset modes, test mode, and non-loopback URLs also disable it. Use separate local data and credentials.
 

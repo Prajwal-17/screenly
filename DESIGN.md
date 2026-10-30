@@ -200,7 +200,7 @@ components:
 
 ## Direction
 
-Screenly uses white reading surfaces, quiet gray navigation, charcoal actions, local Geist, semantic state colors, and existing shadcn/Radix controls. The live conversation and saved review carry the hierarchy. The palette and component tokens above remain the runtime foundation in `apps/web/app/globals.css`; legacy orb and live-question tokens are retained for compatibility but are not current presentation requirements.
+Screenly uses white reading surfaces, quiet gray navigation, charcoal actions, local Geist, semantic state colors, and existing shadcn/Radix controls. The live conversation and saved review carry the hierarchy. The palette and component tokens above remain the runtime foundation in `apps/web/app/globals.css`; orb and live-caption tokens support the preserved live experience required by REQ-012.
 
 ## Workspace
 
@@ -212,7 +212,14 @@ Use a single six-role choice group and one start action. The saved profile role 
 
 ## Live session
 
-A continuous transcript is the primary surface. Speaker-labelled committed turns and temporary transcription/streaming text appear in one flow. Interrupted messages retain their marker. The scroll view follows the latest turn while at the bottom and offers Jump to latest after the reader scrolls away. Above it, concise state and quiet elapsed time remain visible. The dock retains mute, replay, audio/pause preferences and finish; recovery notices remain close to the session. The existing controller owns capture, interruption, playback, reconnect and finish. No orb, persistent question panel, answer caption pane, progress count or per-answer grading organizes the live page.
+Preserve the previous live experience: reactive PorcelainOrb, centered interviewer caption,
+candidate caption, quiet timer and existing control dock. The default-open side transcript
+contains the continuous speaker-labelled conversation, partial/streaming turns and interruption
+markers, with follow-latest and Jump to latest. Its close/reopen control and T shortcut retain
+focus return. Keep caption fitting and control reachability in short windows. The existing
+controller continues to own capture, interruption, playback, reconnect and finish. This explicit
+REQ-012 correction supersedes the earlier transcript-only composition; assessment remains
+qualitative, with no exam counters or per-answer grading.
 
 ## Review and history
 

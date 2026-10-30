@@ -1,7 +1,7 @@
 import { parse } from "jsonc-parser";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { readConfig } from "../src/config";
+import { readLocalConfig } from "../src/config";
 
 const [command = "dev", ...extra] = Bun.argv.slice(2);
 const remote = command === "deploy" || command === "migrate:remote";
@@ -89,10 +89,7 @@ process.addListener("SIGINT", forwardSignal);
 process.addListener("SIGTERM", forwardSignal);
 try {
   if (command === "dev") {
-    const local = readConfig({
-      ...process.env,
-      NODE_ENV: process.env.NODE_ENV ?? "development",
-    });
+    const local = readLocalConfig(process.env);
     config.vars.NODE_ENV = local.NODE_ENV;
     config.vars.ENABLE_DEV_LOGIN = local.ENABLE_DEV_LOGIN;
     await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });

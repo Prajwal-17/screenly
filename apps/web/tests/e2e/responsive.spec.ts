@@ -120,7 +120,7 @@ test("narrow boundary preserves a live session and reconnects its visible contro
   await expect(finish).toBeVisible();
   await expect(
     page
-      .getByRole("region", { name: "Conversation" })
+      .getByRole("region", { name: "Conversation", exact: true })
       .getByText("A synthetic answer while the window is narrow."),
   ).toBeVisible();
   expect(api.sockets.has(socket!)).toBe(true);

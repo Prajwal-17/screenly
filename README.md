@@ -23,7 +23,7 @@ Configure `apps/backend/.env`:
 - `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`: your Chat Completions provider settings.
 - `DEEPGRAM_API_KEY` and `DEEPGRAM_PROJECT_ID`: a management key with `keys:write` and `usage:write` permissions in that project.
 
-For local sign-in without Google, set `ENABLE_DEV_LOGIN=true` with localhost URLs. See the [backend guide](apps/backend/README.md) for configuration and deployment details.
+Local `bun run dev` enables email-only sign-in without Google on localhost. Enter an email on the sign-in page to open its workspace; new users follow onboarding. Set `ENABLE_DEV_LOGIN=false` to disable it. Production always disables it. See the [backend guide](apps/backend/README.md) for configuration and deployment details.
 
 ## Development
 

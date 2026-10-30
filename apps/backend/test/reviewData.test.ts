@@ -14,6 +14,7 @@ import {
   transcriptRevision,
 } from "../src/db/interviews";
 import { createMemory } from "../src/db/memory";
+import { createProfiles } from "../src/db/profiles";
 import type { Database } from "../src/db";
 import { reviewInput, validateReview } from "../src/lib/reviewService";
 
@@ -113,6 +114,33 @@ beforeEach(() => {
   );
 });
 afterEach(() => sqlite.close());
+
+test("inline experience save preserves other profile fields and pending import", async () => {
+  const details = {
+    ...emptyProfile("Owner"),
+    goal: "My goal",
+    about: "My background",
+  };
+  const onboarding = {
+    step: 2,
+    pendingImport: {
+      suggestions: { headline: "Unapproved" },
+      source: "Resume",
+      extractedCharacters: 20,
+    },
+  };
+  sqlite
+    .query(
+      "INSERT INTO user_profile (user_id, details, onboarding, status, completed_at, updated_at) VALUES ('owner', ?, ?, 'complete', 10, 10)",
+    )
+    .run(JSON.stringify(details), JSON.stringify(onboarding));
+  const saved = await createProfiles(db).saveExperience("owner", "Junior");
+  expect(saved.details).toEqual({ ...details, level: "Junior" });
+  expect(saved.onboarding).toEqual(onboarding);
+  expect(saved.status).toBe("complete");
+  expect(saved.completedAt).toBe(10);
+  expect((await createProfiles(db).get("other")).details.level).toBe("");
+});
 
 test("review rejects stale metadata and non-candidate, opening, interrupted or duplicate evidence", async () => {
   const interview = detail();

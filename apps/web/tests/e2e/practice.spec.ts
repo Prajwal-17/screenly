@@ -49,11 +49,7 @@ test("missing saved experience blocks creation; profile and service failures ret
 }) => {
   api.profile.details.level = "";
   await page.goto("/interviews/new");
-  await expect(
-    page.getByText(
-      "Add an experience level to your saved profile before starting.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Choose your experience level")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Check microphone" }),
   ).toBeDisabled();
@@ -75,6 +71,41 @@ test("missing saved experience blocks creation; profile and service failures ret
   await expect(
     page.getByRole("button", { name: "Check microphone" }),
   ).toBeEnabled();
+});
+
+test("missing experience can be saved inline and continued without completing onboarding", async ({
+  page,
+  api,
+}) => {
+  api.profile.details.level = "";
+  api.profile.details.goal = "";
+  api.failures.set("POST /api/profile/experience", {
+    status: 503,
+    error: "Could not save experience. Retry.",
+  });
+  await page.goto("/interviews/new?role=Backend");
+  await page.getByRole("radio", { name: "Senior", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Check microphone", exact: true })
+    .click();
+  await expect(
+    page.getByText("Could not save experience. Retry."),
+  ).toBeVisible();
+  expect(
+    api.requests.some(
+      (r) => r.path === "/api/interviews" && r.method === "POST",
+    ),
+  ).toBe(false);
+  api.failures.delete("POST /api/profile/experience");
+  await page
+    .getByRole("button", { name: "Check microphone", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/interviews\/created$/);
+  expect(api.profile.details.level).toBe("Senior");
+  expect(api.profile.details.goal).toBe("");
+  expect(
+    api.requests.find((r) => r.path === "/api/profile/experience")?.body,
+  ).toEqual({ level: "Senior" });
 });
 
 test("create failure preserves role and retries", async ({ page, api }) => {

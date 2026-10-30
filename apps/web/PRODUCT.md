@@ -20,11 +20,11 @@ Preserve production Google authentication, local development email entry, real o
 
 ## Brand commitments
 
-The text-only wordmark and neutral white/gray/charcoal shadcn system remain. No new brand icon, ornament, or decorative live stage. Normal workspace pages show the inset sidebar; a live session uses the existing navigation drawer. Authenticated workspace and onboarding keep the 1024 CSS pixel desktop boundary, including when a live session is resized narrower. The public landing remains responsive.
+The text-only wordmark and neutral white/gray/charcoal shadcn system remain. Retain the previous reactive PorcelainOrb and live caption composition; do not redesign that experience. Normal workspace pages show the inset sidebar; a live session uses the existing navigation drawer. Authenticated workspace and onboarding keep the 1024 CSS pixel desktop boundary, including when a live session is resized narrower. The public landing remains responsive.
 
 ## Interface hierarchy
 
-New interview selects one of six roles and shows saved experience and meaningful profile warnings. The live page leads with one continuous transcript and keeps voice status and essential controls visible. Completed sessions show a short synthesis, qualitative findings linked to exact transcript messages, one practice priority, limits, and the original transcript. History shows real sessions, status and review availability without scores. Settings contains profile editing, active practice memory, playback preference and account access. Navigation contains only New interview, Interviews and Settings. Help remains in the account menu. Retired workspace routes redirect to New interview.
+New interview selects one of six roles and shows saved experience and meaningful profile warnings. The live page preserves the previous orb, interviewer/candidate captions and control dock, with the continuous transcript open alongside it and available through the transcript toggle. Completed sessions show a short synthesis, qualitative findings linked to exact transcript messages, one practice priority, limits, and the original transcript. History shows real sessions, status and review availability without scores. Settings contains profile editing, active practice memory, playback preference and account access. Navigation contains only New interview, Interviews and Settings. Help remains in the account menu. Retired workspace routes redirect to New interview.
 
 ## Public presentation
 

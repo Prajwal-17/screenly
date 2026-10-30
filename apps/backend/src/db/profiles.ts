@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   emptyProfile,
   type ProfileDetails,
   type UserProfile,
   type OnboardingState,
+  type ExperienceLevel,
 } from "@repo/shared";
 import type { Database } from "./index";
 import { user, userProfile } from "./schema";
@@ -36,6 +37,31 @@ export function createProfiles(db: Database) {
         completedAt: null,
         updatedAt: null,
       };
+    },
+    async saveExperience(
+      userId: string,
+      level: ExperienceLevel,
+    ): Promise<UserProfile> {
+      const prior = await profiles.get(userId);
+      const now = Date.now();
+      await db
+        .insert(userProfile)
+        .values({
+          userId,
+          details: { ...prior.details, level },
+          onboarding: prior.onboarding,
+          status: "draft",
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: userProfile.userId,
+          set: {
+            details: sql`json_set(${userProfile.details}, '$.level', ${level})`,
+            updatedAt: now,
+          },
+        })
+        .run();
+      return profiles.get(userId);
     },
     async save(
       userId: string,

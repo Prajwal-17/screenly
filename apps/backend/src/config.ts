@@ -49,6 +49,18 @@ export type Config = z.infer<typeof configSchema>;
 export function readConfig(bindings: object): Config {
   return configSchema.parse(bindings);
 }
+// Only the local launcher opts in by default; Worker bindings still fail closed.
+export function readLocalConfig(
+  bindings: Record<string, string | undefined>,
+): Config {
+  const mode = bindings.NODE_ENV ?? "development";
+  return readConfig({
+    ...bindings,
+    NODE_ENV: mode,
+    ENABLE_DEV_LOGIN:
+      bindings.ENABLE_DEV_LOGIN ?? (mode === "development" ? "true" : "false"),
+  });
+}
 // Fail closed: a development build, explicit opt-in, and loopback origins are all required.
 const loopback = (value: string) =>
   ["localhost", "127.0.0.1", "[::1]"].includes(new URL(value).hostname);

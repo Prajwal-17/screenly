@@ -5,12 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Mic, RefreshCw } from "lucide-react";
-import { roles, type InterviewRole } from "@repo/shared";
+import {
+  roles,
+  levels,
+  type InterviewRole,
+  type ExperienceLevel,
+} from "@repo/shared";
 import { Workspace } from "@/components/workspace";
 import { InlineAlert, Loading } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/form-choices";
-import { useUserProfile } from "@/lib/profile";
+import { profileApi, useUserProfile } from "@/lib/profile";
 import { api } from "@/lib/api";
 
 export default function NewInterview() {
@@ -18,17 +23,19 @@ export default function NewInterview() {
   const client = useQueryClient();
   const profile = useUserProfile();
   const [selectedRole, setSelectedRole] = useState<InterviewRole | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<ExperienceLevel | null>(
+    null,
+  );
   const [urlRole, setUrlRole] = useState<InterviewRole | null>(null);
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get("role");
     setUrlRole(roles.find((role) => role === value) ?? null);
   }, []);
-  const role = selectedRole ?? urlRole ?? (profile.data?.details.role || roles[0]);
+  const role =
+    selectedRole ?? urlRole ?? (profile.data?.details.role || roles[0]);
   const level = profile.data?.details.level;
   const warnings = profile.data
     ? [
-        !level &&
-          "Add an experience level to your saved profile before starting.",
         !profile.data.details.projects.length &&
           !profile.data.details.about.trim() &&
           "Add a project or background so the interviewer has useful context.",
@@ -41,7 +48,14 @@ export default function NewInterview() {
     queryFn: api.capabilities,
   });
   const create = useMutation({
-    mutationFn: api.create,
+    mutationFn: async (input: { role: InterviewRole }) => {
+      if (!level) {
+        if (!selectedLevel) throw new Error("Choose your experience level.");
+        await profileApi.saveExperience(selectedLevel);
+        await client.invalidateQueries({ queryKey: ["profile"] });
+      }
+      return api.create(input);
+    },
     onSuccess: async (interview) => {
       await client.invalidateQueries({ queryKey: ["interviews"] });
       router.push(`/interviews/${interview.id}`);
@@ -69,7 +83,8 @@ export default function NewInterview() {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                if (level && !create.isPending) create.mutate({ role });
+                if ((level || selectedLevel) && !create.isPending)
+                  create.mutate({ role });
               }}
               className="space-y-7"
             >
@@ -93,10 +108,30 @@ export default function NewInterview() {
                 )}
               </div>
               <div className="border-y py-5 text-sm">
-                <p>
-                  <span className="text-muted-foreground">Experience</span> ·{" "}
-                  {level || "Not saved"}
-                </p>
+                {level ? (
+                  <p>
+                    <span className="text-muted-foreground">Experience</span> ·{" "}
+                    {level}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="font-medium">Choose your experience level</p>
+                    <ChoiceGroup
+                      label="Experience level"
+                      name="level"
+                      options={levels}
+                      value={selectedLevel ?? ""}
+                      variant="segmented"
+                      onValueChange={(value) => {
+                        const next = levels.find((item) => item === value);
+                        if (next) setSelectedLevel(next);
+                      }}
+                    />
+                    <p className="text-muted-foreground">
+                      Saved to your profile when you continue.
+                    </p>
+                  </div>
+                )}
                 <p className="mt-1 text-muted-foreground">
                   20 minute voice interview
                 </p>
@@ -135,7 +170,9 @@ export default function NewInterview() {
               )}
               <Button
                 type="submit"
-                disabled={!level || capabilities.data?.llm === false}
+                disabled={
+                  (!level && !selectedLevel) || capabilities.data?.llm === false
+                }
                 loading={create.isPending}
               >
                 <Mic /> Check microphone <ArrowRight />
