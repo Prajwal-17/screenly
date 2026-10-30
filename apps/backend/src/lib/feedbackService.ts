@@ -36,13 +36,20 @@ export async function generateFeedback(
   if (interview.feedbackStatus === "skipped") return;
   const claim = await store.claimReview(id);
   if (!claim) return;
+  const startedAt = performance.now();
+  let outcome = "failed";
+  console.info(JSON.stringify({ event: "review_started", interviewId: id }));
   try {
     const fresh = await store.get(id);
     if (!fresh || fresh.status !== "completed") return;
     const report = await new ReviewService(env).generate(fresh);
-    if (await store.commitReview(id, claim, report, env.LLM_MODEL!))
+    if (await store.commitReview(id, claim, report, env.LLM_MODEL!)) {
+      outcome = "ready";
       await deriveMemory(id, store, report);
-    else await store.failReview(id, claim);
+    } else {
+      outcome = "stale";
+      await store.failReview(id, claim);
+    }
   } catch (error) {
     // Never log provider output, transcript, profile text or untrusted errors.
     console.error(
@@ -50,11 +57,22 @@ export async function generateFeedback(
         event: "review_failed",
         interviewId: id,
         code:
-          error instanceof Error && "code" in error
+          error instanceof Error &&
+          "code" in error &&
+          /^[A-Z0-9_]{1,60}$/.test(String(error.code))
             ? String(error.code)
             : "PROVIDER_OR_VALIDATION",
       }),
     );
     await store.failReview(id, claim);
+  } finally {
+    console.info(
+      JSON.stringify({
+        event: "review_finished",
+        interviewId: id,
+        outcome,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      }),
+    );
   }
 }

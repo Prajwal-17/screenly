@@ -6,6 +6,7 @@ import {
   rolePreset,
   type InterviewDetail,
   type InterviewMessage,
+  type InterviewObservation,
   type InterviewRole,
   type SessionControlState,
 } from "@repo/shared";
@@ -113,6 +114,109 @@ export function advanceControl(
     constraints: base.constraints.slice(-8),
     exploredObjectives: base.exploredObjectives.slice(-6),
     unresolvedPoints: base.unresolvedPoints.slice(-8),
+  };
+}
+
+/** Conservative source gate; conversational observations never become assessment labels. */
+export function substantiveCandidate(message: InterviewMessage): boolean {
+  if (
+    message.role !== "user" ||
+    message.phase !== "questions" ||
+    message.status !== "complete"
+  )
+    return false;
+  const words = message.content.match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (words.length < 9) return false;
+  if (
+    /\b(?:not sure|don't know|do not know|repeat the (?:instructions|question)|give me a moment|what do you want me to discuss|ready yet)\b/i.test(
+      message.content,
+    )
+  )
+    return false;
+  return true;
+}
+
+export function observedControl(
+  interview: InterviewDetail,
+  observation: InterviewObservation,
+  assistantId: string,
+): SessionControlState | null {
+  const preparation = interview.preparation;
+  const assistant = interview.messages.at(-1);
+  if (
+    !preparation ||
+    assistant?.id !== assistantId ||
+    assistant.role !== "assistant" ||
+    assistant.status !== "complete" ||
+    assistant.phase !== "questions" ||
+    !preparation.objectives.includes(observation.objective) ||
+    (observation.hint && !assistant.content.includes(observation.hint)) ||
+    (observation.constraintChange &&
+      !assistant.content.includes(observation.constraintChange))
+  )
+    return null;
+  const byId = new Map(
+    interview.messages.map((message) => [message.id, message]),
+  );
+  if (
+    observation.sourceMessageIds.some(
+      (id) => id === assistantId || !byId.has(id),
+    ) ||
+    observation.objectiveEvidence.some(
+      (entry) =>
+        !preparation.objectives.includes(entry.objective) ||
+        entry.messageIds.some(
+          (id) =>
+            !observation.sourceMessageIds.includes(id) ||
+            !substantiveCandidate(byId.get(id)!),
+        ),
+    )
+  )
+    return null;
+  const base = interview.control ?? initialControl(interview);
+  if (!base) return null;
+  const evidence = new Map<string, string[]>();
+  for (const entry of base.objectiveEvidence ?? []) {
+    if (preparation.objectives.includes(entry.objective))
+      evidence.set(
+        entry.objective,
+        entry.messageIds.filter((id) => {
+          const source = byId.get(id);
+          return source && substantiveCandidate(source);
+        }),
+      );
+  }
+  for (const entry of observation.objectiveEvidence) {
+    if (!entry.messageIds.length) continue;
+    evidence.set(
+      entry.objective,
+      [
+        ...new Set([
+          ...(evidence.get(entry.objective) ?? []),
+          ...entry.messageIds,
+        ]),
+      ].slice(-8),
+    );
+  }
+  const objectiveEvidence = [...evidence]
+    .filter(([, ids]) => ids.length > 0)
+    .slice(-6)
+    .map(([objective, messageIds]) => ({ objective, messageIds }));
+  return {
+    revision: interview.messages.length,
+    objective: observation.objective,
+    situation: observation.situation,
+    constraints: observation.constraints,
+    unresolvedPoints: observation.unresolvedPoints,
+    sourceMessageIds: [
+      ...new Set([
+        ...observation.sourceMessageIds,
+        assistantId,
+        ...objectiveEvidence.flatMap((entry) => entry.messageIds),
+      ]),
+    ].slice(-20),
+    objectiveEvidence,
+    exploredObjectives: objectiveEvidence.map((entry) => entry.objective),
   };
 }
 

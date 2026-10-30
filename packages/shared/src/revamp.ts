@@ -139,7 +139,33 @@ export type SessionControlState = {
   exploredObjectives: string[];
   unresolvedPoints: string[];
   sourceMessageIds: string[];
+  objectiveEvidence?: { objective: string; messageIds: string[] }[];
 };
+
+// A proposal from the same live response, applied only after its source and
+// spoken response commit. This is conversational context, never a verdict.
+export const interviewObservationSchema = z
+  .object({
+    objective: z.string().min(1).max(300),
+    situation: z.string().min(1).max(1500),
+    constraints: z.array(z.string().min(1).max(400)).max(8),
+    unresolvedPoints: z.array(z.string().min(1).max(400)).max(8),
+    sourceMessageIds: z.array(z.string().min(1).max(100)).min(1).max(18),
+    objectiveEvidence: z
+      .array(
+        z
+          .object({
+            objective: z.string().min(1).max(300),
+            messageIds: z.array(z.string().min(1).max(100)).min(1).max(8),
+          })
+          .strict(),
+      )
+      .max(6),
+    hint: z.string().min(1).max(800).nullable(),
+    constraintChange: z.string().min(1).max(800).nullable(),
+  })
+  .strict();
+export type InterviewObservation = z.infer<typeof interviewObservationSchema>;
 
 export const endInterviewSchema = z
   .object({

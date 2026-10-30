@@ -207,7 +207,16 @@ export class InterviewRoom extends DurableObject<Env> {
       await this.closeVoice();
       const saved = await this.store().get(id);
       if (saved?.feedbackStatus === "skipped") await this.cancelDeadline();
-      else await this.queueFeedback(id);
+      else {
+        try {
+          await this.queueFeedback(id);
+        } catch {
+          await this.store().feedbackState(id, "failed");
+          console.warn(
+            JSON.stringify({ event: "interview_review_queue_failed" }),
+          );
+        }
+      }
     }
   }
   async queueFeedback(id: string, allowSkipped = false) {
@@ -227,11 +236,16 @@ export class InterviewRoom extends DurableObject<Env> {
       return;
     }
     // Expose the queued state before returning so feedback polling starts immediately.
-    if (!interview.review) await store.feedbackState(id, "generating");
-    await this.ctx.storage.put("interviewId", id);
-    await this.ctx.storage.delete("deadline");
-    await this.ctx.storage.put("feedbackPending", crypto.randomUUID());
-    await this.scheduleAlarm();
+    try {
+      if (!interview.review) await store.feedbackState(id, "generating");
+      await this.ctx.storage.put("interviewId", id);
+      await this.ctx.storage.delete("deadline");
+      await this.ctx.storage.put("feedbackPending", crypto.randomUUID());
+      await this.scheduleAlarm();
+    } catch (error) {
+      if (!interview.review) await store.feedbackState(id, "failed");
+      throw error;
+    }
   }
   async alarm() {
     // Revocation still runs when the interview has been deleted from D1.

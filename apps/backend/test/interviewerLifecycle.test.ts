@@ -6,12 +6,14 @@ import type {
   ServerEvent,
   SessionControlState,
   SessionEvent,
+  InterviewObservation,
 } from "@repo/shared";
 import {
   InterviewSession,
   type ClosingIntent,
   type SessionDependencies,
 } from "../src/lib/interviewSession";
+import { liveMessages } from "../src/lib/interviewContext";
 
 function harness(
   reason: "coverage_complete" | "candidate_requested_stop",
@@ -55,8 +57,8 @@ function harness(
       role: "Backend",
       level: "Mid-level",
       rubricVersion: "screenly-rubric-2.0",
-      promptVersion: "screenly-prompts-2.0",
-      objectives: ["Data integrity and concurrency"],
+      promptVersion: "screenly-prompts-2.1",
+      objectives: ["Data integrity and concurrency", "Failure recovery"],
       priorFindings: [],
       warnings: [],
       memoryDegraded: false,
@@ -80,6 +82,26 @@ function harness(
   let turnCallback: ((event: ListenV2TurnInfo) => void) | null = null;
   let finishCount = 0;
   let reviewCount = 0;
+  let openingReady = true;
+  let observation: InterviewObservation | null =
+    reason === "coverage_complete"
+      ? {
+          objective: "Failure recovery",
+          situation: "An API write can be retried after an uncertain response.",
+          constraints: ["Ownership and duplicate writes matter."],
+          unresolvedPoints: ["How the retry key expires"],
+          sourceMessageIds: ["m2", "m4"],
+          objectiveEvidence: [
+            { objective: "Data integrity and concurrency", messageIds: ["m2"] },
+            { objective: "Failure recovery", messageIds: ["m4"] },
+          ],
+          hint: null,
+          constraintChange: null,
+        }
+      : null;
+  let replyText = "Thanks for walking through that.";
+  const sentAudio: Uint8Array[] = [];
+  let clearClosing: (() => Promise<void>) | null = null;
   const deps: SessionDependencies = {
     store: {
       get: async () => structuredClone(detail),
@@ -91,6 +113,16 @@ function harness(
       },
       addEvent: async (_id: string, event: SessionEvent) => {
         detail.events = [...(detail.events ?? []), event];
+        return true;
+      },
+      setEventExposure: async (
+        _id: string,
+        eventId: string,
+        exposure: "played",
+      ) => {
+        const event = detail.events?.find((item) => item.id === eventId);
+        if (!event) return false;
+        event.exposure = exposure;
         return true;
       },
       addMessage: async (
@@ -131,6 +163,7 @@ function harness(
         closing = intent;
       },
       clear: async () => {
+        await clearClosing?.();
         closing = null;
       },
     },
@@ -149,7 +182,9 @@ function harness(
       turnCallback = turn;
       return {
         connect: async () => {},
-        sendAudio: async () => {},
+        sendAudio: async (audio) => {
+          sentAudio.push(audio);
+        },
         endSpeech: () => {
           if (finalTranscript)
             turnCallback?.({
@@ -168,11 +203,16 @@ function harness(
       flush: async () => {},
       close: () => {},
     }),
-    openingReply: async () => ({ ready: true, text: "" }),
+    openingReply: async () =>
+      openingReady
+        ? { ready: true, text: "" }
+        : { ready: false, text: "Take your time." },
     reply: async function* () {
-      yield "Thanks for walking through that.";
+      yield replyText;
       if (withEndTool) {
         beforeTool();
+        if (observation)
+          yield { type: "record_interview_observation" as const, observation };
         yield { type: "end_interview" as const, request: { reason } };
       }
     },
@@ -197,6 +237,25 @@ function harness(
     setFinalTranscript(text: string) {
       finalTranscript = text;
     },
+    setCandidateContent(text: string) {
+      detail.messages[3]!.content = text;
+    },
+    setObservation(value: InterviewObservation | null) {
+      observation = value;
+    },
+    setReplyText(value: string) {
+      replyText = value;
+    },
+    setPhase(phase: InterviewDetail["phase"]) {
+      detail.phase = phase;
+    },
+    setOpeningReady(value: boolean) {
+      openingReady = value;
+    },
+    setClearClosing(value: () => Promise<void>) {
+      clearClosing = value;
+    },
+    sentAudio,
     get closing() {
       return closing;
     },
@@ -324,6 +383,240 @@ test("expired durable closing intent resumes and freezes one transcript", async 
     expect(h.detail.messages.map((message) => message.id)).toEqual(frozen);
     expect(h.finishCount).toBe(1);
     expect(h.reviewCount).toBe(1);
+  } finally {
+    await h.session.close();
+  }
+});
+
+test("coverage needs current substantive objective sources, not long filler", async () => {
+  const h = harness("coverage_complete", false);
+  h.setCandidateContent(
+    "I am not sure what to say yet. Could you repeat the instructions and give me a moment to think about what you want me to discuss?",
+  );
+  h.detail.messages[1]!.content = h.detail.messages[3]!.content;
+  try {
+    await h.session.handle({ type: "start" });
+    await h.drain();
+    expect(h.closing).toBeNull();
+    expect(h.detail.control?.objectiveEvidence ?? []).toHaveLength(0);
+    expect(h.detail.status).toBe("active");
+  } finally {
+    await h.session.close();
+  }
+});
+
+test("stale or cancelled response cannot commit an observation", async () => {
+  const stale = harness("coverage_complete", false);
+  stale.setBeforeTool(() => {
+    stale.detail.messages.push({
+      id: "late",
+      role: "user",
+      content: "A later correction changes the source.",
+      status: "complete",
+      phase: "questions",
+      createdAt: Date.now(),
+    });
+  });
+  try {
+    await stale.session.handle({ type: "start" });
+    await stale.drain();
+    expect(stale.detail.control?.objectiveEvidence ?? []).toHaveLength(0);
+    expect(stale.detail.events ?? []).toHaveLength(0);
+  } finally {
+    await stale.session.close();
+  }
+  const cancelled = harness("coverage_complete", false);
+  cancelled.setBeforeTool(() => {
+    void cancelled.session.interrupt();
+  });
+  try {
+    await cancelled.session.handle({ type: "start" });
+    await cancelled.drain();
+    expect(cancelled.detail.control?.objectiveEvidence ?? []).toHaveLength(0);
+    expect(
+      cancelled.detail.events?.some((event) => event.type === "hint") ?? false,
+    ).toBe(false);
+  } finally {
+    await cancelled.session.close();
+  }
+});
+
+for (const utterance of [
+  "Can we stop the API retrying when the database fails?",
+  "How would you end this interview in a test?",
+  "I don't want to end this interview yet.",
+  'The log says "Please end this interview now."',
+]) {
+  test(`candidate stop ignores scenario or reproduced speech: ${utterance}`, async () => {
+    const h = harness("candidate_requested_stop", false);
+    h.setCandidateContent(utterance);
+    try {
+      await h.session.handle({ type: "start" });
+      await h.drain();
+      expect(h.closing).toBeNull();
+      expect(h.detail.status).toBe("active");
+    } finally {
+      await h.session.close();
+    }
+  });
+}
+
+test("committed observation retains changed constraint, correction and unresolved point after reconnect", async () => {
+  const h = harness("coverage_complete", false);
+  h.setReplyText(
+    "Now the database is temporarily unavailable. What would you change?",
+  );
+  h.setObservation({
+    objective: "Failure recovery",
+    situation:
+      "The candidate corrected the first approach to use an idempotency key.",
+    constraints: ["The database is temporarily unavailable."],
+    unresolvedPoints: ["How the retry key expires"],
+    sourceMessageIds: ["m2", "m4"],
+    objectiveEvidence: [
+      { objective: "Data integrity and concurrency", messageIds: ["m2"] },
+      { objective: "Failure recovery", messageIds: ["m4"] },
+    ],
+    hint: null,
+    constraintChange: "Now the database is temporarily unavailable.",
+  });
+  try {
+    await h.session.handle({ type: "start" });
+    await h.drain();
+    expect(h.detail.control?.constraints).toEqual([
+      "The database is temporarily unavailable.",
+    ]);
+    expect(h.detail.control?.unresolvedPoints).toEqual([
+      "How the retry key expires",
+    ]);
+    expect(h.detail.control?.objectiveEvidence).toHaveLength(2);
+    expect(
+      h.detail.events?.find((event) => event.type === "constraint-change")
+        ?.exposure,
+    ).toBe("unknown");
+    expect(JSON.stringify(liveMessages(h.detail).messages)).toContain(
+      "temporarily unavailable",
+    );
+  } finally {
+    await h.session.close();
+  }
+});
+
+test("explicit help is unknown until matching played; neutral probe records no hint", async () => {
+  const h = harness("coverage_complete");
+  h.setReplyText(
+    "A hint: consider a stable idempotency key. How would you use it?",
+  );
+  h.setObservation({
+    objective: "Failure recovery",
+    situation: "An API write may be retried.",
+    constraints: ["Ownership matters."],
+    unresolvedPoints: [],
+    sourceMessageIds: ["m2", "m4"],
+    objectiveEvidence: [{ objective: "Failure recovery", messageIds: ["m4"] }],
+    hint: "A hint: consider a stable idempotency key.",
+    constraintChange: null,
+  });
+  try {
+    await h.session.handle({ type: "start" });
+    const hint = h.detail.events?.find((event) => event.type === "hint");
+    expect(hint?.exposure).toBe("unknown");
+    expect(hint?.messageIds).toEqual([h.detail.messages.at(-1)!.id]);
+    await h.session.handle({ type: "played", responseId: 999 });
+    expect(hint?.exposure).toBe("unknown");
+    await h.session.handle({ type: "played", responseId: 1 });
+    expect(hint?.exposure).toBe("played");
+  } finally {
+    await h.session.close();
+  }
+  const neutral = harness("coverage_complete");
+  try {
+    await neutral.session.handle({ type: "start" });
+    expect(
+      neutral.detail.events?.some((event) => event.type === "hint") ?? false,
+    ).toBe(false);
+    await neutral.session.handle({ type: "speech-start" });
+  } finally {
+    await neutral.session.close();
+  }
+  const unheard = harness("coverage_complete");
+  unheard.setReplyText(
+    "A hint: use a stable idempotency key. How would it help?",
+  );
+  unheard.setObservation({
+    objective: "Failure recovery",
+    situation: "An API write may be retried.",
+    constraints: [],
+    unresolvedPoints: [],
+    sourceMessageIds: ["m4"],
+    objectiveEvidence: [{ objective: "Failure recovery", messageIds: ["m4"] }],
+    hint: "A hint: use a stable idempotency key.",
+    constraintChange: null,
+  });
+  try {
+    await unheard.session.handle({ type: "start" });
+    await unheard.session.handle({ type: "speech-start" });
+    expect(
+      unheard.detail.events?.find((event) => event.type === "hint")?.exposure,
+    ).toBe("unknown");
+  } finally {
+    await unheard.session.close();
+  }
+});
+
+test("finish retains final STT arrival phase during opening and questions", async () => {
+  for (const phase of ["opening", "questions"] as const) {
+    const h = harness("coverage_complete", true, false);
+    h.setPhase(phase);
+    if (phase === "opening") h.setOpeningReady(false);
+    try {
+      await h.session.handle({ type: "start" });
+      h.setFinalTranscript("I am not ready yet.");
+      await h.session.handle({ type: "finish" });
+      expect(h.detail.messages.at(-1)?.phase).toBe(phase);
+    } finally {
+      await h.session.close();
+    }
+  }
+});
+
+test("coverage barge-in buffers early audio until durable closing clear", async () => {
+  const h = harness("coverage_complete");
+  const gate = Promise.withResolvers<void>();
+  h.setClearClosing(() => gate.promise);
+  try {
+    await h.session.handle({ type: "start" });
+    h.session.audio(new Uint8Array([1, 2]));
+    const cancel = h.session.handle({ type: "speech-start" });
+    h.session.audio(new Uint8Array([3, 4]));
+    expect(h.sentAudio).toHaveLength(0);
+    gate.resolve();
+    await cancel;
+    await h.drain();
+    expect(h.sentAudio.map((frame) => [...frame])).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+    expect(h.closing).toBeNull();
+  } finally {
+    gate.resolve();
+    await h.session.close();
+  }
+});
+
+test("explicit stop ignores VAD and immediate audio while farewell is pending", async () => {
+  const h = harness("candidate_requested_stop");
+  try {
+    await h.session.handle({ type: "start" });
+    h.session.audio(new Uint8Array([1, 2]));
+    await h.session.handle({ type: "speech-start" });
+    expect(h.sentAudio).toHaveLength(0);
+    expect(h.closing?.reason).toBe("candidate_requested_stop");
+    expect(
+      h.events.some(
+        (event) => event.type === "status" && event.status === "finishing",
+      ),
+    ).toBe(true);
   } finally {
     await h.session.close();
   }

@@ -11,7 +11,7 @@ export type InterviewRole = (typeof roles)[number];
 export type ExperienceLevel = (typeof levels)[number];
 
 export const RUBRIC_VERSION = "screenly-rubric-2.0";
-export const PROMPT_VERSION = "screenly-prompts-2.0";
+export const PROMPT_VERSION = "screenly-prompts-2.1";
 export const DEFAULT_SESSION_MINUTES = 20;
 export const MEMORY_SELECTED_LIMIT = 3;
 export const MEMORY_RETAINED_LIMIT = 12;

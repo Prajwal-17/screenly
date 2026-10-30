@@ -11,6 +11,7 @@ import { liveMessages, LiveContextBudgetError } from "./interviewContext";
 import {
   EndToolStream,
   endInterviewTool,
+  observationTool,
   type ReplyPart,
 } from "./interviewerTools";
 
@@ -134,7 +135,10 @@ export class LLMService {
           : {}),
         messages,
         ...(interview.preparation
-          ? { tools: [endInterviewTool], tool_choice: "auto" as const }
+          ? {
+              tools: [observationTool, endInterviewTool],
+              tool_choice: "auto" as const,
+            }
           : {}),
         stream: true,
       },
@@ -167,15 +171,20 @@ export class LLMService {
     }
     if (finishReason !== "stop" && finishReason !== "tool_calls")
       throw new Error("The interviewer response did not complete normally.");
-    const request = tool.finish();
-    if (finishReason === "tool_calls" && !request)
+    const requests = tool.finish();
+    if (finishReason === "tool_calls" && !requests.end && !requests.observation)
       throw new Error(
         "The provider marked a tool call without a valid tool request.",
       );
-    if (request && finishReason !== "tool_calls")
+    if ((requests.end || requests.observation) && finishReason !== "tool_calls")
       throw new Error(
         "The tool response ended without a tool completion marker.",
       );
-    if (request) yield { type: "end_interview", request };
+    if (requests.observation)
+      yield {
+        type: "record_interview_observation",
+        observation: requests.observation,
+      };
+    if (requests.end) yield { type: "end_interview", request: requests.end };
   }
 }

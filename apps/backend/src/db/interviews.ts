@@ -63,6 +63,17 @@ const controlSchema = z
     exploredObjectives: z.array(z.string().max(300)).max(8),
     unresolvedPoints: z.array(z.string().max(400)).max(8),
     sourceMessageIds: z.array(z.string().max(100)).max(20),
+    objectiveEvidence: z
+      .array(
+        z
+          .object({
+            objective: z.string().min(1).max(300),
+            messageIds: z.array(z.string().min(1).max(100)).min(1).max(8),
+          })
+          .strict(),
+      )
+      .max(6)
+      .optional(),
   })
   .strict();
 const eventSchema = z
@@ -441,6 +452,28 @@ export function createInterviews(db: Database) {
       )
         return false;
       const priorRevision = detail.control?.revision ?? -1;
+      const objectives = detail.preparation?.objectives ?? [];
+      if (
+        (control.objective && !objectives.includes(control.objective)) ||
+        control.exploredObjectives.some(
+          (objective) => !objectives.includes(objective),
+        ) ||
+        control.objectiveEvidence?.some(
+          (entry) =>
+            !objectives.includes(entry.objective) ||
+            entry.messageIds.some(
+              (source) =>
+                !detail.messages.some(
+                  (message) =>
+                    message.id === source &&
+                    message.role === "user" &&
+                    message.phase === "questions" &&
+                    message.status === "complete",
+                ),
+            ),
+        )
+      )
+        return false;
       if (control.revision <= priorRevision) return false;
       const saved = await db
         .update(interviewSession)
@@ -480,6 +513,47 @@ export function createInterviews(db: Database) {
             eq(interviewSession.status, "active"),
             sql`json_array_length(coalesce(${interviewSession.events}, '[]')) < 64`,
             sql`not exists (select 1 from json_each(coalesce(${interviewSession.events}, '[]')) where json_extract(value, '$.id') = ${event.id})`,
+          ),
+        )
+        .returning({ id: interviewSession.id })
+        .get();
+      return Boolean(saved);
+    },
+    async setEventExposure(id: string, eventId: string, exposure: "played") {
+      const detail = await this.get(id);
+      if (!detail || detail.status !== "active" || exposure !== "played")
+        return false;
+      const position =
+        detail.events?.findIndex((event) => event.id === eventId) ?? -1;
+      const event = detail.events?.[position];
+      if (
+        !event ||
+        !["hint", "constraint-change"].includes(event.type) ||
+        event.messageIds.length !== 1
+      )
+        return false;
+      const source = detail.messages.find(
+        (message) => message.id === event.messageIds[0],
+      );
+      if (
+        !source ||
+        source.role !== "assistant" ||
+        source.phase !== "questions" ||
+        source.status !== "complete" ||
+        !source.content.includes(event.detail)
+      )
+        return false;
+      const saved = await db
+        .update(interviewSession)
+        .set({
+          events: sql`json_set(${interviewSession.events}, ${`$[${position}].exposure`}, 'played')`,
+        })
+        .where(
+          and(
+            eq(interviewSession.id, id),
+            eq(interviewSession.status, "active"),
+            sql`json_extract(${interviewSession.events}, ${`$[${position}].id`}) = ${eventId}`,
+            sql`json_extract(${interviewSession.events}, ${`$[${position}].exposure`}) in ('unknown', 'played')`,
           ),
         )
         .returning({ id: interviewSession.id })

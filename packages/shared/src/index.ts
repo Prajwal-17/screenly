@@ -181,7 +181,11 @@ export type ClientEvent = z.infer<typeof clientEventSchema>;
 export type ServerEvent =
   | { type: "ready"; interview: InterviewDetail }
   | { type: "pause-state"; interview: InterviewDetail; requestId: string }
-  | { type: "status"; status: LiveStatus }
+  | {
+      type: "status";
+      status: LiveStatus;
+      closingReason?: import("./revamp").EndInterviewRequest["reason"];
+    }
   | { type: "partial"; text: string }
   | { type: "message"; message: InterviewMessage }
   | { type: "delta"; responseId: number; text: string }

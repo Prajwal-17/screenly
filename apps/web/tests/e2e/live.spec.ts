@@ -1,3 +1,4 @@
+import type { ServerEvent } from "@repo/shared";
 import { test, expect, now } from "./fixtures";
 
 test("closing playback acknowledges the response without clearing the saving state", async ({
@@ -9,7 +10,11 @@ test("closing playback acknowledges the response without clearing the saving sta
     page.getByRole("button", { name: "Finish interview", exact: true }),
   ).toBeVisible();
   api.send({ type: "audio-start", responseId: 42 });
-  api.send({ type: "status", status: "finishing" });
+  api.send({
+    type: "status",
+    status: "finishing",
+    closingReason: "candidate_requested_stop",
+  } as ServerEvent);
   api.send({ type: "audio-end", responseId: 42 });
   await expect
     .poll(() =>
@@ -21,6 +26,28 @@ test("closing playback acknowledges the response without clearing the saving sta
   await expect(
     page.getByText("Saving interview", { exact: true }),
   ).toBeVisible();
+});
+
+test("coverage close remains saving until server continuation acknowledgement", async ({
+  page,
+  api,
+}) => {
+  await page.goto("/interviews/active");
+  await expect(
+    page.getByRole("button", { name: "Finish interview", exact: true }),
+  ).toBeEnabled();
+  api.send({
+    type: "status",
+    status: "finishing",
+    closingReason: "coverage_complete",
+  } as ServerEvent);
+  await expect(
+    page.getByText("Saving interview", { exact: true }),
+  ).toBeVisible();
+  api.send({ type: "status", status: "listening" });
+  await expect(page.getByText("Saving interview", { exact: true })).toHaveCount(
+    0,
+  );
 });
 
 test("opening, thinking, speaking, and replay retain timing and saved context", async ({

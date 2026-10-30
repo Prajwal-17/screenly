@@ -31,6 +31,10 @@ function fixture(feedbackFails = false) {
       calls.push("persist-completed");
       detail.status = "completed";
     },
+    feedbackState: async (_id: string, state: "failed") => {
+      calls.push(`feedback-${state}`);
+      detail.feedbackStatus = state;
+    },
   } as unknown as SessionDependencies["store"];
   const session = new InterviewSession(detail.id, () => {}, {
     store,
@@ -58,7 +62,7 @@ function fixture(feedbackFails = false) {
       throw new Error("Unexpected speech");
     },
   });
-  return { session, calls };
+  return { session, calls, detail };
 }
 
 for (const feedback of [false, true]) {
@@ -75,11 +79,17 @@ for (const feedback of [false, true]) {
 }
 
 test("feedback scheduling failure cannot leave the completed interview key usable", async () => {
-  const { session, calls } = fixture(true);
+  const { session, calls, detail } = fixture(true);
   // Completion remains successful and recoverable even when the separate
   // review queue fails after the transcript and key revocation commit.
   await expect(session.finish()).resolves.toBeUndefined();
-  expect(calls).toEqual(["persist-completed", "revoke-key", "queue-feedback"]);
+  expect(calls).toEqual([
+    "persist-completed",
+    "revoke-key",
+    "queue-feedback",
+    "feedback-failed",
+  ]);
+  expect(detail.feedbackStatus).toBe("failed");
   await session.close();
 });
 

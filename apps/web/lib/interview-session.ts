@@ -19,6 +19,13 @@ export class Session {
   private replayRequested = false;
   private playbackStartResponseId: number | null = null;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
+  private closingReason:
+    "coverage_complete" | "candidate_requested_stop" | "time_reached" | null =
+    null;
+  private coverageBargeIn = false;
+  private bufferedClosingAudio: ArrayBuffer[] = [];
+  private bufferedClosingBytes = 0;
+  private bufferedSpeechEnd = false;
   private cancelled = new Set<number>();
   private player = new AudioPlayer();
   constructor(
@@ -40,6 +47,7 @@ export class Session {
     this.responseId = 0;
     this.playbackStartResponseId = null;
     this.cancelled.clear();
+    this.clearClosingCapture();
     useInterviewStore.setState({
       status: "connecting",
       error: "",
@@ -107,6 +115,7 @@ export class Session {
       this.socket = null;
       this.stopCapture();
       this.player.stop();
+      this.clearClosingCapture();
       if (!this.disposed)
         useInterviewStore.setState({
           connected: false,
@@ -148,12 +157,21 @@ export class Session {
       if (event.interview.status === "completed")
         this.finished(this.id, event.interview.feedbackStatus !== "skipped");
     }
-    if (
-      event.type === "status" &&
-      !(event.status === "listening" && this.player.busy) &&
-      useInterviewStore.getState().status !== event.status
-    )
-      useInterviewStore.setState({ status: event.status });
+    if (event.type === "status") {
+      const continuing = event.status === "listening" && this.coverageBargeIn;
+      if (event.status === "finishing") {
+        this.closingReason = event.closingReason ?? null;
+      }
+      if (
+        !(event.status === "listening" && this.player.busy && !continuing) &&
+        useInterviewStore.getState().status !== event.status
+      )
+        useInterviewStore.setState({ status: event.status });
+      if (continuing) {
+        this.flushClosingCapture();
+        this.closingReason = null;
+      }
+    }
     if (event.type === "partial")
       useInterviewStore.setState((s) => ({
         partial: event.text,
@@ -270,6 +288,7 @@ export class Session {
       if (event.scope === "voice") this.stopCapture();
     }
     if (event.type === "finished") {
+      this.clearClosingCapture();
       this.stopCapture();
       this.player.stop();
       this.finished(event.id, event.generateFeedback !== false);
@@ -351,6 +370,20 @@ export class Session {
     if (this.captureDevice) return;
     const device = new SpeechCapture({
       start: () => {
+        if (useInterviewStore.getState().status === "finishing") {
+          if (
+            this.closingReason !== "coverage_complete" ||
+            !this.canCaptureCoverageBargeIn()
+          )
+            return;
+          this.coverageBargeIn = true;
+          this.cancelled.add(this.responseId);
+          this.clearListeningTimer();
+          this.player.stop();
+          useInterviewStore.setState({ streaming: "" });
+          this.send({ type: "speech-start" });
+          return;
+        }
         if (!this.canSendMicrophone()) return;
         // Stop locally before waiting for STT or a server round trip. Ignore
         // late text/audio from this response while the new speech is decoded.
@@ -361,11 +394,29 @@ export class Session {
         this.send({ type: "speech-start" });
       },
       audio: (samples) => {
+        if (
+          this.coverageBargeIn &&
+          useInterviewStore.getState().status === "finishing"
+        ) {
+          const buffer = new Uint8Array(samples).buffer;
+          if (this.bufferedClosingBytes + buffer.byteLength <= 256_000) {
+            this.bufferedClosingAudio.push(buffer);
+            this.bufferedClosingBytes += buffer.byteLength;
+          }
+          return;
+        }
         if (this.canSendMicrophone()) this.socket!.send(samples.buffer);
       },
       end: () => {
         if (
-          this.socket?.readyState === WebSocket.OPEN &&
+          this.coverageBargeIn &&
+          useInterviewStore.getState().status === "finishing"
+        ) {
+          this.bufferedSpeechEnd = true;
+          return;
+        }
+        if (
+          this.canSendMicrophone() &&
           useInterviewStore.getState().interview?.status === "active"
         )
           this.send({ type: "speech-end" });
@@ -392,8 +443,37 @@ export class Session {
       !state.muted &&
       !state.paused &&
       this.socket?.readyState === WebSocket.OPEN &&
+      state.status !== "finishing" &&
       state.interview?.status === "active"
     );
+  }
+  private canCaptureCoverageBargeIn() {
+    const state = useInterviewStore.getState();
+    return (
+      !this.disposed &&
+      !state.muted &&
+      !state.paused &&
+      this.socket?.readyState === WebSocket.OPEN &&
+      state.interview?.status === "active"
+    );
+  }
+  private flushClosingCapture() {
+    const audio = this.bufferedClosingAudio;
+    const ended = this.bufferedSpeechEnd;
+    this.bufferedClosingAudio = [];
+    this.bufferedClosingBytes = 0;
+    this.bufferedSpeechEnd = false;
+    this.coverageBargeIn = false;
+    if (!this.canSendMicrophone()) return;
+    for (const buffer of audio) this.socket!.send(buffer);
+    if (ended) this.send({ type: "speech-end" });
+  }
+  private clearClosingCapture() {
+    this.closingReason = null;
+    this.coverageBargeIn = false;
+    this.bufferedClosingAudio = [];
+    this.bufferedClosingBytes = 0;
+    this.bufferedSpeechEnd = false;
   }
   private stopCapture() {
     this.clearListeningTimer();
@@ -422,6 +502,15 @@ export class Session {
     }
   }
   interrupt() {
+    if (useInterviewStore.getState().status === "finishing") {
+      if (this.closingReason === "coverage_complete")
+        try {
+          this.send({ type: "interrupt" });
+        } catch {
+          /* Reconnect restores state. */
+        }
+      return;
+    }
     this.cancelled.add(this.responseId);
     this.player.stop();
     useInterviewStore.setState({ status: "listening" });

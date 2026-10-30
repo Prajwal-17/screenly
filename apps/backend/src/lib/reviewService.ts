@@ -58,6 +58,10 @@ export async function reviewInput(interview: InterviewDetail) {
         interview.preparation?.objectives ?? rolePreset(role).objectives,
       selectedRole: role,
       targetLevel: level,
+      situation: interview.control?.situation ?? null,
+      constraints: interview.control?.constraints ?? [],
+      contextAuthority:
+        "Provisional source-linked conversational framing only. Original transcript and event delivery state are authoritative; no exploration state is an assessment verdict.",
     },
     // Prior findings and provisional control observations are deliberately
     // excluded. Project text helps interpretation but cannot prove ability.
@@ -139,15 +143,34 @@ export function validateReview(
         );
       evidence.add(key);
     }
+    const relatedHints = finding.evidence.flatMap((ref) => {
+      const candidateIndex = interview.messages.findIndex(
+        (message) => message.id === ref.messageId,
+      );
+      const precedingAssistant = interview.messages
+        .slice(0, candidateIndex)
+        .findLast(
+          (message) =>
+            message.role === "assistant" && message.phase === "questions",
+        );
+      if (!precedingAssistant) return [];
+      return (interview.events ?? []).filter(
+        (event) =>
+          event.type === "hint" &&
+          event.messageIds.includes(precedingAssistant.id) &&
+          precedingAssistant.content.includes(event.detail),
+      );
+    });
     if (
-      finding.assistance === "explicit-help" &&
-      !(interview.events ?? []).some(
-        (event) => event.type === "hint" && event.exposure === "played",
-      )
+      (finding.assistance === "explicit-help" &&
+        !relatedHints.some((event) => event.exposure === "played")) ||
+      (finding.assistance === "independent" && relatedHints.length > 0) ||
+      (finding.label === "Not assessed" &&
+        finding.assistance !== "not-applicable")
     )
       throw new ReviewError(
         "UNSUPPORTED_ASSISTANCE",
-        "The transcript does not establish delivered explicit help.",
+        "The claimed assistance does not match the related source and playback evidence.",
       );
   }
   return review;

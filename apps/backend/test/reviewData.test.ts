@@ -160,6 +160,76 @@ test("review refuses an over-budget original transcript without truncating evide
   expect(interview.messages[1]!.content).toHaveLength(160_000);
 });
 
+test("review assistance follows the related hint exposure, and includes changed framing", async () => {
+  const interview = detail();
+  interview.messages.splice(1, 0, {
+    id: "hint-source",
+    role: "assistant",
+    content: "A hint: consider an idempotency key.",
+    phase: "questions",
+    status: "complete",
+    createdAt: 1,
+  });
+  interview.events = [
+    {
+      id: "hint",
+      type: "hint",
+      messageIds: ["hint-source"],
+      detail: "consider an idempotency key",
+      exposure: "played",
+      createdAt: 1,
+    },
+  ];
+  interview.control = {
+    revision: 4,
+    objective: "API",
+    situation: "Database is temporarily unavailable",
+    constraints: ["The next retry must preserve the write invariant"],
+    exploredObjectives: [],
+    unresolvedPoints: [],
+    sourceMessageIds: ["hint-source"],
+  };
+  const reviewed = await report(interview);
+  expect(() =>
+    validateReview(reviewed, interview, reviewed.transcriptRevision),
+  ).toThrow();
+  reviewed.findings[0]!.assistance = "explicit-help";
+  expect(
+    validateReview(reviewed, interview, reviewed.transcriptRevision)
+      .findings[0]!.assistance,
+  ).toBe("explicit-help");
+  interview.events[0]!.exposure = "unknown";
+  expect(() =>
+    validateReview(reviewed, interview, reviewed.transcriptRevision),
+  ).toThrow();
+  reviewed.findings[0]!.assistance = "uncertain";
+  expect(
+    validateReview(reviewed, interview, reviewed.transcriptRevision)
+      .findings[0]!.assistance,
+  ).toBe("uncertain");
+  interview.events[0]!.exposure = "played";
+  interview.messages.splice(2, 0, {
+    id: "neutral",
+    role: "assistant",
+    content: "Explain the mechanism.",
+    phase: "questions",
+    status: "complete",
+    createdAt: 1,
+  });
+  const revision = await transcriptRevision(interview.messages);
+  reviewed.transcriptRevision = revision;
+  reviewed.findings[0]!.assistance = "explicit-help";
+  expect(() => validateReview(reviewed, interview, revision)).toThrow();
+  reviewed.findings[0]!.assistance = "neutral-follow-up";
+  expect(
+    validateReview(reviewed, interview, revision).findings[0]!.assistance,
+  ).toBe("neutral-follow-up");
+  const input = JSON.parse((await reviewInput(interview)).input);
+  expect(input.brief.situation).toBe(interview.control.situation);
+  expect(input.brief.constraints).toEqual(interview.control.constraints);
+  expect(input.brief).not.toHaveProperty("exploredObjectives");
+});
+
 test("memory is owner-scoped, dismissal survives retry, and source deletion cascades", async () => {
   const review = await report();
   sqlite
@@ -291,6 +361,21 @@ test("completed sessions reject late transcript writes and active control uses s
   sqlite.run(
     "INSERT INTO interview_session (id,user_id,created_at,updated_at,status) VALUES ('session','owner',1,1,'active')",
   );
+  sqlite
+    .query("UPDATE interview_session SET preparation=? WHERE id='session'")
+    .run(
+      JSON.stringify({
+        schemaVersion: 2,
+        role: "Full-stack",
+        level: "Mid-level",
+        rubricVersion: RUBRIC_VERSION,
+        promptVersion: PROMPT_VERSION,
+        objectives: ["API"],
+        priorFindings: [],
+        warnings: [],
+        memoryDegraded: false,
+      }),
+    );
   const store = createInterviews(db);
   const message = await store.addMessage(
     "session",
@@ -307,6 +392,7 @@ test("completed sessions reject late transcript writes and active control uses s
     exploredObjectives: [],
     unresolvedPoints: [],
     sourceMessageIds: [message!.id],
+    objectiveEvidence: [{ objective: "API", messageIds: [message!.id] }],
   };
   expect(await store.saveControl("session", control)).toBe(true);
   expect(await store.saveControl("session", control)).toBe(false);
@@ -314,27 +400,43 @@ test("completed sessions reject late transcript writes and active control uses s
   expect(await store.saveControl("session", { ...control, revision: 1 })).toBe(
     false,
   );
+  const assistant = await store.addMessage(
+    "session",
+    "assistant",
+    "Hint played",
+    "hint-source",
+  );
   expect(
     await store.addEvent("session", {
       id: "hint-1",
       type: "hint",
-      messageIds: [message!.id],
+      messageIds: [assistant!.id],
       detail: "Hint played",
-      exposure: "played",
+      exposure: "unknown",
       createdAt: 2,
     }),
   ).toBe(true);
+  expect(await store.setEventExposure("session", "missing", "played")).toBe(
+    false,
+  );
+  expect(await store.setEventExposure("session", "hint-1", "played")).toBe(
+    true,
+  );
+  expect((await store.get("session"))?.events?.[0]?.exposure).toBe("played");
   expect(
     await store.addEvent("session", {
       id: "hint-1",
       type: "hint",
-      messageIds: [message!.id],
+      messageIds: [assistant!.id],
       detail: "Hint played",
       exposure: "played",
       createdAt: 2,
     }),
   ).toBe(false);
   await store.finish("session");
+  expect(await store.setEventExposure("session", "hint-1", "played")).toBe(
+    false,
+  );
   expect(
     await store.addMessage("session", "user", "Late", "late"),
   ).toBeUndefined();

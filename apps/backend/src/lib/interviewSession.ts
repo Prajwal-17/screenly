@@ -7,6 +7,7 @@ import {
   type ClientEvent,
   type InterviewDetail,
   type InterviewPhase,
+  type InterviewObservation,
   type ServerEvent,
 } from "@repo/shared";
 import type { ListenV2TurnInfo } from "@deepgram/sdk/listen";
@@ -21,6 +22,8 @@ import { interviewWelcome, type OpeningReply } from "./interviewOpening";
 import {
   advanceControl,
   LiveContextBudgetError,
+  observedControl,
+  substantiveCandidate,
   transcriptIdentity,
 } from "./interviewContext";
 import type { ReplyPart } from "./interviewerTools";
@@ -83,7 +86,12 @@ export class InterviewSession {
   private stt: ReturnType<SessionDependencies["stt"]> | null = null;
   private tts: ReturnType<SessionDependencies["tts"]> | null = null;
   private responseId = 0;
-  private playback: { id: number; messageId: string | null } | null = null;
+  private playback: {
+    id: number;
+    messageId: string | null;
+    eventIds: string[];
+    createdAt: number;
+  } | null = null;
   private current: {
     id: number;
     text: string;
@@ -100,7 +108,8 @@ export class InterviewSession {
   private paused = false;
   private pauseOutput: (ServerEvent | Uint8Array)[] = [];
   private pauseBytes = 0;
-  private pendingTurns: ListenV2TurnInfo[] = [];
+  private pendingTurns: { event: ListenV2TurnInfo; phase: InterviewPhase }[] =
+    [];
   private pendingReply = false;
   private clockStarted = false;
   private awaitingPlaybackStart = new Set<number>();
@@ -116,6 +125,12 @@ export class InterviewSession {
   private speechStartedAt: number | null = null;
   private firstAudioForResponse = new Set<number>();
   private acceptingFinalTurns = false;
+  private phase: InterviewPhase = "opening";
+  private closingAudio: Uint8Array[] = [];
+  private closingAudioBytes = 0;
+  private closingSpeechEnd = false;
+  private coverageCancellation: Promise<boolean> | null = null;
+  private acknowledgedPlaybackIds = new Set<number>();
 
   constructor(
     readonly id: string,
@@ -142,6 +157,7 @@ export class InterviewSession {
   async ready() {
     const interview = await this.deps.store.get(this.id);
     if (interview && !this.closed) {
+      this.phase = interview.phase ?? "questions";
       this.paused = interview.pausedAt != null;
       this.send({ type: "ready", interview });
       if (interview.status === "active") {
@@ -150,7 +166,7 @@ export class InterviewSession {
           this.closing = closing;
           this.finishing = true;
           this.active = false;
-          this.send({ type: "status", status: "finishing" });
+          this.closingStatus(closing.reason);
           this.armClosingTimeout(closing);
         }
       }
@@ -164,15 +180,25 @@ export class InterviewSession {
         this.playback?.id === event.responseId &&
         this.closing.responseId === event.responseId
       ) {
+        await this.acknowledgePlayback(event.responseId);
         this.playback = null;
         await this.finish();
       } else if (
         (event.type === "speech-start" || event.type === "interrupt") &&
         this.closing.reason === "coverage_complete"
       ) {
-        await this.cancelCoverageClosing();
-        await this.interrupt();
-      } else if (event.type === "finish")
+        const continued = await this.cancelCoverageClosing();
+        if (continued) {
+          this.speechRevision++;
+          this.speechStartedAt = performance.now();
+          await this.interrupt();
+        }
+      } else if (
+        event.type === "speech-end" &&
+        this.closing.reason === "coverage_complete"
+      )
+        this.closingSpeechEnd = true;
+      else if (event.type === "finish")
         await this.finish(event.generateFeedback ?? true);
       return;
     }
@@ -203,7 +229,10 @@ export class InterviewSession {
     }
     if (event.type === "played" || event.type === "prepare-listening") {
       if (this.playback?.id === event.responseId) {
-        if (event.type === "played") this.playback = null;
+        if (event.type === "played") {
+          await this.acknowledgePlayback(event.responseId);
+          this.playback = null;
+        }
         // Hide an idle provider handshake behind the last part of playback.
         // Still retire quiet sockets; no silent keepalive audio is uploaded.
         if (this.voice && this.active && !this.paused) {
@@ -236,6 +265,13 @@ export class InterviewSession {
     }
   }
   audio(data: Uint8Array) {
+    if (this.closing?.reason === "coverage_complete" && !this.finishTask) {
+      if (this.closingAudioBytes + data.byteLength <= 256_000) {
+        this.closingAudio.push(data.slice());
+        this.closingAudioBytes += data.byteLength;
+      }
+      return;
+    }
     if (
       !this.closed &&
       this.voice &&
@@ -251,12 +287,13 @@ export class InterviewSession {
     try {
       const saved = await this.deps.store.get(this.id);
       if (!saved || saved.status === "completed") return;
+      this.phase = saved.phase ?? "questions";
       const closing = await this.deps.closing?.load();
       if (closing?.interviewId === this.id) {
         this.closing = closing;
         this.finishing = true;
         this.active = false;
-        this.send({ type: "status", status: "finishing" });
+        this.closingStatus(closing.reason);
         this.armClosingTimeout(closing);
         return;
       }
@@ -324,6 +361,42 @@ export class InterviewSession {
       this.pauseOutput.push(event);
     } else this.emit(event);
   }
+  private currentPhaseAtArrival(): InterviewPhase {
+    return this.phase;
+  }
+  private closingStatus(reason: ClosingIntent["reason"]) {
+    this.send({
+      type: "status",
+      status: "finishing",
+      closingReason: reason,
+    });
+  }
+  private async acknowledgePlayback(responseId: number) {
+    const playback = this.playback;
+    if (!playback || playback.id !== responseId) return;
+    if (this.current?.id === responseId)
+      this.acknowledgedPlaybackIds.add(responseId);
+    console.info(
+      JSON.stringify({
+        event: "interviewer_playback_acknowledged",
+        responseId,
+        elapsedMs: Math.round(performance.now() - playback.createdAt),
+        source: "browser_played_ack",
+      }),
+    );
+    for (const eventId of playback.eventIds) {
+      try {
+        await this.markEventPlayed(eventId);
+      } catch {
+        console.warn(
+          JSON.stringify({ event: "interview_exposure_update_failed" }),
+        );
+      }
+    }
+  }
+  private markEventPlayed(eventId: string): Promise<boolean | undefined> {
+    return this.deps.store.setEventExposure(this.id, eventId, "played");
+  }
   private queueClock(work: () => Promise<void>) {
     const task = this.clockTask.then(work);
     this.clockTask = task.catch(() => {});
@@ -381,7 +454,8 @@ export class InterviewSession {
           this.pendingTurns = [];
           const reply = this.pendingReply;
           this.pendingReply = false;
-          for (const turn of turns) this.deps.background(this.turn(turn));
+          for (const turn of turns)
+            this.deps.background(this.turn(turn.event, turn.phase));
           if (reply && !turns.length && !this.current)
             this.deps.background(this.reply());
         }
@@ -418,7 +492,10 @@ export class InterviewSession {
       this.awaitingPlaybackStart.add(responseId);
     this.send(packAudio(responseId, audio));
   }
-  private turn(event: ListenV2TurnInfo): Promise<void> {
+  private turn(
+    event: ListenV2TurnInfo,
+    arrivedPhase = this.currentPhaseAtArrival(),
+  ): Promise<void> {
     if (
       this.finishing &&
       this.acceptingFinalTurns &&
@@ -426,9 +503,11 @@ export class InterviewSession {
       event.event === "EndOfTurn" &&
       event.transcript.trim() &&
       event.turn_index > this.finalizedTurn &&
-      !this.pendingTurns.some((turn) => turn.turn_index === event.turn_index)
+      !this.pendingTurns.some(
+        (turn) => turn.event.turn_index === event.turn_index,
+      )
     ) {
-      this.pendingTurns.push(event);
+      this.pendingTurns.push({ event, phase: arrivedPhase });
       return Promise.resolve();
     }
     if (
@@ -447,9 +526,11 @@ export class InterviewSession {
       if (
         event.event === "EndOfTurn" &&
         event.transcript.trim() &&
-        !this.pendingTurns.some((turn) => turn.turn_index === event.turn_index)
+        !this.pendingTurns.some(
+          (turn) => turn.event.turn_index === event.turn_index,
+        )
       )
-        this.pendingTurns.push(event);
+        this.pendingTurns.push({ event, phase: arrivedPhase });
       return Promise.resolve();
     }
     const resumed =
@@ -506,13 +587,14 @@ export class InterviewSession {
           await interrupted;
           const interview = await this.deps.store.get(this.id);
           if (interview?.status !== "active") return;
+          this.phase = interview.phase ?? "questions";
           const message = await this.deps.store.addMessage(
             this.id,
             "user",
             event.transcript,
             key,
             "complete",
-            interview.phase ?? "questions",
+            arrivedPhase,
           );
           if (!message || this.closed) return;
           this.send({ type: "message", message });
@@ -825,6 +907,7 @@ export class InterviewSession {
           if (current.controller.signal.aborted || this.closed) return;
           if (decision.ready) {
             detail = await this.deps.store.beginQuestions(this.id);
+            this.phase = "questions";
             current.phase = detail.phase ?? "questions";
             this.send({ type: "ready", interview: detail });
             detail = (await this.liveContext()) ?? detail;
@@ -852,12 +935,18 @@ export class InterviewSession {
               yield openingText;
             })();
       let proposedEnd: EndInterviewRequest | null = null;
+      let proposedObservation: InterviewObservation | null = null;
       for await (const part of output) {
         if (current.controller.signal.aborted || this.closed) return;
         if (typeof part !== "string") {
-          if (part.type !== "end_interview" || proposedEnd)
-            throw new Error("Unexpected model tool output.");
-          proposedEnd = part.request;
+          if (part.type === "end_interview" && !proposedEnd)
+            proposedEnd = part.request;
+          else if (
+            part.type === "record_interview_observation" &&
+            !proposedObservation
+          )
+            proposedObservation = part.observation;
+          else throw new Error("Unexpected model tool output.");
           continue;
         }
         const text = part;
@@ -882,7 +971,18 @@ export class InterviewSession {
       });
       const [, spoken] = await Promise.all([saving, flushing]);
       if (spoken && current.savedId && !current.controller.signal.aborted)
-        this.playback = { id: current.id, messageId: current.savedId };
+        this.playback = {
+          id: current.id,
+          messageId: current.savedId,
+          eventIds: [],
+          createdAt: current.createdAt,
+        };
+      if (
+        proposedObservation &&
+        !current.controller.signal.aborted &&
+        !this.closed
+      )
+        await this.applyObservation(current, proposedObservation);
       if (proposedEnd && !current.controller.signal.aborted && !this.closed) {
         const accepted = await this.acceptEnd(
           current,
@@ -937,6 +1037,7 @@ export class InterviewSession {
         });
       }
     } finally {
+      this.acknowledgedPlaybackIds.delete(current.id);
       if (prepared) this.discardPreparedReply(prepared);
       speech?.close();
       if (this.current === current) {
@@ -1000,7 +1101,18 @@ export class InterviewSession {
       speech.sendText(message.content);
       await speech.flush();
       if (!current.controller.signal.aborted)
-        this.playback = { id: current.id, messageId: null };
+        this.playback = {
+          id: current.id,
+          messageId: null,
+          eventIds: (interview.events ?? [])
+            .filter(
+              (event) =>
+                event.messageIds.includes(message.id) &&
+                (event.type === "hint" || event.type === "constraint-change"),
+            )
+            .map((event) => event.id),
+          createdAt: current.createdAt,
+        };
     } catch (error) {
       if (!current.controller.signal.aborted) this.speechError(error);
     } finally {
@@ -1039,6 +1151,82 @@ export class InterviewSession {
             : "Microphone transcription stopped. Retry the microphone to reconnect.",
       });
   }
+  private async applyObservation(
+    current: NonNullable<InterviewSession["current"]>,
+    observation: InterviewObservation,
+  ): Promise<boolean> {
+    if (
+      this.current !== current ||
+      current.controller.signal.aborted ||
+      !current.savedId ||
+      this.finishing ||
+      this.closed
+    )
+      return false;
+    const detail = await this.deps.store.get(this.id);
+    if (!detail || detail.status !== "active" || detail.phase !== "questions")
+      return false;
+    const source = detail.messages.filter(
+      (message) => message.id !== current.savedId,
+    );
+    if (transcriptIdentity(source) !== current.sourceIdentity) return false;
+    const control = observedControl(detail, observation, current.savedId);
+    if (!control) {
+      console.warn(JSON.stringify({ event: "interview_observation_rejected" }));
+      return false;
+    }
+    if (!(await this.deps.store.saveControl(this.id, control))) return false;
+    const events: SessionEvent[] = [];
+    if (observation.hint)
+      events.push({
+        id: `hint:${current.savedId}`,
+        type: "hint",
+        messageIds: [current.savedId],
+        detail: observation.hint,
+        exposure: "unknown",
+        createdAt: Date.now(),
+      });
+    if (observation.constraintChange)
+      events.push({
+        id: `constraint:${current.savedId}`,
+        type: "constraint-change",
+        messageIds: [current.savedId],
+        detail: observation.constraintChange,
+        exposure: "unknown",
+        createdAt: Date.now(),
+      });
+    for (const event of events) {
+      try {
+        const added = await this.deps.store.addEvent(this.id, event);
+        if (added && this.playback?.id === current.id)
+          this.playback.eventIds.push(event.id);
+        if (added && this.acknowledgedPlaybackIds.has(current.id))
+          await this.markEventPlayed(event.id);
+      } catch {
+        console.warn(
+          JSON.stringify({ event: "interview_observation_event_failed" }),
+        );
+      }
+    }
+    this.acknowledgedPlaybackIds.delete(current.id);
+    return true;
+  }
+  private deliberateStop(utterance: string): boolean {
+    if (!utterance || utterance.length > 600) return false;
+    const unquoted = utterance.replace(/“[^”]*”|"[^"]*"|'[^']*'/g, " ");
+    if (
+      /\b(?:don't|do not|not yet|what if|how would|hypothetical|for example|quoted|suppose|imagine)\b/i.test(
+        unquoted,
+      )
+    )
+      return false;
+    const normalized = unquoted
+      .trim()
+      .replace(/^(?:okay|ok|well|thanks|thank you)[,!. ]+/i, "");
+    return /^(?:(?:please\s+)?(?:stop|end|finish|quit)|(?:i\s+(?:want|need|would like)\s+to|let'?s|can we|could we|would you please)\s+(?:stop|end|finish|quit))\s+(?:(?:this|the|our|my)\s+)?(?:interview|session|conversation|call)\b(?:\s+(?:now|please))?[.!?]?$/i.test(
+      normalized,
+    );
+  }
   private endEligible(
     interview: InterviewDetail,
     reason: EndInterviewRequest["reason"],
@@ -1055,38 +1243,22 @@ export class InterviewSession {
         message.status === "complete",
     );
     if (reason === "coverage_complete") {
-      const assistant = interview.messages.filter(
-        (message) =>
-          message.role === "assistant" &&
-          message.phase === "questions" &&
-          message.status === "complete",
+      const objectives = interview.preparation?.objectives ?? [];
+      const byId = new Map(candidate.map((message) => [message.id, message]));
+      const evidence = interview.control?.objectiveEvidence ?? [];
+      const explored = evidence.filter(
+        (entry) =>
+          objectives.includes(entry.objective) &&
+          entry.messageIds.some((id) => {
+            const message = byId.get(id);
+            return message && substantiveCandidate(message);
+          }),
       );
       return (
-        candidate.length >= 2 &&
-        assistant.length >= 2 &&
-        candidate.reduce(
-          (length, message) => length + message.content.trim().length,
-          0,
-        ) >= 120
+        explored.length >= Math.min(2, objectives.length) && explored.length > 0
       );
     }
-    const last = candidate.at(-1)?.content.trim() ?? "";
-    if (
-      !last ||
-      last.length > 600 ||
-      /\b(don't|do not|not yet|how would|what if|hypothetical|example|quoted)\b/i.test(
-        last,
-      )
-    )
-      return false;
-    return (
-      /\b(please\s+)?(stop|end|finish|quit)\s+(this\s+|the\s+|our\s+)?(interview|session|conversation|call)\b/i.test(
-        last,
-      ) ||
-      /\b(i\s+(want|need|would like|have)\s+to|let's|can we)\s+(stop|end|finish|quit)\b/i.test(
-        last,
-      )
-    );
+    return this.deliberateStop(candidate.at(-1)?.content.trim() ?? "");
   }
   private async acceptEnd(
     current: NonNullable<InterviewSession["current"]>,
@@ -1127,7 +1299,7 @@ export class InterviewSession {
     this.closing = closing;
     this.finishing = true;
     this.cancelPreparedReply();
-    this.send({ type: "status", status: "finishing" });
+    this.closingStatus(request.reason);
     if (!spoken || !current.savedId) this.deps.background(this.finish());
     else this.armClosingTimeout(closing);
     return true;
@@ -1142,17 +1314,36 @@ export class InterviewSession {
       Math.max(0, closing.deadlineAt - Date.now()),
     );
   }
-  private async cancelCoverageClosing() {
+  private cancelCoverageClosing(): Promise<boolean> {
+    if (this.coverageCancellation) return this.coverageCancellation;
     const closing = this.closing;
-    if (closing?.reason !== "coverage_complete" || this.finishTask) return;
-    await this.deps.closing?.clear();
-    if (this.closing !== closing || this.finishTask) return;
-    if (this.closingTimer) clearTimeout(this.closingTimer);
-    this.closingTimer = null;
-    this.closing = null;
-    this.finishing = false;
-    this.active = true;
-    this.send({ type: "status", status: "listening" });
+    if (closing?.reason !== "coverage_complete" || this.finishTask)
+      return Promise.resolve(false);
+    const task = (async () => {
+      await this.deps.closing?.clear();
+      if (this.closing !== closing || this.finishTask) return false;
+      if (this.closingTimer) clearTimeout(this.closingTimer);
+      this.closingTimer = null;
+      this.closing = null;
+      this.finishing = false;
+      this.active = true;
+      const audio = this.closingAudio;
+      const ended = this.closingSpeechEnd;
+      this.closingAudio = [];
+      this.closingAudioBytes = 0;
+      this.closingSpeechEnd = false;
+      this.send({ type: "status", status: "listening" });
+      if (this.voice && this.stt && !this.paused) {
+        for (const frame of audio)
+          this.deps.background(this.stt.sendAudio(frame));
+        if (ended) this.stt.endSpeech();
+      }
+      return true;
+    })();
+    this.coverageCancellation = task.finally(() => {
+      this.coverageCancellation = null;
+    });
+    return this.coverageCancellation;
   }
   finish(generateFeedback = true): Promise<void> {
     if (this.finishTask) return this.finishTask;
@@ -1162,6 +1353,9 @@ export class InterviewSession {
     this.closingTimer = null;
     this.finishing = true;
     this.active = false;
+    this.closingAudio = [];
+    this.closingAudioBytes = 0;
+    this.closingSpeechEnd = false;
     this.acceptingFinalTurns = true;
     let completed = false;
     this.finishTask = (async () => {
@@ -1182,13 +1376,15 @@ export class InterviewSession {
       // Ending must retain those answers without starting another reply.
       if (this.pendingTurns.length) {
         await this.interrupt();
-        for (const turn of this.pendingTurns) {
+        for (const { event: turn, phase } of this.pendingTurns) {
           if (turn.turn_index <= this.finalizedTurn) continue;
           const message = await this.deps.store.addMessage(
             this.id,
             "user",
             turn.transcript,
             `stt:${this.connectionId}:${turn.turn_index}`,
+            "complete",
+            phase,
           );
           this.finalizedTurn = turn.turn_index;
           if (message) this.send({ type: "message", message });
@@ -1236,6 +1432,17 @@ export class InterviewSession {
         console.error(
           JSON.stringify({ event: "interview_review_queue_failed" }),
         );
+        if (generateFeedback) {
+          try {
+            await this.deps.store.feedbackState(this.id, "failed");
+          } catch {
+            console.error(
+              JSON.stringify({
+                event: "interview_review_failure_state_failed",
+              }),
+            );
+          }
+        }
         this.send({
           type: "error",
           scope: "session",

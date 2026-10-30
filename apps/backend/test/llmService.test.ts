@@ -102,7 +102,7 @@ test("streamed end tool arguments stay separate from spoken text", async () => {
       role: "Frontend",
       level: "Mid-level",
       rubricVersion: "screenly-rubric-2.0",
-      promptVersion: "screenly-prompts-2.0",
+      promptVersion: "screenly-prompts-2.1",
       objectives: ["State and asynchronous UI"],
       priorFindings: [],
       warnings: [],
@@ -178,6 +178,70 @@ test("malformed streamed end tool cannot become lifecycle authority", async () =
     },
   ]);
   expect(() => tool.finish()).toThrow();
+});
+
+test("one observation and one end request share a stream without speaking tool JSON", async () => {
+  const { EndToolStream } = await import("../src/lib/interviewerTools");
+  const tool = new EndToolStream();
+  tool.add([
+    {
+      index: 0,
+      id: "observation",
+      type: "function",
+      function: {
+        name: "record_interview_observation",
+        arguments: JSON.stringify({
+          objective: "State and asynchronous UI",
+          situation: "A screen loads data.",
+          constraints: [],
+          unresolvedPoints: [],
+          sourceMessageIds: ["ready"],
+          objectiveEvidence: [],
+          hint: null,
+          constraintChange: null,
+        }),
+      },
+    },
+    {
+      index: 1,
+      id: "ending",
+      type: "function",
+      function: {
+        name: "end_interview",
+        arguments: '{"reason":"coverage_complete"}',
+      },
+    },
+  ]);
+  expect(tool.finish()).toMatchObject({
+    observation: { objective: "State and asynchronous UI" },
+    end: { reason: "coverage_complete" },
+  });
+  const duplicate = new EndToolStream();
+  duplicate.add([
+    {
+      index: 0,
+      id: "a",
+      type: "function",
+      function: { name: "record_interview_observation", arguments: "{}" },
+    },
+    {
+      index: 1,
+      id: "b",
+      type: "function",
+      function: { name: "record_interview_observation", arguments: "{}" },
+    },
+  ]);
+  expect(() => duplicate.finish()).toThrow();
+  const unknown = new EndToolStream();
+  unknown.add([
+    {
+      index: 0,
+      id: "c",
+      type: "function",
+      function: { name: "change_score", arguments: "{}" },
+    },
+  ]);
+  expect(() => unknown.finish()).toThrow();
 });
 
 test("oversize live context fails without truncating the saved explanation", () => {
