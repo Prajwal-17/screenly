@@ -3,6 +3,7 @@ import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
 import { initialState, useInterviewStore } from "@/store/interviewStore";
 import { API_URL } from "./api";
 import { AudioPlayer } from "./audio-player";
+import { copyPcmBytes } from "./audio/pcm";
 import {
   preferredPlaybackRate,
   savePlaybackRate,
@@ -398,7 +399,7 @@ export class Session {
           this.coverageBargeIn &&
           useInterviewStore.getState().status === "finishing"
         ) {
-          const buffer = new Uint8Array(samples).buffer;
+          const buffer = copyPcmBytes(samples);
           if (this.bufferedClosingBytes + buffer.byteLength <= 256_000) {
             this.bufferedClosingAudio.push(buffer);
             this.bufferedClosingBytes += buffer.byteLength;
