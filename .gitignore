@@ -68,3 +68,8 @@ playwright-report/
 /apps/web/public/audio/playback-processor.js
 /apps/web/public/audio/soundtouch-LICENSE.txt
 /apps/web/public/vad/
+
+# Local agent instructions and implementation planning
+/AGENTS.md
+/IMPLEMENTATION_PLAN.md
+/plan/
