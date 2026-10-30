@@ -3,7 +3,10 @@ import { unpackAudio, type ClientEvent, type ServerEvent } from "@repo/shared";
 import { initialState, useInterviewStore } from "@/store/interviewStore";
 import { API_URL } from "./api";
 import { AudioPlayer } from "./audio-player";
-import { preferredPlaybackRate, savePlaybackRate } from "./audio/playback-rates";
+import {
+  preferredPlaybackRate,
+  savePlaybackRate,
+} from "./audio/playback-rates";
 
 export class Session {
   private socket: WebSocket | null = null;
@@ -241,7 +244,8 @@ export class Session {
           !this.cancelled.has(event.responseId) &&
           this.socket?.readyState === WebSocket.OPEN
         ) {
-          useInterviewStore.setState({ status: "listening" });
+          if (useInterviewStore.getState().status !== "finishing")
+            useInterviewStore.setState({ status: "listening" });
           try {
             this.send({ type: "played", responseId: event.responseId });
           } catch {

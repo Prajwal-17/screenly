@@ -215,6 +215,18 @@ export default function SessionReport() {
                 <p className="mt-3 text-xs text-muted-foreground">
                   This earlier summary has no evidence-linked assessment labels.
                 </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  loading={
+                    retry.isPending ||
+                    ["pending", "generating"].includes(interview.feedbackStatus)
+                  }
+                  onClick={() => retry.mutate()}
+                >
+                  <RefreshCw /> Request a new review
+                </Button>
               </section>
             ) : (
               <section className="border-y py-7">

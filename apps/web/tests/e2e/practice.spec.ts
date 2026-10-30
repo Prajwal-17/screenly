@@ -190,6 +190,8 @@ test("review findings link exact saved evidence and legacy report stays unscored
   await expect(page.getByText(/\/ 10|score breakdown|Answer 1/i)).toHaveCount(
     0,
   );
+  await page.getByRole("button", { name: "Request a new review" }).click();
+  await expect(page.getByText(review.summary)).toBeVisible();
 });
 
 for (const status of ["pending", "generating", "failed", "skipped"] as const) {

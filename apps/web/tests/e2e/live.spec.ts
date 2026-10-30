@@ -1,5 +1,28 @@
 import { test, expect, now } from "./fixtures";
 
+test("closing playback acknowledges the response without clearing the saving state", async ({
+  page,
+  api,
+}) => {
+  await page.goto("/interviews/active");
+  await expect(
+    page.getByRole("button", { name: "Finish interview", exact: true }),
+  ).toBeVisible();
+  api.send({ type: "audio-start", responseId: 42 });
+  api.send({ type: "status", status: "finishing" });
+  api.send({ type: "audio-end", responseId: 42 });
+  await expect
+    .poll(() =>
+      api.clients.some(
+        (event) => event.type === "played" && event.responseId === 42,
+      ),
+    )
+    .toBe(true);
+  await expect(
+    page.getByText("Saving interview", { exact: true }),
+  ).toBeVisible();
+});
+
 test("opening, thinking, speaking, and replay retain timing and saved context", async ({
   page,
   api,
