@@ -37,10 +37,12 @@ export const profileApi = {
     details: ProfileDetails,
     complete = false,
     onboarding?: OnboardingState,
+    signal?: AbortSignal,
   ) =>
     request<UserProfile>("/profile", {
       method: "PUT",
       body: JSON.stringify({ details, complete, onboarding }),
+      signal,
     }),
   skip: () =>
     request<UserProfile>("/profile/skip", { method: "POST", body: "{}" }),

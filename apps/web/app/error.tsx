@@ -10,7 +10,7 @@ export default function Error({
 }) {
   return (
     <PageRecovery title="This page couldn’t load" retry={reset}>
-      Try loading it again, or return to your overview to continue.
+      Try loading it again, or return to Screenly to continue.
     </PageRecovery>
   );
 }

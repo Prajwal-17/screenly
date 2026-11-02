@@ -18,6 +18,7 @@ import { STTService } from "./sttService";
 import { InvalidOpeningReplyError } from "./llmService";
 import { DeepgramConnectionError } from "./deepgramSocket";
 import { TTSService } from "./ttsService";
+import { ResponseTextFilter } from "./responseText";
 import { interviewWelcome, type OpeningReply } from "./interviewOpening";
 import {
   advanceControl,
@@ -824,12 +825,23 @@ export class InterviewSession {
       id: ++this.responseId,
       createdAt: performance.now(),
       text: "",
-      controller: prepared?.controller ?? new AbortController(),
+      controller: new AbortController(),
       saved: false,
       savedId: null as string | null,
       phase: interview?.phase ?? "questions",
       sourceIdentity: "",
     };
+    if (prepared) {
+      // A draft can be discarded while the final reply continues (for example,
+      // speculative replies are not generated during the opening). Only an
+      // interruption of the final reply should also cancel the draft.
+      const draftController = prepared.controller;
+      current.controller.signal.addEventListener(
+        "abort",
+        () => draftController.abort(),
+        { once: true },
+      );
+    }
     this.current = current;
     this.send({ type: "status", status: "thinking" });
     const speech = this.deps.speechEnabled
@@ -936,6 +948,14 @@ export class InterviewSession {
             })();
       let proposedEnd: EndInterviewRequest | null = null;
       let proposedObservation: InterviewObservation | null = null;
+      const responseText = new ResponseTextFilter();
+      const sendText = (text: string) => {
+        if (!text) return;
+        current.text += text;
+        this.send({ type: "delta", responseId: current.id, text });
+        if (speechConnected) speech?.sendText(text);
+        else if (speech && !speechFailed) pendingSpeech.push(text);
+      };
       for await (const part of output) {
         if (current.controller.signal.aborted || this.closed) return;
         if (typeof part !== "string") {
@@ -949,13 +969,10 @@ export class InterviewSession {
           else throw new Error("Unexpected model tool output.");
           continue;
         }
-        const text = part;
-        current.text += text;
-        this.send({ type: "delta", responseId: current.id, text });
-        if (speechConnected) speech?.sendText(text);
-        else if (speech && !speechFailed) pendingSpeech.push(text);
+        sendText(responseText.push(part));
       }
       if (current.controller.signal.aborted || this.closed) return;
+      sendText(responseText.finish());
       if (!current.text.trim() && !proposedEnd)
         throw new Error("The interviewer returned an empty response.");
       const saving = this.persist(current, "complete");
@@ -1213,19 +1230,26 @@ export class InterviewSession {
   }
   private deliberateStop(utterance: string): boolean {
     if (!utterance || utterance.length > 600) return false;
-    const unquoted = utterance.replace(/“[^”]*”|"[^"]*"|'[^']*'/g, " ");
-    if (
-      /\b(?:don't|do not|not yet|what if|how would|hypothetical|for example|quoted|suppose|imagine)\b/i.test(
-        unquoted,
-      )
-    )
-      return false;
-    const normalized = unquoted
-      .trim()
-      .replace(/^(?:okay|ok|well|thanks|thank you)[,!. ]+/i, "");
-    return /^(?:(?:please\s+)?(?:stop|end|finish|quit)|(?:i\s+(?:want|need|would like)\s+to|let'?s|can we|could we|would you please)\s+(?:stop|end|finish|quit))\s+(?:(?:this|the|our|my)\s+)?(?:interview|session|conversation|call)\b(?:\s+(?:now|please))?[.!?]?$/i.test(
-      normalized,
+    // Only validate a model's end-tool request; a matching phrase alone never
+    // ends a session. Do not let quoted examples become candidate intent.
+    const unquoted = utterance.replace(
+      /“[^”]*”|"[^"]*"|‘[^’]*’|(?<![\p{L}\p{N}])'(?:[^']|(?<=[\p{L}\p{N}])'(?=[\p{L}\p{N}]))*'(?![\p{L}\p{N}])/gu,
+      " ",
     );
+    return unquoted.split(/(?<=[.!?;])\s+/).some((sentence) => {
+      const normalized = sentence
+        .trim()
+        .replace(/^(?:okay|ok|well|thanks|thank you|yeah|yes)[,!. ]+/i, "");
+      if (
+        /\b(?:don't|do not|not yet|what if|how would|hypothetical|for example|quoted|suppose|imagine)\b/i.test(
+          normalized,
+        )
+      )
+        return false;
+      return /^(?:(?:(?:please|just)\s+)*(?:stop|end|finish|quit)|(?:i\s+(?:want|need|would like)\s+to|let'?s|can we|could we|(?:can|could|would) you(?: please)?)\s+(?:stop|end|finish|quit))\s+(?:(?:this|the|our|my)\s+)?(?:interview|session|conversation|call)\b(?:\s+(?:now|please))?[.!?]?$/i.test(
+        normalized,
+      );
+    });
   }
   private endEligible(
     interview: InterviewDetail,

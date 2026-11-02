@@ -68,10 +68,10 @@ export function InterviewExample() {
   return (
     <section
       id="example"
-      className="rounded-xl border bg-card"
+      className="overflow-hidden rounded-xl border bg-card"
       aria-label="Illustrative transcript and review"
     >
-      <div className="border-b px-5 py-4 text-sm font-medium">
+      <div className="border-b bg-sidebar px-5 py-3 type-caption text-muted-foreground">
         Illustrative conversation and review
       </div>
       <Tabs
@@ -102,7 +102,7 @@ export function InterviewExample() {
             key={item}
             value={item}
             aria-label={`${item} example`}
-            className="mt-0 p-5 sm:p-7"
+            className="mt-0 p-5 sm:p-8"
           >
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.7fr)]">
               <div

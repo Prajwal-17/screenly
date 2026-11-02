@@ -31,7 +31,7 @@ export function Dialog({
   return (
     <Primitive.Root open={open} onOpenChange={onOpenChange}>
       <Primitive.Portal>
-        <Primitive.Overlay className="fixed inset-0 z-50 bg-foreground/25 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
+        <Primitive.Overlay className="fixed inset-0 z-50 bg-black/30 dark:bg-black/65 backdrop-blur-[3px] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
         <Primitive.Content
           onOpenAutoFocus={(event) => {
             onOpenAutoFocus?.(event);
@@ -42,13 +42,13 @@ export function Dialog({
           }}
           onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
-            "fixed top-[min(18vh,140px)] left-1/2 z-50 max-h-[75dvh] w-[calc(100%_-_32px)] max-w-[540px] -translate-x-1/2 overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-xl outline-none duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+            "fixed top-[min(18vh,140px)] left-1/2 z-50 max-h-[75dvh] w-[calc(100%_-_32px)] max-w-[540px] -translate-x-1/2 overflow-y-auto rounded-2xl border bg-popover text-popover-foreground shadow-xl outline-none duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             className,
           )}
         >
           <div
             className={cn(
-              "flex items-start justify-between gap-4 px-5 pt-5 pb-4",
+              "flex items-start justify-between gap-4 px-6 pt-6 pb-4",
               !showHeader && "sr-only",
             )}
           >
@@ -56,7 +56,7 @@ export function Dialog({
               <Primitive.Title className="text-base font-semibold">
                 {title}
               </Primitive.Title>
-              <Primitive.Description className="mt-1 text-xs text-muted-foreground">
+              <Primitive.Description className="mt-1 text-sm leading-relaxed text-muted-foreground">
                 {description}
               </Primitive.Description>
             </div>

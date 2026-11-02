@@ -14,7 +14,7 @@ import { InterviewNotice } from "@/components/interview-notice";
 import { Preflight } from "@/components/preflight";
 import { Session } from "@/lib/interview-session";
 import { useInterviewView } from "@/store/interviewStore";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 export default function InterviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -140,6 +140,24 @@ export default function InterviewPage() {
   );
   const notices = (
     <>
+      {query.data && (query.isError || query.fetchStatus === "paused") && (
+        <InterviewNotice
+          warning
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void query.refetch()}
+              loading={query.isFetching}
+            >
+              Retry refresh
+            </Button>
+          }
+        >
+          Your saved interview couldn’t refresh. The current conversation stays
+          open.
+        </InterviewNotice>
+      )}
       {(state.error || finish.error) && (
         <InterviewNotice
           action={
@@ -233,16 +251,32 @@ export default function InterviewPage() {
   return (
     <Workspace
       voice
-      immersive={started}
+      immersive={started && !!query.data}
       interviewActive={interview?.status === "active"}
       beforeNavigate={confirmExit}
       title={interview ? `${interview.role} interview` : "Interview"}
     >
-      {query.isPending ? (
-        <Loading label="Loading interview…" />
-      ) : query.error ? (
+      {!query.data &&
+      !(
+        query.isError ||
+        query.errorUpdatedAt > 0 ||
+        query.fetchStatus === "paused"
+      ) ? (
+        <Loading label="Loading your interview…" layout="interview" />
+      ) : !query.data ? (
         <ErrorState
-          message={query.error.message}
+          title={
+            query.error instanceof ApiError && query.error.status === 404
+              ? "Interview not found"
+              : "We couldn’t load this interview"
+          }
+          message={
+            query.error instanceof ApiError && query.error.status === 404
+              ? "Interview not found."
+              : query.fetchStatus === "paused"
+                ? "You’re offline. Reconnect, then try again."
+                : "Try opening your saved interview again."
+          }
           retry={() => void query.refetch()}
           retrying={query.isFetching}
         />

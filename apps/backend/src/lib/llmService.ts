@@ -124,17 +124,29 @@ export class LLMService {
       }),
     );
     const requestStarted = performance.now();
+    // The opening transcript cannot supply technical evidence or authorize an
+    // end tool. Start with a spoken question before offering observation and
+    // end tools; some providers otherwise emit a tool call with no speech.
+    const hasCandidateAnswer = interview.messages.some(
+      (message) =>
+        message.role === "user" &&
+        message.phase === "questions" &&
+        message.status === "complete",
+    );
+    const modelOptions = {
+      model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,
+      ...(this.env.LLM_INTERVIEW_REASONING_EFFORT
+        ? { reasoning_effort: this.env.LLM_INTERVIEW_REASONING_EFFORT }
+        : {}),
+      ...(this.env.LLM_INTERVIEW_MAX_TOKENS
+        ? { max_tokens: this.env.LLM_INTERVIEW_MAX_TOKENS }
+        : {}),
+    };
     const stream = await this.client.chat.completions.create(
       {
-        model: this.env.LLM_INTERVIEW_MODEL || this.env.LLM_MODEL!,
-        ...(this.env.LLM_INTERVIEW_REASONING_EFFORT
-          ? { reasoning_effort: this.env.LLM_INTERVIEW_REASONING_EFFORT }
-          : {}),
-        ...(this.env.LLM_INTERVIEW_MAX_TOKENS
-          ? { max_tokens: this.env.LLM_INTERVIEW_MAX_TOKENS }
-          : {}),
+        ...modelOptions,
         messages,
-        ...(interview.preparation
+        ...(interview.preparation && hasCandidateAnswer
           ? {
               tools: [observationTool, endInterviewTool],
               tool_choice: "auto" as const,
@@ -147,6 +159,7 @@ export class LLMService {
     const tool = new EndToolStream();
     let finishReason: string | null = null;
     let firstOutputLogged = false;
+    let hasSpeech = false;
     const logFirstOutput = () => {
       if (firstOutputLogged) return;
       firstOutputLogged = true;
@@ -167,7 +180,10 @@ export class LLMService {
       const deltas = chunk.choices[0]?.delta?.tool_calls;
       if (text || deltas?.length) logFirstOutput();
       tool.add(deltas);
-      if (text) yield text;
+      if (text) {
+        if (text.trim()) hasSpeech = true;
+        yield text;
+      }
     }
     if (finishReason !== "stop" && finishReason !== "tool_calls")
       throw new Error("The interviewer response did not complete normally.");
@@ -180,6 +196,48 @@ export class LLMService {
       throw new Error(
         "The tool response ended without a tool completion marker.",
       );
+    if (!hasSpeech && requests.observation && !requests.end) {
+      // Some providers send the observation as a tool-only message. Complete
+      // that tool turn and request the spoken response; the observation is
+      // still provisional until the session validates and commits the reply.
+      const continuationMessages = [
+        ...messages,
+        {
+          role: "assistant" as const,
+          content: null,
+          tool_calls: requests.calls,
+        },
+        {
+          role: "tool" as const,
+          tool_call_id: requests.calls[0]!.id,
+          content:
+            "Observation received for validation after your spoken reply. Continue the interview aloud. Include any proposed hint or changed constraint exactly as recorded; do not introduce unrecorded help or changed constraints.",
+        },
+      ];
+      const continuationCharacters =
+        JSON.stringify(continuationMessages).length;
+      if (continuationCharacters > LIVE_CONTEXT_CHARACTER_LIMIT)
+        throw new LiveContextBudgetError(continuationCharacters);
+      const continuation = await this.client.chat.completions.create(
+        { ...modelOptions, messages: continuationMessages, stream: true },
+        { signal },
+      );
+      let continuationFinish: string | null = null;
+      for await (const chunk of continuation) {
+        if (signal.aborted) return;
+        if (chunk.choices[0]?.delta?.tool_calls?.length)
+          throw new Error("Unexpected tool call in the spoken continuation.");
+        const text = chunk.choices[0]?.delta?.content;
+        if (text) {
+          if (text.trim()) hasSpeech = true;
+          yield text;
+        }
+        const reason = chunk.choices[0]?.finish_reason;
+        if (reason) continuationFinish = reason;
+      }
+      if (continuationFinish !== "stop" || !hasSpeech)
+        throw new Error("The interviewer did not provide a spoken response.");
+    }
     if (requests.observation)
       yield {
         type: "record_interview_observation",

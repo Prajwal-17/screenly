@@ -1,0 +1,64 @@
+/* Profile layout inherits the shared application theme, including portaled editors. */
+.profile-surface {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+.profile-surface :is(input, textarea, [data-slot="select-trigger"]) {
+  font-size: 1rem;
+  line-height: 1.6;
+  background-color: var(--card);
+}
+.profile-surface :is(.type-ui, .type-caption) {
+  font-weight: 400;
+}
+.profile-surface [data-slot="button"][data-variant="ghost"]:disabled {
+  background: transparent;
+  border-color: transparent;
+  opacity: 0.5;
+}
+.profile-surface :is(.type-section-title, .type-subsection-title) {
+  font-weight: 600;
+}
+.profile-surface ::selection {
+  background: var(--selection);
+  color: var(--selection-foreground);
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  align-items: start;
+  gap: 48px;
+}
+.profile-form {
+  padding: 16px;
+  margin-inline: -16px;
+  border-radius: 12px;
+  background: var(--secondary);
+  outline: 1px solid var(--border);
+}
+.onboarding-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  overflow: clip;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+@media (max-width: 1279px) {
+  .profile-grid {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 32px;
+  }
+  .onboarding-grid {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .profile-grid,
+  .onboarding-grid {
+    display: block;
+  }
+  .profile-grid > aside {
+    margin-top: 32px;
+  }
+}

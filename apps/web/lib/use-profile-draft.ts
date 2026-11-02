@@ -180,5 +180,13 @@ export function useProfileDraft(
       /* The saved server profile takes precedence. */
     }
   };
-  return { draft, update, sync, flush, finish, clear };
+  return {
+    draft,
+    update,
+    sync,
+    flush,
+    finish,
+    clear,
+    ready: !!userId && initialized.current === userId,
+  };
 }

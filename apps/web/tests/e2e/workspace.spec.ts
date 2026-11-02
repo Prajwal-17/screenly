@@ -18,13 +18,7 @@ test("compact navigation and history search remain keyboard accessible", async (
 });
 
 test("retired workspace routes redirect intentionally", async ({ page }) => {
-  for (const route of [
-    "/dashboard",
-    "/library",
-    "/plans",
-    "/progress",
-    "/saved",
-  ]) {
+  for (const route of ["/library", "/plans", "/progress", "/saved"]) {
     await page.goto(route);
     await expect(page).toHaveURL(/\/interviews\/new$/);
   }
@@ -48,6 +42,13 @@ test("sign-out failure is recoverable and success returns home", async ({
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(
+    navigation.getByRole("link", { name: "Sign in", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Go to app" })).toHaveCount(0);
+  await navigation.getByRole("link", { name: "Get started" }).click();
+  await expect(page).toHaveURL(/\/auth\/sign-in$/);
 });
 
 test("profile failure, expiry, and missing interviews offer recovery", async ({
@@ -66,7 +67,7 @@ test("profile failure, expiry, and missing interviews offer recovery", async ({
   api.failures.delete("GET /api/profile");
   await page.getByRole("button", { name: /Try again|Retry/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Choose a role" }),
+    page.getByRole("radiogroup", { name: "Interview role" }),
   ).toBeVisible();
   api.failures.set("GET /api/profile", { status: 401, error: "Expired" });
   await page.reload();

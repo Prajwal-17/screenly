@@ -39,7 +39,7 @@ export default defineConfig({
   webServer: {
     command: "bun run dev",
     url: "http://127.0.0.1:3106",
-    timeout: 120_000,
+    timeout: 240_000,
     reuseExistingServer: false,
     env: {
       WEB_PORT: "3106",

@@ -1,10 +1,25 @@
-Geist Sans and Geist Mono, variable weights 100–900.
-Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font).
-License: SIL Open Font License 1.1, retained in OFL.txt.
+Active shared family — REQ-038
+-----------------------------
+The screenshot-pinned UI uses the system-first stack backed by Geist Sans:
+  -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Segoe UI", sans-serif
+GeistVF.woff (100–900) and GeistMonoVF.woff (100–900) are locally loaded in app/layout.tsx.
+Geist Mono serves code. Both retain the original SIL OFL 1.1 license in OFL.txt.
+Source: https://github.com/vercel/geist-font; restored unchanged from master commit
+64d570884aa3c81574ff3e120c31b18b482212e5. Copyright 2024 The Geist Project Authors.
 
-GeistVF.woff and GeistMonoVF.woff are restored unchanged from this repository's
-master commit 64d570884aa3c81574ff3e120c31b18b482212e5. Both are committed and
-served through next/font/local; development, type checks, and builds do not
-fetch fonts from a CDN. Geist Sans is the application font; Geist Mono is
-reserved for code. The loader variables are --font-geist-sans and
---font-geist-mono, distinct from Tailwind's --font-sans and --font-mono.
+Preserved live family
+---------------------
+OverusedGrotesk-VF.woff2 (300–900) remains locally loaded for live stage/caption fitting.
+Source: https://github.com/RandomMaerks/Overused-Grotesk, pinned commit
+749aa2c96c43a4af2d6932607ed42a5709982c5f, fonts/variable/OverusedGrotesk-VF.woff2.
+Copyright Bao Nguyen/RandomMaerks; SIL OFL 1.1 in OverusedGrotesk-OFL.txt.
+
+Retained inactive assets
+------------------------
+Manrope-VF.ttf and BricolageGrotesque-VF.ttf are no longer loaded. Their exact source URLs,
+SHA-256 values and licenses remain in HIGH-CHROMA-SOURCES.json; licenses in Manrope-OFL.txt
+and BricolageGrotesque-OFL.txt. Those binaries are retained unchanged.
+IBMPlexSans-Latin-VF.woff2 is also inactive, with its exact source/SHA metadata in
+IBMPlexSans-SOURCE.json and license in IBMPlexSans-OFL.txt.
+
+Build and runtime require no font CDN.

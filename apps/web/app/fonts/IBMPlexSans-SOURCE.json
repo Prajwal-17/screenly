@@ -1,0 +1,9 @@
+{
+  "font": "IBM Plex Sans",
+  "source": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+  "css": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@100..700&display=swap",
+  "license": "https://raw.githubusercontent.com/IBM/plex/master/LICENSE.txt",
+  "sha256": "e2291e842cf5af167122a22881a740c7f2dda7716f1e8cd76680264f4a859470",
+  "bytes": 45712,
+  "fontWeight": "100 700"
+}

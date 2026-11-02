@@ -1,12 +1,25 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
-import { Mic, Volume2, Check, ArrowRight, Loader2, Clock3 } from "lucide-react";
+import { useState, useRef, useEffect, type CSSProperties } from "react";
+import Link from "next/link";
+import {
+  Mic,
+  Volume2,
+  ArrowRight,
+  ArrowLeft,
+  Pencil,
+  Play,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { InlineAlert } from "@/components/common";
 import { closeAudioContext } from "@/lib/audio-context";
 import { clock, elapsed } from "@/lib/api";
 import type { InterviewDetail, Capabilities } from "@repo/shared";
+import styles from "./preflight.module.css";
+
+const inputEnvelope = Array.from(
+  { length: 57 },
+  (_, index) => 0.15 + 0.85 * Math.sin((index / 56) * Math.PI) ** 2,
+);
 export function Preflight({
   interview,
   capabilities,
@@ -27,23 +40,31 @@ export function Preflight({
   const [checked, setChecked] = useState(false);
   const [testing, setTesting] = useState(false);
   const [level, setLevel] = useState(0);
+  const [soundTesting, setSoundTesting] = useState(false);
+  const [soundTested, setSoundTested] = useState(false);
   const [error, setError] = useState("");
   const mounted = useRef(true);
   const checkVersion = useRef(0);
+  const soundVersion = useRef(0);
   const cleanup = useRef<() => void>(() => {});
+  const cleanupSound = useRef<() => void>(() => {});
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
       checkVersion.current += 1;
+      soundVersion.current += 1;
       cleanup.current();
+      cleanupSound.current();
     };
   }, []);
   async function testMic() {
+    if (testing || starting) return;
     const version = (checkVersion.current += 1);
     cleanup.current();
     setChecked(false);
     setTesting(true);
+    setLevel(0);
     setError("");
     let checkedStream: MediaStream | null = null;
     let checkedContext: AudioContext | null = null;
@@ -111,175 +132,263 @@ export function Preflight({
     }
   }
   async function testSound() {
+    if (soundTesting || starting) return;
+    const version = (soundVersion.current += 1);
+    cleanupSound.current();
     setError("");
+    setSoundTesting(true);
+    setSoundTested(false);
     let ctx: AudioContext | null = null;
     try {
       ctx = new AudioContext();
       await ctx.resume();
+      if (!mounted.current || version !== soundVersion.current) {
+        void closeAudioContext(ctx);
+        return;
+      }
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
       gain.gain.value = 0.08;
       oscillator.frequency.value = 440;
       oscillator.connect(gain);
       gain.connect(ctx.destination);
-      oscillator.onended = () => void closeAudioContext(ctx);
+      let active = true;
+      const release = () => {
+        if (!active) return;
+        active = false;
+        oscillator.onended = null;
+        oscillator.disconnect();
+        gain.disconnect();
+        void closeAudioContext(ctx);
+        cleanupSound.current = () => {};
+      };
+      cleanupSound.current = () => {
+        if (!active) return;
+        oscillator.onended = null;
+        try {
+          oscillator.stop();
+        } catch {
+          // An oscillator whose start failed still needs its nodes released.
+        }
+        release();
+      };
+      oscillator.onended = () => {
+        release();
+        if (mounted.current && version === soundVersion.current) {
+          setSoundTesting(false);
+          setSoundTested(true);
+        }
+      };
       oscillator.start();
       oscillator.stop(ctx.currentTime + 0.25);
     } catch {
+      cleanupSound.current();
       void closeAudioContext(ctx);
-      if (mounted.current)
+      if (mounted.current && version === soundVersion.current) {
+        setSoundTesting(false);
         setError("Speaker test failed. Check your audio output and retry.");
+      }
     }
   }
+  const active = interview.status === "active";
+  const setupHref = `/interviews/new?role=${encodeURIComponent(interview.role)}`;
   return (
     <section
-      className="mx-auto grid w-full max-w-[760px] gap-8 py-10 sm:py-16 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:py-24"
+      className="mx-auto w-full max-w-2xl py-3 sm:py-5"
       aria-labelledby="preflight-title"
+      data-audio-preflight=""
     >
-      <div>
-        <h2
-          id="preflight-title"
-          className="text-2xl leading-tight font-semibold tracking-[-0.025em]"
-        >
-          {interview.status === "active"
-            ? "Resume interview"
-            : "Check your audio"}
+      <header className="mb-6">
+        <h2 id="preflight-title" className="type-page-title">
+          {active ? "Resume interview" : "Check your audio"}
         </h2>
-        <p className="mt-4 text-sm text-ink-secondary">
-          {interview.role} · {interview.level}{" "}
-          <span className="px-1 text-muted-foreground" aria-hidden="true">
-            ·
-          </span>{" "}
-          {interview.duration} min
-        </p>
-        {interview.status === "active" && (
-          <p className="mt-4 max-w-[36ch] text-xs leading-relaxed text-muted-foreground">
-            Your conversation is saved. Continue with the time remaining.
-          </p>
-        )}
-      </div>
-      <div className="min-w-0">
-        <div className="divide-y border-y">
-          <div className="py-2">
-            <div className="flex min-h-12 items-center justify-between gap-3">
-              <span className="flex min-w-0 items-center gap-3 text-[13px] font-medium">
-                {checked ? (
-                  <Check
-                    className="size-[18px] shrink-0 text-success"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Mic
-                    className="size-[18px] shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                )}
-                Microphone
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="shrink-0 px-3 text-xs"
-                disabled={testing}
-                aria-label={
-                  testing
-                    ? "Listening for 4 seconds…"
-                    : checked
-                      ? "Check microphone again"
-                      : "Check microphone"
-                }
-                onClick={() => void testMic()}
-              >
-                {testing && (
-                  <Loader2 className="animate-spin" aria-hidden="true" />
-                )}
-                {testing ? "Checking…" : checked ? "Check again" : "Check"}
-              </Button>
-            </div>
-            <span role="status" className="sr-only">
-              {testing
-                ? "Checking microphone access."
-                : checked
-                  ? "Microphone access confirmed."
-                  : ""}
-            </span>
-            {testing && (
-              <div className="flex items-center gap-3 pb-3 pl-[30px]">
-                <Progress
-                  role="meter"
-                  aria-label="Microphone input level"
-                  value={level}
-                  className="h-1 flex-1"
-                />
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  Speak naturally
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="flex min-h-16 items-center justify-between gap-3 py-2">
-            <span className="flex items-center gap-3 text-[13px] font-medium">
-              <Volume2
-                className="size-[18px] shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Speakers
-            </span>
+        <div className="mt-4 flex flex-wrap items-center gap-2 type-caption text-muted-foreground">
+          <span className="font-medium text-foreground">{interview.role}</span>
+          <span aria-hidden="true">·</span>
+          <span>{interview.level}</span>
+          <span aria-hidden="true">·</span>
+          <span>{interview.duration} min</span>
+          {!active && (
             <Button
+              asChild
               variant="ghost"
               size="sm"
-              className="shrink-0 px-3 text-xs"
-              onClick={() => void testSound()}
+              className="ml-auto px-0 type-caption"
             >
-              Test sound
+              <Link href={setupHref}>
+                Change role
+                <Pencil className="size-3.5" />
+              </Link>
             </Button>
-          </div>
+          )}
         </div>
-        <div className="mt-5 space-y-3">
-          {notice}
-          {capabilities && !capabilities.llm && (
-            <InlineAlert variant="warning">
-              The interviewer is unavailable. Try again later.
-            </InlineAlert>
-          )}
-          {capabilities && !capabilities.voice && (
-            <InlineAlert variant="warning">
-              Voice interviews are unavailable. Try again later.
-            </InlineAlert>
-          )}
-          {error && <InlineAlert>{error}</InlineAlert>}
+      </header>
+      <div className="mb-5 space-y-3">
+        {notice}
+        {capabilities && !capabilities.llm && (
+          <InlineAlert variant="warning">
+            The interviewer is unavailable. Try again later.
+          </InlineAlert>
+        )}
+        {capabilities && !capabilities.voice && (
+          <InlineAlert variant="warning">
+            Voice interviews are unavailable. Try again later.
+          </InlineAlert>
+        )}
+        {error && <InlineAlert>{error}</InlineAlert>}
+      </div>
+      <div className="border-y">
+        <div className="flex items-center gap-3 py-5">
+          <Mic
+            className="size-[18px] shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <h3 className="type-label">Microphone</h3>
+            <p className="mt-1 type-caption text-muted-foreground">
+              Browser default microphone
+            </p>
+          </div>
           <Button
-            className="w-full justify-between"
-            loading={starting}
-            disabled={
-              disabled ||
-              starting ||
-              testing ||
-              !capabilities?.llm ||
-              !capabilities?.voice
+            variant="outline"
+            size="sm"
+            disabled={starting}
+            loading={testing}
+            loadingLabel="Listening…"
+            aria-label={
+              testing
+                ? "Listening for 4 seconds"
+                : checked
+                  ? "Test input again"
+                  : "Test input"
             }
-            onClick={() => {
-              checkVersion.current += 1;
-              cleanup.current();
-              onStart();
-            }}
+            onClick={() => void testMic()}
           >
-            {interview.status === "active"
-              ? "Resume interview"
-              : "Start interview"}
-            <ArrowRight aria-hidden="true" />
+            {checked ? "Test input again" : "Test input"}
           </Button>
-          <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-            <Clock3 className="size-3 shrink-0" aria-hidden="true" />
-            {interview.startedAt != null
-              ? `${clock(Math.max(0, interview.duration * 60 - elapsed(interview)))} remaining`
-              : interview.phase === "opening"
-                ? "A short introduction first. Your timer starts with the first technical question."
-                : "Your timer starts when the interviewer begins speaking."}
+        </div>
+        <div className="flex min-h-28 flex-col items-center justify-center gap-4 pb-5 sm:min-h-32">
+          <div
+            className={styles.waveform}
+            data-testing={testing}
+            role="meter"
+            aria-label="Microphone input level"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(level)}
+            aria-valuetext={
+              testing
+                ? `${Math.round(level)} percent`
+                : checked
+                  ? "Microphone access confirmed"
+                  : "Not tested"
+            }
+            style={{ "--input-level": testing ? level : 0 } as CSSProperties}
+          >
+            {inputEnvelope.map((strength, index) => (
+              <span
+                key={index}
+                className={styles.bar}
+                style={{ "--input-strength": strength } as CSSProperties}
+                aria-hidden="true"
+              />
+            ))}
+          </div>
+          <p
+            role="status"
+            className={`flex items-center gap-2 type-caption ${checked ? "text-success" : "text-muted-foreground"}`}
+          >
+            <span
+              className={`size-1.5 shrink-0 rounded-full ${checked ? "bg-success" : "border border-input"}`}
+              aria-hidden="true"
+            />
+            {testing
+              ? "Listening… say a few words."
+              : checked
+                ? "Microphone access confirmed."
+                : "Your voice will appear here."}
           </p>
-          {secondaryAction && <div className="pt-2">{secondaryAction}</div>}
+        </div>
+        <div className="flex items-center gap-3 border-t py-5">
+          <Volume2
+            className="size-[18px] shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <h3 className="type-label">Speakers</h3>
+            <p
+              role="status"
+              className="mt-1 type-caption text-muted-foreground"
+            >
+              {soundTested ? "Test sound played" : "Browser default output"}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={starting}
+            loading={soundTesting}
+            loadingLabel="Playing…"
+            aria-label={
+              soundTesting
+                ? "Playing test sound"
+                : soundTested
+                  ? "Play again"
+                  : "Test sound"
+            }
+            onClick={() => void testSound()}
+          >
+            <Play className="size-3.5" />
+            {soundTested ? "Play again" : "Test sound"}
+          </Button>
         </div>
       </div>
+      <footer className="mt-6 flex flex-wrap items-center justify-between gap-4">
+        {!active ? (
+          <Button asChild variant="ghost" size="sm" className="px-0">
+            <Link href={setupHref}>
+              <ArrowLeft />
+              Back
+            </Link>
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Button
+          className="min-w-40"
+          loading={starting}
+          loadingLabel="Connecting…"
+          aria-label={active ? "Resume interview" : "Start interview"}
+          disabled={
+            disabled ||
+            starting ||
+            testing ||
+            soundTesting ||
+            !capabilities?.llm ||
+            !capabilities?.voice
+          }
+          onClick={() => {
+            checkVersion.current += 1;
+            soundVersion.current += 1;
+            cleanup.current();
+            cleanupSound.current();
+            onStart();
+          }}
+        >
+          {active ? "Resume interview" : "Start interview"}
+          <ArrowRight />
+        </Button>
+      </footer>
+      <p className="mt-4 max-w-[58ch] type-caption leading-relaxed text-muted-foreground">
+        {interview.startedAt != null
+          ? `${clock(Math.max(0, interview.duration * 60 - elapsed(interview)))} remaining`
+          : interview.phase === "opening"
+            ? "Your timer starts with the first technical question."
+            : "Your timer starts when the interviewer begins speaking."}
+      </p>
+      {secondaryAction && (
+        <div className="mt-6 border-t pt-5">{secondaryAction}</div>
+      )}
     </section>
   );
 }

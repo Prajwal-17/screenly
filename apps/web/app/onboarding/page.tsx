@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,145 +7,223 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCheck,
   CloudCheck,
-  FileText,
-  FolderGit2,
-  Link2,
   Loader2,
-  Pencil,
-  Plus,
-  ScanText,
-  Target,
-  Trash2,
-  UserRound,
 } from "lucide-react";
 import {
   profileDetailsSchema,
-  normalizeProfileLink,
   roles,
   levels,
   type ProfileDetails,
-  type ProfileProject,
+  type UserProfile,
 } from "@repo/shared";
 import { authClient } from "@/lib/auth-client";
 import { profileApi, useUserProfile } from "@/lib/profile";
 import { useProfileDraft } from "@/lib/use-profile-draft";
 import { api } from "@/lib/api";
 import { Brand } from "@/components/workspace";
+import { ProfileTheme } from "@/components/profile-theme";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { InlineAlert } from "@/components/common";
 import { ChoiceGroup } from "@/components/form-choices";
+import { InlineAlert, ErrorState, Loading } from "@/components/common";
 import {
   ProfileField,
-  ProjectEditor,
   StackEditor,
 } from "@/components/onboarding/profile-fields";
+import { BackgroundExtras } from "@/components/onboarding/background-extras";
 import { ImportPanel } from "@/components/onboarding/import-panel";
 import {
   ImportReview,
   mergeSuggestions,
+  suggestionKeys,
   ProfileReview,
 } from "@/components/onboarding/profile-review";
 
-const steps = [
-  { title: "Get started", hint: "Bring a resume or profile", icon: ScanText },
-  { title: "About you", hint: "Your background", icon: UserRound },
-  { title: "Your links", hint: "Where to find your work", icon: Link2 },
-  { title: "Projects", hint: "What you’ve built", icon: FolderGit2 },
-  { title: "Practice focus", hint: "Your stack and goals", icon: Target },
-  { title: "Review", hint: "One last look", icon: CheckCheck },
-];
-const copy = [
-  {
-    title: "Import profile",
-    description: "Import your background, or build your profile step by step.",
-  },
-  {
-    title: "About you",
-    description: "",
-  },
-  {
-    title: "Links",
-    description: "",
-  },
-  {
-    title: "Projects",
-    description: "Personal, open-source, and professional projects all count.",
-  },
-  {
-    title: "Practice focus",
-    description: "",
-  },
-  {
-    title: "Review profile",
-    description:
-      "Review your details before continuing. You can edit them anytime.",
-  },
-];
+const steps = ["Background", "Practice", "Review"];
+const phaseFor = (step: number) => (step < 4 ? 0 : step === 4 ? 1 : 2);
+const savedStep = [1, 4, 5] as const;
+
+function OnboardingFrame({
+  children,
+  phase = 0,
+  onStep,
+  status,
+  action,
+}: {
+  children: React.ReactNode;
+  phase?: number;
+  onStep?: (index: number) => void;
+  status?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <ProfileTheme className="min-h-dvh bg-background">
+      <header className="mx-auto flex min-h-[84px] max-w-[1200px] items-center justify-between gap-4 px-6 sm:px-10">
+        <Brand />
+        {action}
+      </header>
+      <main className="mx-auto max-w-[1040px] px-6 pt-5 pb-12 sm:px-10">
+        <div className="onboarding-grid">
+          <aside className="flex flex-col border-r bg-sidebar px-6 py-8 lg:px-[30px] lg:py-9">
+            <h2 className="mb-8 text-lg leading-tight font-semibold tracking-[-0.02em] text-foreground">
+              Your profile
+            </h2>
+            <nav aria-label="Onboarding steps">
+              <ol className="flex flex-wrap gap-3 md:flex-col md:gap-5">
+                {steps.map((title, index) => (
+                  <li key={title}>
+                    <button
+                      type="button"
+                      disabled={!onStep}
+                      onClick={() => onStep?.(index)}
+                      aria-current={index === phase ? "step" : undefined}
+                      className={
+                        "flex min-h-10 items-center gap-3 rounded-md text-left text-sm " +
+                        (index === phase
+                          ? "font-medium text-link"
+                          : "text-muted-foreground")
+                      }
+                    >
+                      <span
+                        className={
+                          "grid size-7 shrink-0 place-items-center rounded-full border text-xs tabular-nums " +
+                          (index === phase
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input")
+                        }
+                      >
+                        {index < phase ? (
+                          <Check className="size-3.5" aria-hidden="true" />
+                        ) : (
+                          index + 1
+                        )}
+                      </span>
+                      {title}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+            {status && <div className="mt-auto pt-10">{status}</div>}
+          </aside>
+          <section className="min-w-0 p-6 sm:p-8 lg:p-9">{children}</section>
+        </div>
+      </main>
+    </ProfileTheme>
+  );
+}
+
 export default function Onboarding() {
-  const client = useQueryClient();
-  const router = useRouter();
-  const { data: session, isPending } = authClient.useSession();
+  const session = authClient.useSession();
   const profile = useUserProfile();
-  const [editing, setEditing] = useState(false);
-  const [modeReady, setModeReady] = useState(false);
+  const router = useRouter();
+  const [legacyEdit, setLegacyEdit] = useState<boolean | null>(null);
+  useEffect(
+    () =>
+      setLegacyEdit(new URLSearchParams(location.search).get("edit") === "1"),
+    [],
+  );
+  const complete =
+    profile.data?.status === "complete" || profile.data?.status === "skipped";
   useEffect(() => {
-    setEditing(new URLSearchParams(location.search).get("edit") === "1");
-    setModeReady(true);
-  }, []);
-  const { draft, update, sync, flush, finish, clear } = useProfileDraft(
-    modeReady ? profile.data : undefined,
-    session?.user.id,
-    editing,
+    if (!session.isPending && !session.data && !session.error)
+      router.replace("/auth/sign-in");
+    if (session.data && complete && legacyEdit !== null)
+      router.replace(legacyEdit ? "/profile" : "/interviews/new");
+  }, [
+    session.isPending,
+    session.data,
+    session.error,
+    complete,
+    legacyEdit,
+    router,
+  ]);
+  if (session.data && profile.data && !complete && legacyEdit !== null)
+    return (
+      <OnboardingForm
+        key={session.data.user.id}
+        userId={session.data.user.id}
+        profile={profile.data}
+      />
+    );
+  const failed =
+    !!session.error ||
+    (!complete &&
+      (profile.isError ||
+        profile.errorUpdatedAt > 0 ||
+        profile.fetchStatus === "paused"));
+  return (
+    <OnboardingFrame>
+      <h1 className="mb-7 type-page-title">Your background</h1>
+      {failed ? (
+        <ErrorState
+          title={
+            session.error
+              ? "We couldn’t check your session"
+              : "We couldn’t load your profile"
+          }
+          message={
+            profile.fetchStatus === "paused"
+              ? "Reconnect to load your profile. Your device draft is kept."
+              : "Try connecting again. Your saved profile and device draft are kept."
+          }
+          retry={() => {
+            if (session.error) void session.refetch();
+            else void profile.refetch();
+          }}
+          retryLabel={session.error ? "Retry session" : "Retry loading profile"}
+          retrying={session.isRefetching || profile.isFetching}
+        />
+      ) : (
+        <Loading
+          layout="onboarding"
+          label={complete ? "Opening your workspace…" : "Loading your profile…"}
+        />
+      )}
+    </OnboardingFrame>
+  );
+}
+
+function OnboardingForm({
+  userId,
+  profile,
+}: {
+  userId: string;
+  profile: UserProfile;
+}) {
+  const router = useRouter();
+  const client = useQueryClient();
+  const { draft, update, sync, flush, finish, clear, ready } = useProfileDraft(
+    profile,
+    userId,
+    false,
   );
   const [error, setError] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [settingUp, setSettingUp] = useState(false);
-  const ready = !!session && !!profile.data && modeReady;
   const [projectIndex, setProjectIndex] = useState<number | null>(null);
-  const [selection, setSelection] = useState<string[]>([]);
   const heading = useRef<HTMLHeadingElement>(null);
-  const content = useRef<HTMLDivElement>(null);
-  const admitted = useRef("");
-  const step = draft?.onboarding.step ?? 0;
-  const pending = draft?.onboarding.pendingImport;
+  const submitting = useRef(false);
+  const step = draft.onboarding.step;
+  const phase = phaseFor(step);
+  const pending = draft.onboarding.pendingImport;
+  const available = pending ? suggestionKeys(pending.suggestions) : [];
+  const selection = (draft.onboarding.importSelection ?? available).filter(
+    (key) => available.includes(key),
+  );
+  const details = draft.details;
   const hasPending = !!pending;
   useEffect(() => {
-    if (!isPending && !session) router.replace("/auth/sign-in");
-  }, [isPending, session, router]);
-  useEffect(() => {
-    if (
-      !profile.data ||
-      !modeReady ||
-      !session ||
-      admitted.current === session.user.id
-    )
-      return;
-    admitted.current = session.user.id;
-    if (!editing && ["complete", "skipped"].includes(profile.data.status))
-      router.replace("/interviews/new");
-  }, [profile.data, modeReady, editing, router, session]);
-  useEffect(() => {
-    heading.current?.focus({ preventScroll: true });
-    content.current?.scrollTo({ top: 0 });
-  }, [step, hasPending]);
-  useEffect(() => {
-    if (pending)
-      setSelection(
-        draft?.onboarding.importSelection ?? Object.keys(pending.suggestions),
-      );
-  }, [pending, draft?.onboarding.importSelection]);
-  function go(next: number) {
+    heading.current?.focus();
+  }, [phase, hasPending, ready]);
+  function go(index: number) {
     setError("");
     setErrors({});
     update((prior) => ({
       ...prior,
-      onboarding: { ...prior.onboarding, step: next },
+      onboarding: { ...prior.onboarding, step: savedStep[index]! },
     }));
   }
   function change<K extends keyof ProfileDetails>(
@@ -158,233 +237,172 @@ export default function Onboarding() {
     setErrors((prior) =>
       Object.fromEntries(
         Object.entries(prior).filter(
-          ([path]) => path !== key && !path.startsWith(`${key}.`),
+          ([path]) => path !== key && !path.startsWith(key + "."),
         ),
       ),
     );
   }
   function validate(all = false) {
-    if (!draft) return false;
-    const result = profileDetailsSchema.safeParse(draft.details);
-    if (result.success) return true;
-    const allowed =
-      step === 1
-        ? ["name", "headline", "location", "about"]
-        : step === 2
-          ? ["githubUrl", "linkedinUrl", "portfolioUrl", "otherLinks"]
-          : step === 3
-            ? ["projects"]
-            : ["role", "level", "stack", "goal"];
-    const issues = result.error.issues.filter(
-      (issue) => all || allowed.includes(String(issue.path[0])),
-    );
+    const parsed = profileDetailsSchema.safeParse(details);
+    const practiceFields = ["role", "level", "goal", "stack"];
+    const issues = parsed.success
+      ? []
+      : parsed.error.issues
+          .filter(
+            (issue) =>
+              all ||
+              (phase === 0
+                ? !practiceFields.includes(String(issue.path[0]))
+                : practiceFields.includes(String(issue.path[0]))),
+          )
+          .map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          }));
+    if ((phase === 1 || all) && !details.role)
+      issues.push({ path: "role", message: "Choose a role." });
+    if ((phase === 1 || all) && !details.level)
+      issues.push({ path: "level", message: "Choose your experience." });
     if (!issues.length) return true;
     setErrors(
-      Object.fromEntries(
-        issues.map((issue) => [issue.path.join("."), issue.message]),
-      ),
+      Object.fromEntries(issues.map((issue) => [issue.path, issue.message])),
     );
-    const field = String(issues[0]?.path[0]);
-    if (all) {
-      const target = ["name", "headline", "location", "about"].includes(field)
-        ? 1
-        : ["githubUrl", "linkedinUrl", "portfolioUrl", "otherLinks"].includes(
-              field,
-            )
-          ? 2
-          : field === "projects"
-            ? 3
-            : 4;
-      update((prior) => ({
-        ...prior,
-        onboarding: { ...prior.onboarding, step: target },
-      }));
-    }
-    setError(issues[0]?.message ?? "Check your details.");
-    const index = issues[0]?.path[1];
-    const nested = String(issues[0]?.path[2] ?? "name");
-    const focusId =
-      field === "otherLinks" && typeof index === "number"
-        ? `extra-${nested === "label" ? "label" : "url"}-${index}`
-        : field === "projects" && typeof index === "number"
-          ? `project-${nested}`
-          : `profile-${field}`;
-    if (field === "projects" && typeof index === "number")
-      setProjectIndex(index);
-    setTimeout(() => document.getElementById(focusId)?.focus(), 0);
+    const first = issues[0]!.path;
+    const focusPhase = ["role", "level", "stack", "goal"].includes(first)
+      ? 1
+      : 0;
+    update((prior) => ({
+      ...prior,
+      onboarding: { ...prior.onboarding, step: savedStep[focusPhase]! },
+    }));
+    if (first.startsWith("projects."))
+      setProjectIndex(Number(first.split(".")[1]));
+    const focusId = first.startsWith("otherLinks.")
+      ? "extra-" +
+        (first.endsWith(".label") ? "label" : "url") +
+        "-" +
+        first.split(".")[1]
+      : first.startsWith("projects.")
+        ? "project-" + first.split(".")[2]
+        : "profile-" + first;
+    requestAnimationFrame(() => {
+      const target =
+        (first === "role" || first === "level"
+          ? null
+          : document.getElementById(focusId)) ??
+        document.querySelector<HTMLElement>(
+          '[role="radiogroup"][aria-label="' +
+            (first === "role" ? "Role" : "Experience") +
+            '"] button',
+        );
+      target?.focus();
+    });
     return false;
   }
   async function next() {
-    if (saving || busy || (step > 0 && !ready)) return;
-    if (step === 0 && pending) {
+    if (submitting.current || saving || importBusy || !ready) return;
+    setError("");
+    if (pending) {
+      if (!selection.length) return;
       update((prior) => ({
-        ...prior,
         details: mergeSuggestions(
           prior.details,
           pending.suggestions,
           selection,
         ),
-        onboarding: { step: 1, pendingImport: null },
+        onboarding: {
+          ...prior.onboarding,
+          step: 1,
+          pendingImport: null,
+          importSelection: undefined,
+        },
       }));
-      setError("");
       return;
     }
-    if (step === 0) {
-      go(1);
+    if (!validate(phase === 2)) return;
+    if (phase < 2) {
+      go(phase + 1);
       return;
     }
-    if (!validate(step === 5)) return;
-    if (step < 5) {
-      go(step + 1);
-      return;
-    }
+    submitting.current = true;
     setSaving(true);
-    if (!editing) setSettingUp(true);
-    setError("");
     try {
       await finish();
-      if (editing) router.replace("/settings");
-      else await openWorkspace("/interviews/new");
-    } catch (cause) {
-      setSettingUp(false);
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not save your profile. Try again.",
-      );
+      await Promise.all([
+        client.prefetchQuery({ queryKey: ["interviews"], queryFn: api.list }),
+        client.prefetchQuery({
+          queryKey: ["capabilities"],
+          queryFn: api.capabilities,
+        }),
+      ]);
+      router.replace("/interviews/new");
+    } catch {
+      setError("Couldn’t save your profile. Try again.");
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   }
-  async function openWorkspace(destination: string) {
-    await Promise.all([
-      client.prefetchQuery({ queryKey: ["interviews"], queryFn: api.list }),
-      client.prefetchQuery({
-        queryKey: ["capabilities"],
-        queryFn: api.capabilities,
-      }),
-    ]);
-    router.replace(destination);
-  }
   async function exit() {
-    if (!ready || saving) return;
+    if (submitting.current || saving || importBusy || !ready) return;
+    submitting.current = true;
     setSaving(true);
-    if (!editing) setSettingUp(true);
     setError("");
     try {
       await flush();
-      if (!editing)
-        client.setQueryData(
-          ["profile", session?.user.id],
-          await profileApi.skip(),
-        );
+      client.setQueryData(["profile", userId], await profileApi.skip());
       clear();
-      if (editing) router.replace("/settings");
-      else await openWorkspace("/interviews/new");
+      router.replace("/interviews/new");
     } catch {
-      setSettingUp(false);
       setError(
-        "Your draft is kept on this device. Could not sync it; try again.",
+        "Couldn’t sync your draft. It is kept on this device. Try again.",
       );
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   }
-  if (settingUp)
-    return (
-      <div className="flex min-h-dvh flex-col">
-        <header className="mx-auto w-full max-w-6xl px-6 py-5 sm:px-10">
-          <Brand />
-        </header>
-        <main className="grid flex-1 place-items-center px-6 pb-24">
-          <div
-            className="max-w-sm text-center"
-            role="status"
-            aria-live="polite"
-          >
-            <Loader2
-              className="mx-auto mb-6 size-6 animate-spin text-primary"
-              aria-hidden="true"
-            />
-            <h1 className="text-2xl sm:text-[28px]">
-              Setting up your workspace…
-            </h1>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Saving your preferences and getting your practice space ready.
-            </p>
-          </div>
-        </main>
-      </div>
-    );
-  const details = draft.details;
   const field = (
-    key:
-      | "name"
-      | "headline"
-      | "location"
-      | "about"
-      | "githubUrl"
-      | "linkedinUrl"
-      | "portfolioUrl"
-      | "goal",
+    key: "name" | "headline" | "about" | "location" | "goal",
     label: string,
-    options: {
-      multiline?: boolean;
-      optional?: boolean;
-      placeholder?: string;
-    } = {},
+    multiline = false,
   ) => (
     <ProfileField
-      id={`profile-${key}`}
+      id={"profile-" + key}
       label={label}
+      multiline={multiline}
       value={details[key]}
-      onChange={(value) => change(key, value)}
+      disabled={saving}
+      required={key === "name"}
       error={errors[key]}
       maxLength={
-        key.includes("Url")
-          ? 2048
-          : key === "name"
-            ? 80
-            : key === "about"
-              ? 1500
-              : key === "goal"
-                ? 500
-                : 120
+        key === "name"
+          ? 80
+          : key === "about"
+            ? 1500
+            : key === "goal"
+              ? 500
+              : 120
       }
-      onBlur={
-        key.includes("Url")
-          ? () => change(key, normalizeProfileLink(details[key]))
-          : undefined
-      }
-      disabled={saving}
-      {...options}
+      onChange={(value) => change(key, value)}
     />
   );
-  const saveStatus = (
+  const status = (
     <div
-      className="flex items-center gap-2 text-xs text-muted-foreground"
       role="status"
+      className="flex flex-wrap items-center gap-2 type-caption text-muted-foreground"
     >
       {sync === "saving" ? (
-        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-      ) : sync === "error" ? (
-        <FileText className="size-3.5" aria-hidden="true" />
-      ) : (
-        <CloudCheck className="size-3.5 text-primary" aria-hidden="true" />
-      )}
-      {!ready ? (
-        profile.isError ? (
-          <Button variant="link" onClick={() => void profile.refetch()}>
-            Could not load profile. Retry
-          </Button>
-        ) : (
-          "Connecting your account…"
-        )
-      ) : sync === "saving" ? (
-        "Saving changes…"
+        <>
+          <Loader2
+            className="size-3.5 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+          Saving…
+        </>
       ) : sync === "error" ? (
         <>
-          Sync failed.{" "}
+          Couldn’t sync.
           <Button
             variant="link"
             size="xs"
@@ -394,472 +412,229 @@ export default function Onboarding() {
           </Button>
         </>
       ) : (
-        "All changes saved"
+        <>
+          <CloudCheck className="size-3.5" aria-hidden="true" />
+          Saved
+        </>
       )}
     </div>
   );
   return (
-    <div className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar">
-      <header className="mx-auto flex h-[72px] w-full max-w-[1200px] shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
-        <Brand />
+    <OnboardingFrame
+      phase={phase}
+      onStep={!importBusy && !saving && !pending ? go : undefined}
+      status={ready ? status : null}
+      action={
         <Button
           variant="ghost"
-          size="sm"
-          disabled={saving}
+          loading={saving}
+          loadingLabel="Saving…"
+          disabled={importBusy || !ready}
           onClick={() => void exit()}
         >
-          {editing ? "Save & exit" : "Skip for now"}
+          Save & exit
         </Button>
-      </header>
-      <main className="mx-auto flex min-h-0 w-full max-w-[1120px] flex-1 gap-8 px-4 pt-2 pb-5 sm:px-8 sm:pt-4 sm:pb-8">
-        <aside className="hidden w-[216px] shrink-0 flex-col py-6 md:flex">
-          <div className="mb-7">
-            <h2 className="text-base">Your Screenly profile</h2>
-          </div>
-          <nav aria-label="Onboarding steps">
-            <ol className="space-y-1">
-              {steps.map((item, index) => (
-                <li key={item.title}>
-                  <button
-                    type="button"
-                    disabled={busy || saving || !!pending}
-                    onClick={() => go(index)}
-                    aria-current={index === step ? "step" : undefined}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${index === step ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary"}`}
-                  >
-                    <span
-                      className={`grid size-7 shrink-0 place-items-center rounded-md ${index === step ? "bg-primary text-primary-foreground" : index < step ? "bg-secondary text-primary" : "border border-border"}`}
-                    >
-                      {index < step ? (
-                        <Check className="size-4" aria-hidden="true" />
-                      ) : (
-                        <item.icon className="size-4" aria-hidden="true" />
-                      )}
-                    </span>
-                    <span>
-                      <span className="block text-sm font-medium">
-                        {item.title}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </nav>
-          <div className="mt-auto pt-8">{saveStatus}</div>
-        </aside>
-        <section
-          aria-labelledby="onboarding-heading"
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card"
-        >
-          <div className="shrink-0 border-b px-5 py-5 sm:px-8 sm:py-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-muted-foreground">
-                {pending
-                  ? "Review AI suggestions"
-                  : `Step ${step + 1} of ${steps.length}`}
-              </span>
-              <span className="md:hidden">{saveStatus}</span>
+      }
+    >
+      <h1
+        ref={heading}
+        tabIndex={-1}
+        className="mb-7 type-page-title outline-none"
+      >
+        {pending
+          ? "Review suggestions"
+          : phase === 0
+            ? "Your background"
+            : phase === 1
+              ? "Practice"
+              : "Review"}
+      </h1>
+      {!ready ? (
+        <Loading layout="onboarding" label="Loading your profile…" />
+      ) : (
+        <>
+          {error && (
+            <div className="mb-5">
+              <InlineAlert>{error}</InlineAlert>
             </div>
-            <Progress
-              value={((step + 1) / steps.length) * 100}
-              aria-label="Onboarding progress"
-              className="mb-5 h-1 bg-secondary"
+          )}
+          {pending ? (
+            <ImportReview
+              result={pending}
+              selection={selection}
+              onSelection={(keys) =>
+                update((prior) => ({
+                  ...prior,
+                  onboarding: { ...prior.onboarding, importSelection: keys },
+                }))
+              }
             />
-            <h1
-              id="onboarding-heading"
-              ref={heading}
-              tabIndex={-1}
-              className="text-[24px] leading-tight tracking-[-0.03em] outline-none sm:text-[28px]"
+          ) : phase === 0 ? (
+            <>
+              <ImportPanel
+                compact
+                ready={!saving}
+                onBusy={setImportBusy}
+                onResult={(result) => {
+                  setImportBusy(false);
+                  update((prior) => ({
+                    ...prior,
+                    onboarding: {
+                      ...prior.onboarding,
+                      pendingImport: result,
+                      importSelection: suggestionKeys(result.suggestions),
+                    },
+                  }));
+                }}
+              />
+              <form
+                id="onboarding-form"
+                noValidate
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void next();
+                }}
+                className="mt-7 space-y-6 border-t pt-7"
+              >
+                <div className="grid gap-6 xl:grid-cols-2">
+                  {field("name", "Name")}
+                  {field("location", "Location")}
+                </div>
+                {field("headline", "Headline")}
+                {field("about", "About", true)}
+                <BackgroundExtras
+                  details={details}
+                  disabled={saving}
+                  errors={errors}
+                  projectIndex={projectIndex}
+                  onProjectIndex={setProjectIndex}
+                  initiallyOpen={step === 2 || step === 3}
+                  onChange={(next) => {
+                    update((prior) => ({ ...prior, details: next }));
+                    setErrors({});
+                  }}
+                />
+              </form>
+            </>
+          ) : phase === 1 ? (
+            <form
+              id="onboarding-form"
+              noValidate
+              onSubmit={(event) => {
+                event.preventDefault();
+                void next();
+              }}
+              className="space-y-7"
             >
-              {pending ? "Review suggestions" : copy[step]?.title}
-            </h1>
-            {(pending || copy[step]?.description) && (
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {pending
-                  ? "Nothing is applied until you approve. You can edit every detail next."
-                  : copy[step]?.description}
-              </p>
-            )}
-          </div>
-          <div
-            ref={content}
-            className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8"
-            tabIndex={0}
-            aria-label={`${steps[step]?.title} content`}
-          >
-            {error && (
-              <div className="mb-5">
-                <InlineAlert>{error}</InlineAlert>
-              </div>
-            )}
-            {step === 0 ? (
-              pending ? (
-                <ImportReview
-                  result={pending}
-                  selection={selection}
-                  onSelection={(keys) => {
-                    setSelection(keys);
-                    update((prior) => ({
-                      ...prior,
-                      onboarding: {
-                        ...prior.onboarding,
-                        importSelection: keys,
-                      },
-                    }));
-                  }}
+              <fieldset id="profile-role">
+                <legend className="mb-3 type-label">Role</legend>
+                <ChoiceGroup
+                  name="profile-role"
+                  label="Role"
+                  options={roles}
+                  disabled={saving}
+                  invalid={!!errors.role}
+                  describedBy={errors.role ? "profile-role-error" : undefined}
+                  value={details.role}
+                  onValueChange={(value) =>
+                    change("role", value as ProfileDetails["role"])
+                  }
                 />
-              ) : (
-                <ImportPanel
-                  ready={ready}
-                  onBusy={setBusy}
-                  onResult={(result) => {
-                    update((prior) => ({
-                      ...prior,
-                      onboarding: { step: 0, pendingImport: result },
-                    }));
-                  }}
-                />
-              )
-            ) : null}
-            {step === 1 && (
-              <div className="space-y-5">
-                <div className="grid gap-5 sm:grid-cols-2">
-                  {field("name", "Your name")}
-                  {field("location", "Location", {
-                    optional: true,
-                    placeholder: "City, country",
-                  })}
-                </div>
-                {field("headline", "Professional headline", {
-                  optional: true,
-                  placeholder: "e.g. Software engineer at Acme",
-                })}
-                {field("about", "About you", {
-                  multiline: true,
-                  optional: true,
-                  placeholder:
-                    "Your background, experience, and the work you enjoy.",
-                })}
-              </div>
-            )}
-            {step === 2 && (
-              <div className="space-y-5">
-                {field("githubUrl", "GitHub", {
-                  optional: true,
-                  placeholder: "https://github.com/you",
-                })}
-                {field("linkedinUrl", "LinkedIn", {
-                  optional: true,
-                  placeholder: "https://linkedin.com/in/you",
-                })}
-                {field("portfolioUrl", "Portfolio", {
-                  optional: true,
-                  placeholder: "https://your-site.com",
-                })}
-                <div className="border-t pt-4">
-                  {details.otherLinks.map((link, index) => (
-                    <div key={index} className="mb-4 flex items-end gap-2">
-                      <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[140px_1fr]">
-                        <ProfileField
-                          id={`extra-label-${index}`}
-                          label="Link label"
-                          error={errors[`otherLinks.${index}.label`]}
-                          value={link.label}
-                          maxLength={40}
-                          onChange={(value) =>
-                            change(
-                              "otherLinks",
-                              details.otherLinks.map((item, i) =>
-                                i === index ? { ...item, label: value } : item,
-                              ),
-                            )
-                          }
-                        />
-                        <ProfileField
-                          id={`extra-url-${index}`}
-                          label="URL"
-                          error={errors[`otherLinks.${index}.url`]}
-                          value={link.url}
-                          maxLength={2048}
-                          onChange={(value) =>
-                            change(
-                              "otherLinks",
-                              details.otherLinks.map((item, i) =>
-                                i === index ? { ...item, url: value } : item,
-                              ),
-                            )
-                          }
-                          onBlur={() =>
-                            change(
-                              "otherLinks",
-                              details.otherLinks.map((item, i) =>
-                                i === index
-                                  ? {
-                                      ...item,
-                                      url: normalizeProfileLink(item.url),
-                                    }
-                                  : item,
-                              ),
-                            )
-                          }
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove ${link.label || "extra link"}`}
-                        onClick={() =>
-                          change(
-                            "otherLinks",
-                            details.otherLinks.filter((_, i) => i !== index),
-                          )
-                        }
-                      >
-                        <Trash2 className="size-4" aria-hidden="true" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-3"
-                    disabled={details.otherLinks.length >= 8}
-                    onClick={() =>
-                      change("otherLinks", [
-                        ...details.otherLinks,
-                        { label: "", url: "" },
-                      ])
-                    }
+                {errors.role && (
+                  <p
+                    id="profile-role-error"
+                    role="alert"
+                    className="mt-2 text-sm text-destructive-text"
                   >
-                    <Plus aria-hidden="true" />
-                    Add another link
-                  </Button>
-                </div>
-              </div>
-            )}
-            {step === 3 && (
-              <div>
-                <div className="mb-5 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    {details.projects.length
-                      ? `${details.projects.length} project${details.projects.length === 1 ? "" : "s"} added`
-                      : "Add the work you’d like to talk about."}
+                    {errors.role}
                   </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={details.projects.length >= 10}
-                    onClick={() => {
-                      change("projects", [
-                        ...details.projects,
-                        {
-                          name: "",
-                          description: "",
-                          role: "",
-                          stack: [],
-                          url: "",
-                          repositoryUrl: "",
-                        },
-                      ]);
-                      setProjectIndex(details.projects.length);
-                    }}
+                )}
+              </fieldset>
+              <fieldset id="profile-level">
+                <legend className="mb-3 type-label">Experience</legend>
+                <ChoiceGroup
+                  name="profile-level"
+                  label="Experience"
+                  options={levels}
+                  disabled={saving}
+                  invalid={!!errors.level}
+                  describedBy={errors.level ? "profile-level-error" : undefined}
+                  value={details.level}
+                  onValueChange={(value) =>
+                    change("level", value as ProfileDetails["level"])
+                  }
+                />
+                {errors.level && (
+                  <p
+                    id="profile-level-error"
+                    role="alert"
+                    className="mt-2 text-sm text-destructive-text"
                   >
-                    <Plus aria-hidden="true" />
-                    Add project
-                  </Button>
-                </div>
-                {details.projects.length ? (
-                  <ul className="divide-y border-y">
-                    {details.projects.map((project, index) => (
-                      <li
-                        key={index}
-                        className="flex items-start justify-between gap-4 py-5"
-                      >
-                        <div className="min-w-0">
-                          <h2 className="text-sm font-semibold">
-                            {project.name || "Untitled project"}
-                          </h2>
-                          {project.description && (
-                            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                              {project.description}
-                            </p>
-                          )}
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {[project.role, project.stack.join(", ")]
-                              .filter(Boolean)
-                              .join(" · ") ||
-                              "Add a description and technologies"}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Edit ${project.name || "project"}`}
-                            onClick={() => setProjectIndex(index)}
-                          >
-                            <Pencil className="size-4" aria-hidden="true" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Remove ${project.name || "project"}`}
-                            onClick={() =>
-                              change(
-                                "projects",
-                                details.projects.filter((_, i) => i !== index),
-                              )
-                            }
-                          >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center">
-                    <FolderGit2
-                      className="mb-4 size-7 text-muted-foreground"
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                    />
-                    <h2 className="text-base">No projects yet</h2>
-                    <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                      Share what you built, your contribution, and the
-                      technologies you used.
-                    </p>
-                  </div>
+                    {errors.level}
+                  </p>
+                )}
+              </fieldset>
+              <div className="space-y-3">
+                <Label htmlFor="profile-stack">Technologies</Label>
+                <StackEditor
+                  value={details.stack}
+                  disabled={saving}
+                  suggestions={false}
+                  onChange={(value) => change("stack", value)}
+                />
+                {errors.stack && (
+                  <p role="alert" className="text-sm text-destructive-text">
+                    {errors.stack}
+                  </p>
                 )}
               </div>
-            )}
-            {step === 4 && (
-              <div className="space-y-5">
-                <div className="grid gap-5 xl:grid-cols-2">
-                  <fieldset>
-                    <legend className="mb-3 text-sm font-medium">
-                      Target role{" "}
-                      <span className="font-normal text-muted-foreground">
-                        (optional)
-                      </span>
-                    </legend>
-                    <ChoiceGroup
-                      name="profile-role"
-                      label="Target role"
-                      options={roles}
-                      value={details.role}
-                      onValueChange={(value) =>
-                        change("role", value as ProfileDetails["role"])
-                      }
-                    />
-                  </fieldset>
-                  <fieldset>
-                    <legend className="mb-3 text-sm font-medium">
-                      Experience level{" "}
-                      <span className="font-normal text-muted-foreground">
-                        (optional)
-                      </span>
-                    </legend>
-                    <ChoiceGroup
-                      name="profile-level"
-                      label="Experience level"
-                      options={levels}
-                      value={details.level}
-                      onValueChange={(value) =>
-                        change("level", value as ProfileDetails["level"])
-                      }
-                    />
-                  </fieldset>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="profile-stack">
-                    Your technologies{" "}
-                    <span className="font-normal text-muted-foreground">
-                      (optional)
-                    </span>
-                  </Label>
-                  <StackEditor
-                    value={details.stack}
-                    onChange={(value) => change("stack", value)}
-                    disabled={saving}
-                  />
-                </div>
-                {field("goal", "What would you like to work on?", {
-                  optional: true,
-                  placeholder: "e.g. Explaining my technical decisions clearly",
-                })}
-              </div>
-            )}
-            {step === 5 && <ProfileReview details={details} onEdit={go} />}
-          </div>
-          <footer className="flex shrink-0 items-center justify-between gap-3 border-t bg-card px-5 py-4 sm:px-8">
+              {field("goal", "Practice goal", true)}
+            </form>
+          ) : (
+            <ProfileReview
+              details={details}
+              onEdit={(step) => go(phaseFor(step))}
+            />
+          )}
+          <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-6">
             <Button
               type="button"
               variant="ghost"
-              disabled={saving || busy || !ready}
+              disabled={saving || importBusy}
               onClick={() => {
-                if (pending) {
+                if (pending)
                   update((prior) => ({
                     ...prior,
-                    onboarding: { step: 0, pendingImport: null },
+                    onboarding: {
+                      ...prior.onboarding,
+                      pendingImport: null,
+                      importSelection: undefined,
+                    },
                   }));
-                } else go(Math.max(0, step - 1));
+                else if (phase > 0) go(phase - 1);
+                else void exit();
               }}
-              className={step === 0 && !pending ? "hidden" : ""}
             >
-              <ArrowLeft aria-hidden="true" />
-              {pending ? "Discard" : "Back"}
+              {pending || phase > 0 ? <ArrowLeft aria-hidden="true" /> : null}
+              {pending ? "Discard" : phase > 0 ? "Back" : "Skip for now"}
             </Button>
             <Button
               type="button"
-              className="ml-auto"
               loading={saving}
-              disabled={
-                busy || (!!pending && !selection.length) || (step > 0 && !ready)
-              }
+              loadingLabel="Saving profile…"
+              disabled={importBusy || (!!pending && !selection.length)}
               onClick={() => void next()}
             >
               {pending
-                ? "Approve & continue"
-                : step === 0
-                  ? "Enter details manually"
-                  : step === 5
-                    ? editing
-                      ? "Save profile"
-                      : "Finish setup"
-                    : "Continue"}
-              {pending ? (
-                <Check aria-hidden="true" />
-              ) : (
-                <ArrowRight aria-hidden="true" />
-              )}
+                ? "Apply selected"
+                : phase === 2
+                  ? "Create profile"
+                  : "Continue"}
+              <ArrowRight aria-hidden="true" />
             </Button>
           </footer>
-        </section>
-      </main>
-      <ProjectEditor
-        validationErrors={Object.fromEntries(
-          Object.entries(errors)
-            .filter(([key]) => key.startsWith(`projects.${projectIndex}.`))
-            .map(([key, message]) => [key.split(".")[2]!, message]),
-        )}
-        project={
-          projectIndex === null
-            ? null
-            : (details.projects[projectIndex] ?? null)
-        }
-        onClose={() => setProjectIndex(null)}
-        onChange={(project: ProfileProject) =>
-          change(
-            "projects",
-            details.projects.map((item, index) =>
-              index === projectIndex ? project : item,
-            ),
-          )
-        }
-      />
-    </div>
+        </>
+      )}
+    </OnboardingFrame>
   );
 }

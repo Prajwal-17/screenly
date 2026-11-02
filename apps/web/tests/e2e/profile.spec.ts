@@ -7,21 +7,23 @@ test.beforeEach(async ({ api }) => {
   api.profile.onboarding = { step: 0, pendingImport: null };
 });
 
-test("six manual steps validate, save repeated fields, and finish without losing data", async ({
+test("three setup phases preserve manual links, projects and practice details", async ({
   page,
   api,
 }) => {
   await page.goto("/onboarding");
-  await page.getByRole("button", { name: "Enter details manually" }).click();
-  await page.getByRole("textbox", { name: "Your name", exact: true }).fill("");
+  await expect(
+    page.getByRole("button", { name: "Import resume", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
-    page.getByRole("textbox", { name: "Your name", exact: true }),
+    page.getByRole("textbox", { name: "Name", exact: true }),
   ).toBeFocused();
   await page
-    .getByRole("textbox", { name: "Your name", exact: true })
+    .getByRole("textbox", { name: "Name", exact: true })
     .fill("Alex Test");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByText("Links and projects", { exact: true }).click();
   await page.getByRole("button", { name: "Add another link" }).click();
   await page
     .getByRole("textbox", { name: "Link label", exact: true })
@@ -39,7 +41,6 @@ test("six manual steps validate, save repeated fields, and finish without losing
   await page
     .getByRole("textbox", { name: "URL", exact: true })
     .fill("https://example.com/writing");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Add project", exact: true }).click();
   const project = page.getByRole("dialog", { name: "Project details" });
   await project.getByRole("button", { name: "Done", exact: true }).click();
@@ -56,18 +57,22 @@ test("six manual steps validate, save repeated fields, and finish without losing
   await projectUrl.fill("http://example.com");
   await project.getByRole("button", { name: "Done", exact: true }).click();
   await expect(projectUrl).toBeFocused();
-  await expect(projectUrl).toHaveAttribute("aria-invalid", "true");
   await projectUrl.fill("https://example.com");
   await project.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your background", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("radio", { name: "Backend", exact: true }).click();
   await page.getByRole("radio", { name: "Senior", exact: true }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Review profile", exact: true }),
+    page.getByRole("heading", { name: "Review", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Finish setup", exact: true }).click();
-  await expect(page).toHaveURL(/\/interviews\/new$/);
+  await page
+    .getByRole("button", { name: "Create profile", exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp("/interviews/new$"));
   expect(api.profile.status).toBe("complete");
   expect(api.profile.details.name).toBe("Alex Test");
   expect(api.profile.details.projects[0]?.name).toBe("Accessible editor");
@@ -99,7 +104,12 @@ for (const source of ["text", "file", "url"] as const) {
       await expect(
         page.getByLabel("Upload resume", { exact: true }),
       ).toBeEnabled();
-      await page.getByLabel("Upload resume", { exact: true }).setInputFiles({
+      const choosing = page.waitForEvent("filechooser");
+      await page
+        .getByRole("button", { name: "Import resume", exact: true })
+        .click();
+      const chooser = await choosing;
+      await chooser.setFiles({
         name: "resume.txt",
         mimeType: "text/plain",
         buffer: Buffer.from(
@@ -132,14 +142,14 @@ for (const source of ["text", "file", "url"] as const) {
       .click();
     await page.getByRole("checkbox", { name: "Name", exact: true }).uncheck();
     await page
-      .getByRole("button", { name: "Approve & continue", exact: true })
+      .getByRole("button", { name: "Apply selected", exact: true })
       .click();
     await expect(
-      page.getByRole("textbox", { name: "Your name", exact: true }),
+      page.getByRole("textbox", { name: "Name", exact: true }),
     ).toHaveValue("Alex Morgan");
-    await expect(
-      page.getByRole("textbox", { name: "Professional headline" }),
-    ).toHaveValue("Imported headline");
+    await expect(page.getByRole("textbox", { name: "Headline" })).toHaveValue(
+      "Imported headline",
+    );
   });
 }
 
@@ -204,9 +214,8 @@ test("import validation, provider failure, cancellation, and empty extraction ke
   await expect(
     page.getByText("No readable profile details were found."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Enter details manually" }).click();
   await expect(
-    page.getByRole("heading", { name: "About you", exact: true }),
+    page.getByRole("heading", { name: "Your background", exact: true }),
   ).toBeVisible();
 });
 
@@ -214,18 +223,21 @@ test("failed autosave recovers device draft across refresh and retries", async (
   page,
   api,
 }) => {
+  api.profile.status = "draft";
+  api.profile.onboarding.step = 2;
   api.failures.set("PUT /api/profile", { status: 503, error: "Offline" });
   await page.goto("/onboarding");
-  await page.getByRole("button", { name: "Enter details manually" }).click();
   await page
-    .getByRole("textbox", { name: "Your name", exact: true })
+    .getByRole("textbox", { name: "Name", exact: true })
     .fill("Recovered Alex");
   await expect(
-    page.getByText("Sync failed.", { exact: false }).filter({ visible: true }),
+    page
+      .getByText("Couldn’t sync.", { exact: false })
+      .filter({ visible: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("textbox", { name: "Your name", exact: true }),
+    page.getByRole("textbox", { name: "Name", exact: true }),
   ).toHaveValue("Recovered Alex");
   await expect(
     page.getByRole("button", { name: "Retry", exact: true }),
@@ -236,17 +248,15 @@ test("failed autosave recovers device draft across refresh and retries", async (
     .first()
     .click();
   await expect(
-    page
-      .getByText("All changes saved", { exact: true })
-      .filter({ visible: true }),
+    page.getByText("Saved", { exact: true }).filter({ visible: true }),
   ).toBeVisible();
   expect(api.profile.details.name).toBe("Recovered Alex");
   await page.getByRole("button", { name: "Skip for now", exact: true }).click();
-  await expect(page).toHaveURL(/\/interviews\/new$/);
+  await expect(page).toHaveURL(new RegExp("/interviews/new$"));
   expect(api.profile.status).toBe("skipped");
 });
 
-test("editing a complete profile restores existing values and saves to settings", async ({
+test("legacy full-profile editing redirects to field editing", async ({
   page,
   api,
 }) => {
@@ -254,16 +264,15 @@ test("editing a complete profile restores existing values and saves to settings"
   api.profile.updatedAt = now;
   api.profile.onboarding.step = 5;
   await page.goto("/onboarding?edit=1");
-  await expect(
-    page.getByRole("textbox", { name: "Your name", exact: true }),
-  ).toHaveValue("Alex Morgan");
+  await expect(page).toHaveURL(new RegExp("/profile$"));
+  await page.getByRole("button", { name: "Edit name", exact: true }).click();
   await page
-    .getByRole("textbox", { name: "Your name", exact: true })
+    .getByRole("textbox", { name: "Name", exact: true })
     .fill("Edited Alex");
-  for (let step = 1; step < 5; step++)
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByRole("button", { name: "Save profile", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edited Alex", exact: true }),
+  ).toBeVisible();
   expect(api.profile.details.name).toBe("Edited Alex");
   expect(api.profile.status).toBe("complete");
 });

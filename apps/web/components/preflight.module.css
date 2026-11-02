@@ -1,0 +1,32 @@
+.waveform {
+  display: flex;
+  width: 100%;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.bar {
+  flex: 0 0 3px;
+  height: calc(
+    3px + var(--input-level, 0) * var(--input-strength, 0.5) * 0.45px
+  );
+  max-height: 48px;
+  border-radius: 9999px;
+  background: var(--input);
+  opacity: 0.65;
+  transition: height 100ms ease-out;
+}
+
+.waveform[data-testing="true"] .bar {
+  background: var(--foreground);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}

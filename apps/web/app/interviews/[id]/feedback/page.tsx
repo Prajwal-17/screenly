@@ -12,13 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import {
   Loading,
   ErrorState,
+  RefreshNotice,
   InlineAlert,
   ConfirmAction,
   PageIntro,
 } from "@/components/common";
-import { api, formatDate, elapsed, clock } from "@/lib/api";
+import { ApiError, api, formatDate, elapsed, clock } from "@/lib/api";
 import { exportTranscript } from "@/lib/export";
 import { authClient } from "@/lib/auth-client";
+import { FeaturePreview } from "@/components/feature-preview";
 
 export default function SessionReport() {
   const { id } = useParams<{ id: string }>();
@@ -54,17 +56,44 @@ export default function SessionReport() {
   }, [interview?.review, interview?.feedback, client]);
   return (
     <Workspace title="Interview review">
-      {query.isPending ? (
-        <Loading label="Loading interview…" />
-      ) : query.error ? (
+      {!query.data &&
+      !(
+        query.isError ||
+        query.errorUpdatedAt > 0 ||
+        query.fetchStatus === "paused"
+      ) ? (
+        <Loading label="Loading your interview review…" layout="review" />
+      ) : !query.data ? (
         <ErrorState
-          message={query.error.message}
+          title={
+            query.error instanceof ApiError && query.error.status === 404
+              ? "Interview not found"
+              : "We couldn’t load this interview"
+          }
+          message={
+            query.error instanceof ApiError && query.error.status === 404
+              ? "Interview not found."
+              : query.fetchStatus === "paused"
+                ? "You’re offline. Reconnect, then try again."
+                : "Your saved conversation hasn’t changed. Try opening it again."
+          }
           retry={() => void query.refetch()}
           retrying={query.isFetching}
         />
       ) : (
         interview && (
           <>
+            {(query.isError || query.fetchStatus === "paused") && (
+              <RefreshNotice
+                message={
+                  query.fetchStatus === "paused"
+                    ? "You’re offline. Showing the last loaded version."
+                    : "This section couldn’t refresh. Showing the last loaded version."
+                }
+                retry={() => void query.refetch()}
+                retrying={query.isFetching}
+              />
+            )}
             <PageIntro
               description={`${interview.role} · ${interview.level} · ${formatDate(interview.createdAt)} · ${clock(elapsed(interview))} practiced`}
               action={
@@ -97,39 +126,55 @@ export default function SessionReport() {
               }
             />
             {interview.review?.schemaVersion === 2 ? (
-              <div className="space-y-8">
+              <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_280px]">
                 <section
                   aria-labelledby="review-title"
-                  className="border-y py-7"
+                  className="border-b pb-7 xl:col-start-1"
                 >
-                  <h2 id="review-title" className="mb-3 text-lg font-medium">
+                  <h2 id="review-title" className="mb-3 type-section-title">
                     Session review
                   </h2>
-                  <p className="max-w-[70ch] leading-relaxed">
+                  <p className="max-w-[70ch] type-prose">
                     {interview.review.summary}
                   </p>
                 </section>
                 {interview.review.findings.length > 0 && (
-                  <section aria-labelledby="findings-title">
-                    <h2
-                      id="findings-title"
-                      className="mb-4 text-base font-medium"
-                    >
+                  <section
+                    aria-labelledby="findings-title"
+                    className="xl:col-start-1"
+                  >
+                    <h2 id="findings-title" className="mb-4 type-section-title">
                       Findings
                     </h2>
                     <div className="divide-y border-y">
                       {interview.review.findings.map((finding) => (
                         <article key={finding.id} className="py-5">
                           <div className="mb-3 flex flex-wrap items-center gap-3">
-                            <h3 className="font-medium">
-                              {finding.dimension.replaceAll("-", " ")}
+                            <h3 className="type-subsection-title">
+                              {finding.dimension
+                                .replaceAll("-", " ")
+                                .replace(/^./, (letter) =>
+                                  letter.toUpperCase(),
+                                )}
                             </h3>
-                            <Badge variant="secondary">{finding.label}</Badge>
+                            <Badge
+                              variant={
+                                finding.label === "Demonstrated"
+                                  ? "success"
+                                  : finding.label === "Partially demonstrated"
+                                    ? "warning"
+                                    : finding.label === "Needs work"
+                                      ? "destructive"
+                                      : "secondary"
+                              }
+                            >
+                              {finding.label}
+                            </Badge>
                           </div>
-                          <p className="max-w-[70ch] text-sm leading-relaxed">
+                          <p className="max-w-[70ch] type-prose">
                             {finding.observation}
                           </p>
-                          <p className="mt-3 max-w-[70ch] text-sm leading-relaxed text-muted-foreground">
+                          <p className="mt-3 max-w-[70ch] type-prose text-muted-foreground">
                             {finding.improvement}
                           </p>
                           {finding.evidence.length > 0 && (
@@ -163,21 +208,18 @@ export default function SessionReport() {
                 )}
                 <section
                   aria-labelledby="priority-title"
-                  className="border-y py-6"
+                  className="rounded-xl bg-accent p-6 text-accent-foreground xl:sticky xl:top-20 xl:col-start-2 xl:row-start-1 xl:row-span-3"
                 >
-                  <h2
-                    id="priority-title"
-                    className="mb-2 text-base font-medium"
-                  >
+                  <h2 id="priority-title" className="mb-2 type-section-title">
                     Next practice
                   </h2>
-                  <h3 className="font-medium">
+                  <h3 className="type-subsection-title">
                     {interview.review.practicePriority.title}
                   </h3>
-                  <p className="mt-2 max-w-[70ch] text-sm leading-relaxed">
+                  <p className="mt-3 max-w-[70ch] type-ui leading-relaxed">
                     {interview.review.practicePriority.action}
                   </p>
-                  <p className="mt-2 max-w-[70ch] text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-3 max-w-[70ch] type-ui leading-relaxed">
                     A stronger explanation would show:{" "}
                     {interview.review.practicePriority.strongerExplanation}
                   </p>
@@ -192,7 +234,7 @@ export default function SessionReport() {
                 {(interview.review.notAssessed.length > 0 ||
                   interview.review.limitations.length > 0) && (
                   <section
-                    className="max-w-[70ch] space-y-3 text-sm text-muted-foreground"
+                    className="max-w-[70ch] space-y-3 text-sm text-muted-foreground xl:col-start-1"
                     aria-label="Review limits"
                   >
                     {interview.review.notAssessed.length > 0 && (
@@ -208,8 +250,8 @@ export default function SessionReport() {
               </div>
             ) : interview.feedback ? (
               <section className="border-y py-7">
-                <h2 className="mb-3 text-base font-medium">Earlier review</h2>
-                <p className="max-w-[70ch] leading-relaxed">
+                <h2 className="mb-3 type-section-title">Earlier review</h2>
+                <p className="max-w-[70ch] type-prose">
                   {interview.feedback.summary}
                 </p>
                 <p className="mt-3 text-xs text-muted-foreground">
@@ -230,7 +272,7 @@ export default function SessionReport() {
               </section>
             ) : (
               <section className="border-y py-7">
-                <h2 className="text-base font-medium">
+                <h2 className="type-section-title">
                   {interview.feedbackStatus === "generating" ||
                   interview.feedbackStatus === "pending"
                     ? "Review in progress"
@@ -239,7 +281,14 @@ export default function SessionReport() {
                       ? "Review unavailable"
                       : "Conversation saved"}
                 </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p
+                  role={
+                    ["pending", "generating"].includes(interview.feedbackStatus)
+                      ? "status"
+                      : undefined
+                  }
+                  className="mt-2 text-sm text-muted-foreground"
+                >
                   {interview.feedbackStatus === "generating" ||
                   interview.feedbackStatus === "pending"
                     ? "Your transcript is available below while the review is prepared."
@@ -254,6 +303,13 @@ export default function SessionReport() {
                   <Button
                     className="mt-5"
                     loading={retry.isPending}
+                    loadingLabel="Requesting review…"
+                    aria-label={
+                      interview.feedbackStatus === "failed" ||
+                      interview.feedbackStatus === "ready"
+                        ? "Retry review"
+                        : "Generate review"
+                    }
                     onClick={() => retry.mutate()}
                   >
                     <RefreshCw />{" "}
@@ -270,11 +326,14 @@ export default function SessionReport() {
                 )}
               </section>
             )}
+            <div className="mt-6 flex justify-end">
+              <FeaturePreview feature="plan" />
+            </div>
             <section
-              className="mt-9 border-t pt-6"
+              className="mt-6 border-t pt-6"
               aria-labelledby="transcript-title"
             >
-              <h2 id="transcript-title" className="mb-6 text-base font-medium">
+              <h2 id="transcript-title" className="mb-6 type-section-title">
                 Transcript
               </h2>
               <div className="mx-auto max-w-3xl space-y-6">

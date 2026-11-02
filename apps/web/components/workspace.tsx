@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,12 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { WorkspaceSidebar } from "@/components/workspace-sidebar";
 import { useUserProfile } from "@/lib/profile";
-import { ErrorState } from "@/components/common";
+import {
+  Loading,
+  WorkspacePlaceholder,
+  routeLoading,
+} from "@/components/loading-state";
+import { ErrorState, RefreshNotice } from "@/components/common";
 import { ApiError } from "@/lib/api";
 import { workspaceDestinations } from "@/lib/workspace-navigation";
 
@@ -49,7 +53,13 @@ export function Workspace({
   immersive?: boolean;
   beforeNavigate?: () => Promise<boolean>;
 }) {
-  const { data: session, isPending } = authClient.useSession();
+  const {
+    data: session,
+    isPending,
+    error: sessionError,
+    refetch: refetchSession,
+  } = authClient.useSession();
+  const [retryingSession, setRetryingSession] = useState(false);
   const router = useRouter();
   const client = useQueryClient();
   const profile = useUserProfile();
@@ -87,8 +97,15 @@ export function Workspace({
     }
   }
   useEffect(() => {
-    if (!isPending && !session && !signingOut) router.replace("/auth/sign-in");
-  }, [isPending, session, signingOut, router]);
+    if (
+      !isPending &&
+      !session &&
+      !sessionError &&
+      !retryingSession &&
+      !signingOut
+    )
+      router.replace("/auth/sign-in");
+  }, [isPending, session, sessionError, retryingSession, signingOut, router]);
   useEffect(() => {
     if (session && needsOnboarding) router.replace("/onboarding");
   }, [session, needsOnboarding, router]);
@@ -111,19 +128,39 @@ export function Workspace({
   useEffect(() => {
     document.title = `${context} · Screenly`;
   }, [context]);
-  if (signingOut || isPending || !session || needsOnboarding)
+  const loading = routeLoading(path);
+  if (signingOut || !session || needsOnboarding)
     return (
-      <div
-        className="flex min-h-dvh items-center justify-center gap-2 text-sm text-muted-foreground"
-        role="status"
-      >
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        {signingOut ? "Signing out…" : "Loading your workspace…"}
-      </div>
+      <WorkspacePlaceholder title={context}>
+        {!session && !signingOut && (sessionError || retryingSession) ? (
+          <ErrorState
+            title="We couldn’t check your session"
+            message="We couldn’t reach your account. Try connecting again to open your workspace."
+            retry={() => {
+              setRetryingSession(true);
+              void refetchSession()
+                .catch(() => {})
+                .finally(() => setRetryingSession(false));
+            }}
+            retryLabel="Retry session"
+            retrying={retryingSession}
+          />
+        ) : (
+          <Loading
+            {...loading}
+            label={
+              signingOut
+                ? "Signing out…"
+                : needsOnboarding
+                  ? "Opening your profile…"
+                  : loading.label
+            }
+          />
+        )}
+      </WorkspacePlaceholder>
     );
   return (
     <SidebarProvider
-      open
       openMobile={navigationOpen}
       onOpenMobileChange={setNavigationOpen}
       forceMobile={immersive}
@@ -156,12 +193,17 @@ export function Workspace({
           <SidebarTrigger
             className="absolute top-2 left-3 z-20 sm:left-6"
             aria-label="Open navigation"
+            title="Open navigation"
           />
         ) : (
-          <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4 sm:px-6">
+          <header className="sticky top-0 z-20 flex h-[52px] shrink-0 items-center gap-3 border-b bg-card px-4 sm:px-6">
+            <SidebarTrigger
+              aria-label="Toggle navigation"
+              title="Toggle navigation"
+            />
             <h1
               id="workspace-title"
-              className="min-w-0 flex-1 truncate text-sm leading-normal font-medium tracking-normal"
+              className="min-w-0 flex-1 truncate type-label"
             >
               {context}
             </h1>
@@ -180,7 +222,7 @@ export function Workspace({
               ? "h-full min-h-0 px-3 sm:px-6 lg:px-8"
               : voice
                 ? "px-4 pb-4 sm:px-8"
-                : "flex-1 px-5 py-8 sm:px-8 sm:py-10 lg:px-10",
+                : "flex-1 px-5 py-7 sm:px-8 sm:py-8",
           )}
         >
           {immersive && (
@@ -242,33 +284,15 @@ export function Workspace({
                 />
               </div>
             ) : !profile.data && profile.isPending ? (
-              <div
-                className="flex items-center gap-2 py-8 text-sm text-muted-foreground"
-                role="status"
-              >
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                Loading your profile…
-              </div>
+              <Loading {...loading} />
             ) : (
               <>
                 {profile.isError && !immersive && (
-                  <div
-                    role="status"
-                    className="mb-6 flex flex-col gap-3 border-b pb-5 text-sm sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <p className="text-muted-foreground">
-                      Your profile couldn’t refresh. Using your last loaded
-                      details.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      loading={profile.isFetching}
-                      onClick={() => void profile.refetch()}
-                    >
-                      Retry profile
-                    </Button>
-                  </div>
+                  <RefreshNotice
+                    message="Your profile couldn’t refresh. Using your last loaded details."
+                    retry={() => void profile.refetch()}
+                    retrying={profile.isFetching}
+                  />
                 )}
                 {children}
               </>

@@ -19,9 +19,8 @@ import {
 } from "@/components/ui/tooltip";
 import { PanelLeftIcon } from "lucide-react";
 
-const SIDEBAR_WIDTH = "16rem";
+const SIDEBAR_WIDTH = "15rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
-const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -117,35 +116,6 @@ function SidebarProvider({
     }
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
   }, [isMobile, openMobile, setOpen, setOpenMobile]);
-
-  // Adds a keyboard shortcut to toggle the sidebar.
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        forceMobile &&
-        window.innerWidth >= 1024 &&
-        !event.defaultPrevented &&
-        !event.repeat &&
-        !event.isComposing &&
-        !event.altKey &&
-        !event.shiftKey &&
-        !(
-          event.target instanceof HTMLElement &&
-          event.target.closest(
-            'input, textarea, select, [role="textbox"], [contenteditable="true"]',
-          )
-        ) &&
-        event.key.toLowerCase() === SIDEBAR_KEYBOARD_SHORTCUT &&
-        (event.metaKey || event.ctrlKey)
-      ) {
-        event.preventDefault();
-        toggleSidebar();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [forceMobile, toggleSidebar]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
@@ -243,7 +213,7 @@ function Sidebar({
           event.preventDefault();
           restoreFocus();
         }}
-        className="w-[min(288px,85vw)] bg-sidebar text-sidebar-foreground"
+        className="w-[min(240px,85vw)] bg-sidebar text-sidebar-foreground"
       >
         <div
           data-slot="sidebar"
@@ -360,7 +330,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        "relative flex w-full flex-1 flex-col bg-card md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className,
       )}
       {...props}

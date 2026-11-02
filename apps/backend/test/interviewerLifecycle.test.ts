@@ -365,6 +365,26 @@ test("explicit candidate stop completes once without requiring another spoken tu
   }
 });
 
+for (const utterance of [
+  "Yeah. What is this question, man? Just end this interview.",
+  "I don't know the answer. Please end the interview.",
+  "That is enough; please just finish this session now.",
+]) {
+  test(`a direct stop after other speech completes the interview: ${utterance}`, async () => {
+    const h = harness("candidate_requested_stop", false);
+    h.setCandidateContent(utterance);
+    try {
+      await h.session.handle({ type: "start" });
+      await h.drain();
+      expect(h.detail.status).toBe("completed");
+      expect(h.finishCount).toBe(1);
+      expect(h.reviewCount).toBe(1);
+    } finally {
+      await h.session.close();
+    }
+  });
+}
+
 test("expired durable closing intent resumes and freezes one transcript", async () => {
   const h = harness("coverage_complete", false);
   const frozen = h.detail.messages.map((message) => message.id);
@@ -446,6 +466,8 @@ for (const utterance of [
   "How would you end this interview in a test?",
   "I don't want to end this interview yet.",
   'The log says "Please end this interview now."',
+  "The log says 'Please end this interview now.'",
+  "What if we end this interview?",
 ]) {
   test(`candidate stop ignores scenario or reproduced speech: ${utterance}`, async () => {
     const h = harness("candidate_requested_stop", false);

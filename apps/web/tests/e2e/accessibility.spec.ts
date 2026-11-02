@@ -17,10 +17,30 @@ function luminance(color: string) {
 test("rendered status text and destructive hover retain readable contrast", async ({
   page,
 }) => {
-  await page.goto("/history");
-  await expect(page.getByRole("table")).toBeVisible();
-  for (const badge of await page.locator('[data-slot="badge"]').all()) {
-    const colors = await badge.evaluate((node) => {
+  {
+    await page.goto("/history");
+    await expect(page.getByRole("table")).toBeVisible();
+    for (const badge of await page.locator('[data-slot="badge"]').all()) {
+      const colors = await badge.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return { text: style.color, background: style.backgroundColor };
+      });
+      const a = luminance(colors.text),
+        b = luminance(colors.background);
+      expect(
+        (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    await page
+      .getByRole("button", { name: "Delete Frontend interview", exact: true })
+      .first()
+      .click();
+    const action = page.getByRole("button", {
+      name: "Delete interview",
+      exact: true,
+    });
+    await action.hover();
+    const colors = await action.evaluate((node) => {
       const style = getComputedStyle(node);
       return { text: style.color, background: style.backgroundColor };
     });
@@ -29,25 +49,8 @@ test("rendered status text and destructive hover retain readable contrast", asyn
     expect(
       (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
     ).toBeGreaterThanOrEqual(4.5);
+    await page.getByRole("button", { name: "Keep it", exact: true }).click();
   }
-  await page
-    .getByRole("button", { name: "Delete Frontend interview", exact: true })
-    .first()
-    .click();
-  const action = page.getByRole("button", {
-    name: "Delete interview",
-    exact: true,
-  });
-  await action.hover();
-  const colors = await action.evaluate((node) => {
-    const style = getComputedStyle(node);
-    return { text: style.color, background: style.backgroundColor };
-  });
-  const a = luminance(colors.text),
-    b = luminance(colors.background);
-  expect(
-    (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
-  ).toBeGreaterThanOrEqual(4.5);
 });
 
 test("role radios support arrow keys without a workspace search overlay", async ({

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export function ProfileField({
   id,
@@ -20,6 +21,7 @@ export function ProfileField({
   optional = false,
   onBlur,
   disabled = false,
+  required = false,
 }: {
   id: string;
   label: string;
@@ -32,6 +34,7 @@ export function ProfileField({
   optional?: boolean;
   onBlur?: () => void;
   disabled?: boolean;
+  required?: boolean;
 }) {
   const props = {
     id,
@@ -39,6 +42,7 @@ export function ProfileField({
     maxLength,
     placeholder,
     disabled,
+    required,
     onBlur,
     onChange: (
       event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -50,6 +54,11 @@ export function ProfileField({
     <div className="min-w-0 space-y-2">
       <Label htmlFor={id}>
         {label}
+        {required && (
+          <span aria-hidden="true" className="text-xs text-muted-foreground">
+            *
+          </span>
+        )}
         {optional && (
           <span className="font-normal text-muted-foreground">(optional)</span>
         )}
@@ -63,7 +72,11 @@ export function ProfileField({
         />
       )}{" "}
       {error && (
-        <p id={`${id}-error`} className="text-xs text-destructive" role="alert">
+        <p
+          id={`${id}-error`}
+          className="text-xs text-destructive-text"
+          role="alert"
+        >
           {error}
         </p>
       )}
@@ -155,7 +168,11 @@ export function StackEditor({
         </div>
       </div>
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="text-xs text-destructive-text"
+        >
           {error}
         </p>
       )}
@@ -249,12 +266,15 @@ export function ProjectEditor({
       }}
       title="Project details"
       description="Your changes save as you type."
-      className="top-[max(16px,4dvh)] max-h-[92dvh] max-w-[640px]"
+      className={cn(
+        "profile-surface top-[max(16px,4dvh)] max-h-[92dvh] max-w-[640px]",
+      )}
     >
       {project && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             done();
           }}
         >

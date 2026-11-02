@@ -21,7 +21,7 @@ export function InterviewNotice({
     >
       <Icon
         aria-hidden="true"
-        className={warning ? "text-warning!" : "text-destructive!"}
+        className={warning ? "text-warning!" : "text-destructive-text!"}
       />
       <AlertDescription className="flex min-w-0 flex-col items-start gap-3 text-foreground @min-[640px]:flex-row @min-[640px]:items-center @min-[640px]:gap-5">
         <p className="mb-0! min-w-0 flex-1 leading-5 [overflow-wrap:anywhere]">

@@ -1,6 +1,6 @@
 "use client";
 import {
-  Loader2,
+  RefreshCw,
   ArrowRight,
   Trash2,
   CircleAlert,
@@ -17,7 +17,7 @@ import { formatDate, interviewLink } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
+export { Loading } from "@/components/loading-state";
 import {
   Table,
   TableBody,
@@ -39,15 +39,17 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function PageIntro({
+  title,
   description,
   action,
   className,
 }: {
+  title?: string;
   description?: string;
   action?: React.ReactNode;
   className?: string;
 }) {
-  if (!description && !action) return null;
+  if (!title && !description && !action) return null;
   return (
     <div
       className={cn(
@@ -55,28 +57,20 @@ export function PageIntro({
         className,
       )}
     >
-      {description && (
-        <p className="max-w-[65ch] text-base leading-relaxed text-muted-foreground">
-          {description}
-        </p>
-      )}
+      <div className="min-w-0">
+        {title && <h2 className="type-page-title">{title}</h2>}
+        {description && (
+          <p
+            className={cn(
+              "max-w-[65ch] type-ui text-muted-foreground",
+              title && "mt-2",
+            )}
+          >
+            {description}
+          </p>
+        )}
+      </div>
       {action && <div className="ml-auto">{action}</div>}
-    </div>
-  );
-}
-export function Loading({ label = "Loading…" }: { label?: string }) {
-  return (
-    <div className="space-y-5 py-5" role="status">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        {label}
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3" aria-hidden="true">
-        <Skeleton className="h-28" />
-        <Skeleton className="h-28" />
-        <Skeleton className="h-28" />
-      </div>
-      <Skeleton className="h-52" aria-hidden="true" />
     </div>
   );
 }
@@ -96,13 +90,13 @@ export function ErrorState({
   action?: React.ReactNode;
 }) {
   return (
-    <Alert className="p-5 sm:p-6">
-      <CircleAlert className="text-muted-foreground" aria-hidden="true" />
+    <Alert className="max-w-3xl gap-x-3 p-5 sm:p-6 [overflow-wrap:anywhere]">
+      <CircleAlert className="text-destructive-text" aria-hidden="true" />
       <AlertTitle>
-        <h2 className="text-base font-medium">{title}</h2>
+        <h2 className="type-subsection-title">{title}</h2>
       </AlertTitle>
       <AlertDescription>
-        <p>{message}</p>
+        <p className="max-w-[65ch] leading-relaxed">{message}</p>
         {(retry || action) && (
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {retry && (
@@ -110,7 +104,10 @@ export function ErrorState({
                 className="w-full sm:w-auto"
                 onClick={retry}
                 loading={retrying}
+                aria-label={retryLabel}
+                loadingLabel="Trying again…"
               >
+                <RefreshCw aria-hidden="true" />
                 {retryLabel}
               </Button>
             )}
@@ -125,8 +122,10 @@ export function InlineAlert({
   children,
   variant = "destructive",
   className,
+  action,
 }: {
   children: React.ReactNode;
+  action?: React.ReactNode;
   variant?: "destructive" | "warning";
   className?: string;
 }) {
@@ -134,15 +133,49 @@ export function InlineAlert({
     <Alert
       variant={variant}
       role={variant === "warning" ? "status" : "alert"}
-      className={className}
+      className={cn("min-w-0 [overflow-wrap:anywhere]", className)}
     >
       {variant === "warning" ? (
         <TriangleAlert aria-hidden="true" />
       ) : (
         <CircleAlert aria-hidden="true" />
       )}
-      <AlertDescription>{children}</AlertDescription>
+      <AlertDescription className="min-w-0">
+        {children}
+        {action && <div className="mt-3 flex flex-wrap gap-2">{action}</div>}
+      </AlertDescription>
     </Alert>
+  );
+}
+export function RefreshNotice({
+  message,
+  retry,
+  retrying = false,
+}: {
+  message: string;
+  retry: () => void;
+  retrying?: boolean;
+}) {
+  return (
+    <div
+      role="status"
+      className="mb-5 flex min-w-0 flex-col items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm sm:flex-row sm:items-center"
+    >
+      <p className="min-w-0 flex-1 text-muted-foreground [overflow-wrap:anywhere]">
+        {message}
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={retry}
+        loading={retrying}
+        loadingLabel="Refreshing…"
+        aria-label="Retry refresh"
+      >
+        <RefreshCw aria-hidden="true" />
+        Retry refresh
+      </Button>
+    </div>
   );
 }
 export function EmptyState() {
@@ -269,7 +302,7 @@ export function InterviewRows({
             <TableHead className="hidden w-32 text-xs text-muted-foreground min-[1100px]:table-cell">
               Date
             </TableHead>
-            <TableHead className="w-28 text-xs text-muted-foreground">
+            <TableHead className="w-40 text-xs text-muted-foreground">
               Status
             </TableHead>
             {onDelete && (
@@ -285,7 +318,7 @@ export function InterviewRows({
               <TableCell className="py-4 pl-4 sm:pl-5">
                 <Link
                   href={interviewLink(item)}
-                  className="block rounded-sm text-sm font-medium hover:text-primary"
+                  className="block rounded-sm text-sm font-medium hover:text-link"
                 >
                   {item.role} interview
                   <span className="mt-1 block text-xs font-normal text-muted-foreground min-[1100px]:hidden">
@@ -305,7 +338,7 @@ export function InterviewRows({
                 <Badge
                   variant={
                     item.status === "completed"
-                      ? "success"
+                      ? "secondary"
                       : item.status === "active"
                         ? "warning"
                         : "info"
@@ -338,7 +371,7 @@ export function InterviewRows({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        className="hover:bg-destructive-surface hover:text-destructive"
+                        className="hover:bg-destructive-surface hover:text-destructive-text"
                         aria-label={`Delete ${item.role} interview`}
                         disabled={deleting}
                       >

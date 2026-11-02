@@ -2,10 +2,19 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import "./globals.css";
+import { appearanceScript } from "@/components/appearance";
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
   weight: "100 900",
+  display: "swap",
+  fallback: ["Arial", "sans-serif"],
+});
+const overusedGrotesk = localFont({
+  src: "./fonts/OverusedGrotesk-VF.woff2",
+  variable: "--font-overused-grotesk",
+  weight: "300 900",
+  style: "normal",
   display: "swap",
   fallback: ["Arial", "sans-serif"],
 });
@@ -30,7 +39,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      className={`dark ${geistSans.variable} ${overusedGrotesk.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: appearanceScript }} />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

@@ -9,6 +9,7 @@ import {
   InterviewRows,
   Loading,
   ErrorState,
+  RefreshNotice,
   InlineAlert,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,20 @@ export default function History() {
     );
   return (
     <Workspace>
+      {query.data && (query.isError || query.fetchStatus === "paused") && (
+        <RefreshNotice
+          message={
+            query.fetchStatus === "paused"
+              ? "You’re offline. Showing the last loaded version."
+              : "This section couldn’t refresh. Showing the last loaded version."
+          }
+          retry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
+      )}
       <PageIntro
+        title="Your interviews"
+        description="Your saved conversations and reviews."
         action={
           query.data?.length ? (
             <Button asChild>
@@ -66,14 +80,16 @@ export default function History() {
               ["active", "In progress"],
               ["draft", "Drafts"],
             ].map(([value, label]) => (
-              <button
+              <Button
                 key={value}
+                type="button"
+                variant="filter"
                 onClick={() => setStatus(value!)}
                 aria-pressed={status === value}
-                className={`min-h-11 border-b-2 text-xs sm:text-sm ${status === value ? "border-foreground font-medium text-foreground" : "border-transparent text-muted-foreground"}`}
+                className="min-h-10"
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         </>
@@ -114,11 +130,21 @@ export default function History() {
           </div>
         </div>
       )}
-      {query.isPending ? (
-        <Loading />
-      ) : query.error ? (
+      {!query.data &&
+      !(
+        query.isError ||
+        query.errorUpdatedAt > 0 ||
+        query.fetchStatus === "paused"
+      ) ? (
+        <Loading label="Loading your interviews…" layout="history" />
+      ) : !query.data ? (
         <ErrorState
-          message={query.error.message}
+          title="We couldn’t load your interviews"
+          message={
+            query.fetchStatus === "paused"
+              ? "You’re offline. Reconnect, then try again."
+              : "Your saved interviews haven’t changed. Try loading the list again."
+          }
           retry={() => void query.refetch()}
           retrying={query.isFetching}
         />

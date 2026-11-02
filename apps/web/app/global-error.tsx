@@ -21,7 +21,7 @@ export default function GlobalError({
     textDecoration: "none",
   } as const;
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
         <title>Couldn’t load Screenly</title>
         <style>{` .desktop-guidance { display: none; } @media (max-width: 1023px) { .desktop-recovery { display: none !important; } .desktop-guidance { display: flex; } } `}</style>
@@ -29,8 +29,9 @@ export default function GlobalError({
       <body
         style={{
           margin: 0,
-          background: "#fff",
-          color: "#262626",
+          background: "#0a0a0a",
+          colorScheme: "dark",
+          color: "#f5f5f5",
           fontFamily: "Arial, sans-serif",
         }}
       >
@@ -54,7 +55,7 @@ export default function GlobalError({
             style={{
               fontSize: 14,
               lineHeight: 1.6,
-              color: "#686868",
+              color: "#a3a3a3",
               margin: "16px 0 28px",
             }}
           >
@@ -65,9 +66,9 @@ export default function GlobalError({
               onClick={reset}
               style={{
                 ...action,
-                border: "1px solid #262626",
-                background: "#262626",
-                color: "#fff",
+                border: "1px solid #d5e665",
+                background: "#d5e665",
+                color: "#26320f",
                 cursor: "pointer",
               }}
             >
@@ -77,8 +78,8 @@ export default function GlobalError({
               href="/"
               style={{
                 ...action,
-                border: "1px solid #a3a3a3",
-                color: "#262626",
+                border: "1px solid #62626b",
+                color: "#f5f5f5",
               }}
             >
               Reload Screenly
@@ -98,7 +99,7 @@ export default function GlobalError({
           }}
         >
           <h1 style={{ fontSize: 24, margin: 0 }}>Use a wider window</h1>
-          <p style={{ fontSize: 14, lineHeight: 1.6, color: "#686868" }}>
+          <p style={{ fontSize: 14, lineHeight: 1.6, color: "#a3a3a3" }}>
             Screenly needs a desktop or laptop window at least 1024 pixels wide.
           </p>
         </main>

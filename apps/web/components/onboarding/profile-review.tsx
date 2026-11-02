@@ -5,6 +5,7 @@ import {
   type ProfileSuggestions,
 } from "@repo/shared";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -23,6 +24,11 @@ const labels: Record<string, string> = {
   projects: "Projects",
   goal: "Practice goal",
 };
+export function suggestionKeys(suggestions: ProfileSuggestions) {
+  return Object.entries(suggestions)
+    .filter(([, value]) => (Array.isArray(value) ? value.length > 0 : !!value))
+    .map(([key]) => key);
+}
 function display(key: string, value: unknown) {
   if (key === "projects")
     return (value as ProfileDetails["projects"])
@@ -56,10 +62,7 @@ export function ImportReview({
 }) {
   return (
     <div>
-      <p className="mb-5 text-sm text-muted-foreground">
-        From {result.source} · {result.extractedCharacters.toLocaleString()}{" "}
-        characters read. Choose what to use.
-      </p>
+      <p className="mb-5 type-caption text-muted-foreground">{result.source}</p>
       <Tabs defaultValue="preview">
         <TabsList>
           <TabsTrigger value="preview">Profile preview</TabsTrigger>
@@ -88,7 +91,7 @@ export function ImportReview({
                     <Label htmlFor={`import-${key}`}>
                       {labels[key] ?? key}
                     </Label>
-                    <p className="mt-2 whitespace-pre-wrap break-words text-sm text-ink-secondary">
+                    <p className="mt-2 whitespace-pre-wrap break-words type-prose text-ink-secondary">
                       {display(key, value)}
                     </p>
                   </div>
@@ -114,7 +117,9 @@ export function mergeSuggestions(
   selection: string[],
 ): ProfileDetails {
   const next = { ...prior };
+  const available = new Set(suggestionKeys(suggestions));
   for (const key of selection) {
+    if (!available.has(key)) continue;
     const value = suggestions[key as keyof ProfileSuggestions];
     if (value !== undefined) Object.assign(next, { [key]: value });
   }
@@ -129,7 +134,7 @@ export function ProfileReview({
 }) {
   const sections = [
     {
-      title: "About you",
+      title: "Background",
       step: 1,
       entries: [
         details.name,
@@ -165,7 +170,7 @@ export function ProfileReview({
       ),
     },
     {
-      title: "Practice focus",
+      title: "Practice",
       step: 4,
       entries: [
         [details.role, details.level].filter(Boolean).join(" · "),
@@ -176,35 +181,42 @@ export function ProfileReview({
   ];
   return (
     <div className="divide-y">
-      {sections.map((section) => (
-        <section key={section.title} className="py-5 first:pt-0">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{section.title}</h2>
-            {onEdit && (
-              <button
-                type="button"
-                className="relative min-h-9 rounded-sm px-2 text-xs text-link underline-offset-4 hover:underline"
-                onClick={() => onEdit(section.step)}
-              >
-                Edit
-                <span className="sr-only"> {section.title.toLowerCase()}</span>
-              </button>
+      {sections
+        .filter((section) => section.entries.some(Boolean))
+        .map((section) => (
+          <section key={section.title} className="py-5 first:pt-0">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="type-section-title">{section.title}</h2>
+              {onEdit && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  className="min-h-9 rounded-sm px-2 text-xs"
+                  onClick={() => onEdit(section.step)}
+                >
+                  Edit
+                  <span className="sr-only">
+                    {" "}
+                    {section.title.toLowerCase()}
+                  </span>
+                </Button>
+              )}
+            </div>
+            {section.entries.filter(Boolean).length ? (
+              section.entries.filter(Boolean).map((entry, index) => (
+                <p
+                  key={index}
+                  className="mt-2 whitespace-pre-wrap break-words type-prose text-ink-secondary"
+                >
+                  {entry}
+                </p>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Not added</p>
             )}
-          </div>
-          {section.entries.filter(Boolean).length ? (
-            section.entries.filter(Boolean).map((entry, index) => (
-              <p
-                key={index}
-                className="mt-2 whitespace-pre-wrap break-words text-sm text-ink-secondary"
-              >
-                {entry}
-              </p>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">Not added</p>
-          )}
-        </section>
-      ))}
+          </section>
+        ))}
     </div>
   );
 }

@@ -50,9 +50,7 @@ export default function SignIn() {
         errorCallbackURL: `${window.location.origin}/auth/sign-in?error=oauth`,
       });
       if (result.error) {
-        setError(
-          result.error.message ?? "Google sign-in failed. Please try again.",
-        );
+        setError("Google sign-in failed. Please try again.");
         setSocial(false);
       }
     } catch {
@@ -62,34 +60,46 @@ export default function SignIn() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-sidebar">
+    <div className="flex min-h-dvh flex-col bg-background">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
         <Brand />
         <Link
           href="/"
-          className="inline-flex min-h-11 items-center gap-2 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex min-h-11 items-center gap-2 type-ui text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to home
         </Link>
       </header>
       <main className="flex flex-1 items-center justify-center px-6 py-10 sm:py-16">
-        <div className="w-full max-w-[400px] rounded-xl border bg-card p-6 sm:p-8">
-          <h1 className="text-2xl font-semibold tracking-[-0.025em]">
-            Sign in
-          </h1>
-          <div className="mt-8 flex flex-col gap-4" aria-label="Google sign-in">
+        <div className="w-full max-w-[400px] rounded-2xl border bg-card p-6 sm:p-8">
+          <h1 className="type-page-title">Sign in</h1>
+          <p className="mt-2 type-ui text-muted-foreground">
+            Continue to your practice workspace.
+          </p>
+          <div className="mt-7 flex flex-col gap-4" aria-label="Google sign-in">
             {error && <InlineAlert>{error}</InlineAlert>}
-            {capabilities.isError ? (
-              <InlineAlert>
-                Could not check sign-in availability.
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => void capabilities.refetch()}
-                >
-                  Try again
-                </Button>
+            {!capabilities.data &&
+            (capabilities.isError ||
+              capabilities.errorUpdatedAt > 0 ||
+              capabilities.fetchStatus === "paused") ? (
+              <InlineAlert
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void capabilities.refetch()}
+                    loading={capabilities.isFetching}
+                    loadingLabel="Checking availability…"
+                    aria-label="Try again"
+                  >
+                    Try again
+                  </Button>
+                }
+              >
+                {capabilities.fetchStatus === "paused"
+                  ? "You’re offline. Reconnect to sign in."
+                  : "Could not check sign-in availability."}
               </InlineAlert>
             ) : capabilities.data && !capabilities.data.google ? (
               <InlineAlert>
@@ -98,8 +108,20 @@ export default function SignIn() {
             ) : null}
             <Button
               variant="outline"
-              className="min-h-[52px] w-full justify-between px-5"
-              loading={social || capabilities.isPending || isPending}
+              className="min-h-11 w-full justify-between px-5"
+              loading={
+                social ||
+                (capabilities.isPending && capabilities.errorUpdatedAt === 0) ||
+                isPending
+              }
+              aria-label="Continue with Google"
+              loadingLabel={
+                social
+                  ? "Opening Google…"
+                  : isPending
+                    ? "Checking your session…"
+                    : "Checking availability…"
+              }
               disabled={!capabilities.data?.google || !!session || localPending}
               onClick={signIn}
             >
@@ -113,7 +135,7 @@ export default function SignIn() {
               />
             </Button>
           </div>
-          <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
+          <p className="mt-4 type-ui text-muted-foreground">
             New accounts are created with Google.
           </p>
           {DevelopmentLogin && capabilities.data?.devLogin && (

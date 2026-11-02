@@ -12,6 +12,11 @@ type ToolDelta = {
   function?: { name?: string; arguments?: string };
 };
 type Pending = { id?: string; type?: string; name?: string; arguments: string };
+type ValidatedToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
 export type ReplyPart =
   | string
   | { type: "end_interview"; request: EndInterviewRequest }
@@ -53,11 +58,13 @@ export class EndToolStream {
   finish(): {
     end: EndInterviewRequest | null;
     observation: InterviewObservation | null;
+    calls: ValidatedToolCall[];
   } {
     if (this.calls.size > 2)
       throw new Error("Too many interviewer tool calls.");
     let end: EndInterviewRequest | null = null;
     let observation: InterviewObservation | null = null;
+    const calls: ValidatedToolCall[] = [];
     for (const call of this.calls.values()) {
       if (call.type !== "function" || !call.id)
         throw new Error("Unknown or malformed tool call.");
@@ -67,13 +74,23 @@ export class EndToolStream {
       } catch {
         throw new Error("Malformed interviewer tool arguments.");
       }
-      if (call.name === "end_interview" && !end)
+      if (call.name === "end_interview" && !end) {
         end = endInterviewSchema.parse(raw);
-      else if (call.name === "record_interview_observation" && !observation)
+        calls.push({
+          id: call.id,
+          type: "function",
+          function: { name: call.name, arguments: JSON.stringify(end) },
+        });
+      } else if (call.name === "record_interview_observation" && !observation) {
         observation = interviewObservationSchema.parse(raw);
-      else throw new Error("Duplicate or unknown interviewer tool call.");
+        calls.push({
+          id: call.id,
+          type: "function",
+          function: { name: call.name, arguments: JSON.stringify(observation) },
+        });
+      } else throw new Error("Duplicate or unknown interviewer tool call.");
     }
-    return { end, observation };
+    return { end, observation, calls };
   }
 }
 

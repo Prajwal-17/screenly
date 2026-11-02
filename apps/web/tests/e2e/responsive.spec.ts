@@ -16,20 +16,30 @@ test("desktop routes fit the supported widths with long content", async ({
     for (const path of [
       "/",
       "/interviews/new",
+      "/interviews/draft",
       "/history",
       "/interviews/completed/feedback",
       "/settings",
-      "/help",
-      "/onboarding?edit=1",
+      "/dashboard",
+      "/profile",
+      "/memory",
+      "/onboarding",
     ]) {
+      api.profile.status = path === "/onboarding" ? "draft" : "complete";
+      if (path === "/onboarding") api.profile.onboarding.step = 1;
       await page.goto(path);
+      if (path === "/onboarding")
+        await expect(
+          page.getByRole("button", { name: "Import resume", exact: true }),
+        ).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
       await expect(page.getByRole("main")).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       if (path !== "/" && !path.startsWith("/onboarding")) {
         await expect(page.locator("#workspace-content")).toBeFocused();
         await expect(
           page
-            .getByRole("navigation", { name: "Main navigation" })
+            .getByRole("navigation", { name: "Interview actions" })
             .getByRole("link", { name: "New interview", exact: true }),
         ).toBeVisible();
       }
@@ -40,10 +50,14 @@ test("desktop routes fit the supported widths with long content", async ({
         `${path} at ${width}px`,
       ).toBe(true);
       if (
-        width === 1440 &&
+        (width === 1440 || (width === 1920 && path === "/interviews/new")) &&
         [
           "/history",
-          "/onboarding?edit=1",
+          "/profile",
+          "/settings",
+          "/interviews/new",
+          "/interviews/draft",
+          "/onboarding",
           "/interviews/completed/feedback",
         ].includes(path)
       ) {
@@ -58,6 +72,23 @@ test("desktop routes fit the supported widths with long content", async ({
         });
       }
     }
+  }
+  api.profile.status = "complete";
+  await page.setViewportSize({ width: 1024, height: 600 });
+  for (const [path, action] of [
+    ["/interviews/new", "Continue to audio"],
+    ["/interviews/draft", "Start interview"],
+  ]) {
+    await page.goto(path!);
+    await expect(
+      page.getByRole("button", { name: action!, exact: true }),
+    ).toBeInViewport();
+    await page.screenshot({
+      path: testInfo.outputPath(
+        `${path!.endsWith("new") ? "role" : "audio"}-1024-short.png`,
+      ),
+      fullPage: true,
+    });
   }
 });
 
@@ -165,7 +196,7 @@ test("narrow screens show desktop guidance and text scaling reflows history", as
     ).toBeVisible();
     await expect(
       page
-        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("navigation", { name: "Interview actions" })
         .getByRole("link", { name: "New interview", exact: true }),
     ).toBeHidden();
   }

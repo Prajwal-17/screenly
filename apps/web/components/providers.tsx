@@ -6,6 +6,7 @@ import { useUIStore } from "@/store/uiStore";
 import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { Wordmark } from "@/components/wordmark";
+import { AppearanceProvider } from "@/components/appearance";
 export function Providers({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const isLanding = path === "/";
@@ -58,26 +59,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   return (
     <QueryClientProvider client={client}>
-      <MotionConfig reducedMotion="user">
-        <div className={isLanding ? undefined : "max-[1024px]:hidden"}>
-          {children}
-        </div>
-        {!isLanding && (
-          <main className="fixed inset-0 z-[100] hidden items-center justify-center bg-background px-8 max-[1024px]:flex">
-            <div className="max-w-md">
-              <Wordmark />
-              <h1 className="mt-6 text-2xl font-semibold tracking-tight">
-                Use a wider window
-              </h1>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                Screenly needs a desktop or laptop window at least 1024 pixels
-                wide. If an interview is in progress, it remains open while you
-                resize.
-              </p>
-            </div>
-          </main>
-        )}
-      </MotionConfig>
+      <AppearanceProvider>
+        <MotionConfig reducedMotion="user">
+          <div className={isLanding ? undefined : "max-[1024px]:hidden"}>
+            {children}
+          </div>
+          {!isLanding && (
+            <main className="fixed inset-0 z-[100] hidden items-center justify-center bg-background px-8 max-[1024px]:flex">
+              <div className="max-w-md">
+                <Wordmark />
+                <h1 className="mt-6 text-2xl font-semibold tracking-tight">
+                  Use a wider window
+                </h1>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  Screenly needs a desktop or laptop window at least 1024 pixels
+                  wide. If an interview is in progress, it remains open while
+                  you resize.
+                </p>
+              </div>
+            </main>
+          )}
+        </MotionConfig>
+      </AppearanceProvider>
     </QueryClientProvider>
   );
 }

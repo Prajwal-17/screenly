@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { ArrowRight, Code2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { InlineAlert } from "@/components/common";
 import { request } from "@/lib/api";
 
@@ -59,9 +60,7 @@ export default function DevelopmentLogin({
         Email-only access to this local workspace.
       </p>
       <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
-        <label className="text-sm font-medium" htmlFor="local-email">
-          Development email
-        </label>
+        <Label htmlFor="local-email">Development email</Label>
         <Input
           id="local-email"
           type="email"
@@ -85,6 +84,7 @@ export default function DevelopmentLogin({
           variant="secondary"
           className="w-full"
           loading={pending}
+          loadingLabel="Opening your workspace…"
           disabled={disabled}
         >
           Enter local workspace <ArrowRight aria-hidden="true" />

@@ -60,7 +60,7 @@ function MessageBubble({
       >
         <div
           className={cn(
-            "mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-muted-foreground",
+            "mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 type-caption text-muted-foreground",
             candidate && "justify-end",
           )}
         >
@@ -92,7 +92,7 @@ function MessageBubble({
             live && "border-dashed border-input",
           )}
         >
-          <p className="max-w-[75ch] text-[15px] leading-[1.7] whitespace-pre-wrap">
+          <p className="max-w-[75ch] type-prose whitespace-pre-wrap">
             {content}
           </p>
         </div>
@@ -153,12 +153,12 @@ const TranscriptLine = memo(function TranscriptLine({
         )}
       </MessageContent>
       {live && (
-        <span className="text-[11px] text-muted-foreground">
+        <span className="type-caption text-muted-foreground">
           {candidate ? "Transcribing…" : "Responding…"}
         </span>
       )}
       {message.status === "interrupted" && (
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1 type-caption text-muted-foreground">
           <CornerDownLeft className="size-3" aria-hidden="true" />
           Interrupted
         </span>

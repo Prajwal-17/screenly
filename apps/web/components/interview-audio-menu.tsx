@@ -292,7 +292,10 @@ export function InterviewAudioMenu({
             </>
           )}
           {error && (
-            <p role="alert" className="px-2.5 py-2 text-xs text-destructive">
+            <p
+              role="alert"
+              className="px-2.5 py-2 text-xs text-destructive-text"
+            >
               {error}
             </p>
           )}

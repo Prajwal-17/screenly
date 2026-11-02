@@ -25,7 +25,7 @@ export function PageRecovery({
           className="mb-5 size-6 text-muted-foreground"
           aria-hidden="true"
         />
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="type-page-title">{title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           {children}
         </p>

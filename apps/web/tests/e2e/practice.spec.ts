@@ -12,7 +12,7 @@ test("role entry uses saved experience and sends only the selected role", async 
     page.getByText("Mid-level", { exact: false }).first(),
   ).toBeVisible();
   const start = page.getByRole("button", {
-    name: "Check microphone",
+    name: "Continue to audio",
     exact: true,
   });
   let release!: () => void;
@@ -49,9 +49,11 @@ test("missing saved experience blocks creation; profile and service failures ret
 }) => {
   api.profile.details.level = "";
   await page.goto("/interviews/new");
-  await expect(page.getByText("Choose your experience level")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Check microphone" }),
+    page.getByRole("radiogroup", { name: "Experience level", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue to audio" }),
   ).toBeDisabled();
   await expect(
     page.getByRole("link", { name: "Complete profile" }),
@@ -69,7 +71,7 @@ test("missing saved experience blocks creation; profile and service failures ret
   api.failures.delete("GET /api/profile");
   await page.getByRole("button", { name: "Retry loading profile" }).click();
   await expect(
-    page.getByRole("button", { name: "Check microphone" }),
+    page.getByRole("button", { name: "Continue to audio" }),
   ).toBeEnabled();
 });
 
@@ -86,7 +88,7 @@ test("missing experience can be saved inline and continued without completing on
   await page.goto("/interviews/new?role=Backend");
   await page.getByRole("radio", { name: "Senior", exact: true }).click();
   await page
-    .getByRole("button", { name: "Check microphone", exact: true })
+    .getByRole("button", { name: "Continue to audio", exact: true })
     .click();
   await expect(
     page.getByText("Could not save experience. Retry."),
@@ -98,7 +100,7 @@ test("missing experience can be saved inline and continued without completing on
   ).toBe(false);
   api.failures.delete("POST /api/profile/experience");
   await page
-    .getByRole("button", { name: "Check microphone", exact: true })
+    .getByRole("button", { name: "Continue to audio", exact: true })
     .click();
   await expect(page).toHaveURL(/\/interviews\/created$/);
   expect(api.profile.details.level).toBe("Senior");
@@ -115,14 +117,76 @@ test("create failure preserves role and retries", async ({ page, api }) => {
   });
   await page.goto("/interviews/new");
   await page.getByRole("radio", { name: "Data Engineering" }).click();
-  await page.getByRole("button", { name: "Check microphone" }).click();
+  await page.getByRole("button", { name: "Continue to audio" }).click();
   await expect(page.getByText("Could not create interview.")).toBeVisible();
   await expect(
     page.getByRole("radio", { name: "Data Engineering" }),
   ).toBeChecked();
   api.failures.delete("POST /api/interviews");
-  await page.getByRole("button", { name: "Check microphone" }).click();
+  await page.getByRole("button", { name: "Continue to audio" }).click();
   await expect(page).toHaveURL(/\/interviews\/created$/);
+});
+
+test("an edited goal retries before creation and preserves newer profile fields", async ({
+  page,
+  api,
+}) => {
+  api.profile.details.goal = "Compare implementation choices.";
+  await page.goto("/interviews/new?role=Backend");
+  const goal = page.getByRole("textbox", { name: "Practice goal" });
+  await expect(goal).toHaveValue("Compare implementation choices.");
+  await goal.fill("Explain technical trade-offs clearly.");
+  await expect(
+    page.getByText("Saved to your profile when you continue."),
+  ).toBeVisible();
+  // A later profile edit must survive the explicit goal save.
+  api.profile.details.headline = "Updated in another tab";
+  api.profile.details.stack.push("Zod");
+  api.profile.onboarding.step = 4;
+  api.failures.set("PUT /api/profile", {
+    status: 503,
+    error: "Private save failure",
+  });
+  await page
+    .getByRole("button", { name: "Continue to audio", exact: true })
+    .click();
+  await expect(
+    page.getByText("Could not save your practice goal. Try again."),
+  ).toBeVisible();
+  await expect(goal).toHaveValue("Explain technical trade-offs clearly.");
+  await expect(page.getByText("Private save failure")).toHaveCount(0);
+  expect(
+    api.requests.some(
+      (r) => r.method === "POST" && r.path === "/api/interviews",
+    ),
+  ).toBe(false);
+  api.failures.delete("PUT /api/profile");
+  await page
+    .getByRole("button", { name: "Continue to audio", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/interviews\/created$/);
+  expect(api.profile.details.goal).toBe(
+    "Explain technical trade-offs clearly.",
+  );
+  expect(api.profile.details.headline).toBe("Updated in another tab");
+  expect(api.profile.details.stack).toContain("Zod");
+  expect(api.profile.onboarding.step).toBe(4);
+  expect(api.profile.status).toBe("complete");
+  const creation = api.requests.findIndex(
+    (r) => r.method === "POST" && r.path === "/api/interviews",
+  );
+  const save = api.requests.reduce(
+    (last, request, index) =>
+      request.method === "PUT" && request.path === "/api/profile"
+        ? index
+        : last,
+    -1,
+  );
+  expect(save).toBeLessThan(creation);
+  expect(api.requests[creation]!.body).toEqual({ role: "Backend" });
+  await expect(
+    page.getByRole("link", { name: "Change role", exact: true }),
+  ).toHaveAttribute("href", "/interviews/new?role=Backend");
 });
 
 test("preflight microphone denial retries and service unavailability blocks starting", async ({
@@ -130,6 +194,8 @@ test("preflight microphone denial retries and service unavailability blocks star
   api,
 }) => {
   await page.addInitScript(() => {
+    const streams: MediaStream[] = [];
+    Object.assign(window, { __preflightStreams: streams });
     const original = navigator.mediaDevices.getUserMedia.bind(
       navigator.mediaDevices,
     );
@@ -138,19 +204,62 @@ test("preflight microphone denial retries and service unavailability blocks star
       deny
         ? ((deny = false),
           Promise.reject(new DOMException("Denied", "NotAllowedError")))
-        : original(constraints);
+        : original(constraints).then((stream) => {
+            streams.push(stream);
+            return stream;
+          });
   });
   await page.goto("/interviews/draft");
-  await page.getByRole("button", { name: "Check microphone" }).click();
+  await page.getByRole("button", { name: "Test input" }).click();
+  await expect(
+    page.getByRole("meter", { name: "Microphone input level" }),
+  ).toBeVisible();
   await expect(
     page.getByText("Allow microphone access in your browser, then retry."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Check microphone" }).click();
+  await page.getByRole("button", { name: "Test input" }).click();
   await expect(
-    page.getByRole("button", { name: "Check microphone again" }),
+    page.getByRole("button", { name: "Start interview", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Test input again" }),
   ).toBeVisible();
+  await expect(
+    page.getByText("Microphone access confirmed.", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as typeof window & { __preflightStreams: MediaStream[] }
+        ).__preflightStreams.every((stream) =>
+          stream.getTracks().every((track) => track.readyState === "ended"),
+        ),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Test sound", exact: true }).click();
+  await expect(
+    page.getByText("Test sound played", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Test input again", exact: true })
+    .click();
+  await page.getByRole("link", { name: "Change role", exact: true }).click();
+  await expect(page).toHaveURL(/\/interviews\/new\?role=Frontend$/);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as typeof window & { __preflightStreams: MediaStream[] }
+        ).__preflightStreams.every((stream) =>
+          stream.getTracks().every((track) => track.readyState === "ended"),
+        ),
+      ),
+    )
+    .toBe(true);
   api.capabilities.voice = false;
-  await page.reload();
+  await page.goto("/interviews/draft");
   await expect(
     page.getByRole("button", { name: "Start interview" }),
   ).toBeDisabled();
@@ -261,11 +370,11 @@ for (const status of ["pending", "generating", "failed", "skipped"] as const) {
   });
 }
 
-test("settings lists owned practice memory and dismisses it without deleting source", async ({
+test("practice memory lists owned findings and dismisses it without deleting source", async ({
   page,
   api,
 }) => {
-  await page.goto("/settings");
+  await page.goto("/memory");
   await expect(
     page.getByText("Explain a concrete profiler trace."),
   ).toBeVisible();
@@ -282,7 +391,8 @@ test("playback preference persists from Settings into the live audio menu", asyn
   page,
 }) => {
   await page.goto("/settings");
-  await page.getByLabel("Interviewer playback speed").selectOption("1.5");
+  await page.getByLabel("Interviewer playback speed").press("Enter");
+  await page.getByRole("option", { name: "1.5×" }).click();
   await page.goto("/interviews/active");
   await page.getByRole("button", { name: "Audio settings" }).click();
   await expect(

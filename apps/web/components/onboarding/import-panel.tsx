@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, FileText, Link2, Loader2, Upload, X } from "lucide-react";
+import { ArrowRight, Check, FileText, Link2, Loader2, X } from "lucide-react";
 import {
   profileURLIssue,
   type ProfileImport,
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineAlert } from "@/components/common";
+import { cn } from "@/lib/utils";
 
 const stages = [
   { id: "uploading", label: "Receiving your source" },
@@ -26,10 +27,12 @@ export function ImportPanel({
   onResult,
   onBusy,
   ready = true,
+  compact = false,
 }: {
   onResult: (result: ProfileImport) => void;
   onBusy: (busy: boolean) => void;
   ready?: boolean;
+  compact?: boolean;
 }) {
   const capabilities = useQuery({
     queryKey: ["capabilities"],
@@ -47,15 +50,25 @@ export function ImportPanel({
   const [showText, setShowText] = useState(false);
   const [dragging, setDragging] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const mounted = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const last = useRef<File | { url?: string; text?: string } | null>(null);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       abort.current?.abort();
-    },
-    [],
-  );
+    };
+  }, []);
+  function cancel() {
+    const current = abort.current;
+    abort.current = null;
+    current?.abort();
+    setBusy(false);
+    onBusy(false);
+  }
   async function start(input: File | { url?: string; text?: string }) {
-    if (busy || !ready) return;
+    if (abort.current || !ready) return;
     if (!(input instanceof File) && input.url) {
       const issue = profileURLIssue(input.url);
       if (issue) {
@@ -86,11 +99,25 @@ export function ImportPanel({
       const result = await profileApi.import(
         input,
         AbortSignal.any([controller.signal, AbortSignal.timeout(100000)]),
-        setStage,
+        (next) => {
+          if (mounted.current && abort.current === controller) setStage(next);
+        },
       );
-      if (!controller.signal.aborted) onResult(result);
+      if (
+        mounted.current &&
+        abort.current === controller &&
+        !controller.signal.aborted
+      ) {
+        setBusy(false);
+        onBusy(false);
+        onResult(result);
+      }
     } catch (cause) {
-      if (!controller.signal.aborted) {
+      if (
+        mounted.current &&
+        abort.current === controller &&
+        !controller.signal.aborted
+      ) {
         setError(
           cause instanceof Error
             ? cause.message
@@ -100,8 +127,11 @@ export function ImportPanel({
           setExtracted(cause.extractedText);
       }
     } finally {
-      setBusy(false);
-      onBusy(false);
+      if (mounted.current && abort.current === controller) {
+        abort.current = null;
+        setBusy(false);
+        onBusy(false);
+      }
     }
   }
   const available = ready && !!capabilities.data?.llm;
@@ -109,14 +139,11 @@ export function ImportPanel({
     return (
       <div className="py-4" aria-busy="true">
         <div className="mb-8 flex items-center gap-3">
-          <div className="grid size-12 place-items-center rounded-xl bg-accent text-primary">
+          <div className="grid size-12 place-items-center rounded-xl bg-accent text-accent-foreground">
             <FileText className="size-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{filename}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Keep this page open. Your draft is safe.
-            </p>
           </div>
         </div>
         <ol className="space-y-6" aria-label="Import progress">
@@ -128,10 +155,10 @@ export function ImportPanel({
                 className={`flex items-center gap-3 text-sm ${index > current ? "text-muted-foreground" : "text-foreground"}`}
               >
                 {index < current ? (
-                  <Check className="size-5 text-primary" aria-hidden="true" />
+                  <Check className="size-5 text-link" aria-hidden="true" />
                 ) : index === current ? (
                   <Loader2
-                    className="size-5 animate-spin text-primary"
+                    className="size-5 animate-spin motion-reduce:animate-none text-link"
                     aria-hidden="true"
                   />
                 ) : (
@@ -145,15 +172,8 @@ export function ImportPanel({
             );
           })}
         </ol>
-        <p className="mt-8 text-xs text-muted-foreground">
-          Larger resumes may take a minute. You’ll review everything before it’s
-          used.
-        </p>
-        <Button
-          variant="ghost"
-          className="-ml-3 mt-3"
-          onClick={() => abort.current?.abort()}
-        >
+
+        <Button variant="ghost" className="-ml-3 mt-3" onClick={cancel}>
           <X aria-hidden="true" />
           Cancel import
         </Button>
@@ -187,71 +207,79 @@ export function ImportPanel({
         </div>
       )}
       {capabilities.isError ? (
-        <InlineAlert>
-          Could not check AI availability.{" "}
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => void capabilities.refetch()}
-          >
-            Retry
-          </Button>
+        <InlineAlert
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              loading={capabilities.isFetching}
+              loadingLabel="Checking availability…"
+              onClick={() => void capabilities.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          Could not check AI availability. You can still enter your details
+          manually.
         </InlineAlert>
-      ) : ready && !capabilities.isPending && !available ? (
+      ) : capabilities.isPending ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Checking import availability…
+        </p>
+      ) : ready && !available ? (
         <p role="status" className="text-sm text-muted-foreground">
           AI import is unavailable. You can enter your details manually.
         </p>
       ) : null}
       <Tabs value={sourceTab} onValueChange={setSourceTab}>
-        <TabsList className="w-full">
-          <TabsTrigger value="resume">
-            <FileText className="hidden size-4 sm:block" aria-hidden="true" />
-            Resume
-          </TabsTrigger>
-          <TabsTrigger value="link">
-            <Link2 className="hidden size-4 sm:block" aria-hidden="true" />
-            Profile link
-          </TabsTrigger>
+        <TabsList className={compact ? "mb-2" : "w-full"}>
+          <TabsTrigger value="resume">Resume</TabsTrigger>
+          <TabsTrigger value="link">Profile link</TabsTrigger>
           <TabsTrigger value="text">Paste text</TabsTrigger>
         </TabsList>
         <TabsContent value="resume">
           <div
-            onDragOver={(e) => {
-              e.preventDefault();
+            onDragOver={(event) => {
+              event.preventDefault();
               setDragging(true);
             }}
             onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
+            onDrop={(event) => {
+              event.preventDefault();
               setDragging(false);
-              if (available && e.dataTransfer.files[0])
-                void start(e.dataTransfer.files[0]);
+              if (available && event.dataTransfer.files[0])
+                void start(event.dataTransfer.files[0]);
             }}
-            className={`flex min-h-[210px] flex-col items-center justify-center rounded-xl border border-dashed px-5 py-6 text-center ${dragging ? "border-primary bg-accent" : "border-input bg-muted/50"}`}
+            className={dragging ? "rounded-lg bg-accent" : ""}
           >
-            <Upload
-              className="mb-4 size-6 text-primary"
-              strokeWidth={1.5}
-              aria-hidden="true"
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".pdf,.doc,.docx,.txt"
+              aria-label="Upload resume"
+              className="sr-only"
+              tabIndex={-1}
+              disabled={!available}
+              onChange={(event) => {
+                if (event.target.files?.[0]) void start(event.target.files[0]);
+                event.target.value = "";
+              }}
             />
-            <p className="text-sm font-medium">Drop your resume here</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              PDF, DOCX, DOC or TXT · up to 5 MB
+            <Button
+              type="button"
+              variant="default"
+              className="min-h-14 w-full justify-start gap-3 px-4 text-base"
+              disabled={!available}
+              onClick={() => fileInput.current?.click()}
+            >
+              <FileText className="size-4" aria-hidden="true" />
+              Import resume
+              <ArrowRight className="ml-auto size-4" aria-hidden="true" />
+            </Button>
+            <p className="mt-2 type-caption text-muted-foreground">
+              PDF, DOCX, DOC or TXT · Up to 5 MB
             </p>
-            <label className="relative mt-5 inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border bg-card px-4 text-sm font-medium focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-3 hover:bg-secondary">
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                aria-label="Upload resume"
-                className="sr-only"
-                disabled={!available}
-                onChange={(e) => {
-                  if (e.target.files?.[0]) void start(e.target.files[0]);
-                  e.target.value = "";
-                }}
-              />
-              Choose file
-            </label>
           </div>
         </TabsContent>
         <TabsContent value="link">
@@ -284,7 +312,7 @@ export function ImportPanel({
               <p
                 id="source-url-error"
                 role="alert"
-                className="text-sm text-destructive"
+                className="text-sm text-destructive-text"
               >
                 {urlError}
               </p>
@@ -345,7 +373,7 @@ export function ImportPanel({
         onOpenChange={setShowText}
         title="Extracted resume text"
         description="Text extracted from your source. This isn’t stored."
-        className="max-w-[720px]"
+        className={cn("profile-surface max-w-[720px]")}
       >
         <pre className="whitespace-pre-wrap break-words px-5 pb-5 font-sans text-sm leading-relaxed">
           {extracted}

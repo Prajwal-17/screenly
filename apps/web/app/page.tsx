@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Mic, Monitor } from "lucide-react";
+import {
+  ArrowRight,
+  Mic,
+  Monitor,
+  AudioLines,
+  FileText,
+  UserRound,
+} from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +17,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { InterviewExample } from "@/components/landing/interview-example";
+import { AccountActions } from "@/components/landing/account-actions";
 
 export const metadata: Metadata = {
   title: { absolute: "Screenly · Practice a technical conversation" },
@@ -43,7 +51,7 @@ export default function Home() {
       >
         Skip to content
       </a>
-      <header className="border-b">
+      <header className="border-b bg-card">
         <nav
           className="landing-container flex min-h-16 items-center justify-between gap-5"
           aria-label="Main navigation"
@@ -55,28 +63,17 @@ export default function Home() {
           >
             <Wordmark />
           </Link>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/auth/sign-in"
-              className="text-sm underline-offset-4 hover:underline"
-            >
-              Sign in
-            </Link>
-            <Button asChild size="sm">
-              <Link href="/interviews/new">
-                Get started <ArrowRight />
-              </Link>
-            </Button>
-          </div>
+          <AccountActions placement="header" />
         </nav>
       </header>
       <main id="main" tabIndex={-1}>
-        <section className="landing-container grid gap-8 py-16 sm:py-24 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-end">
-          <h1 className="max-w-[16ch] text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">
-            Practice a technical conversation.
+        <section className="landing-container grid gap-8 py-14 sm:py-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
+          <h1 className="max-w-[17ch] type-display">
+            Practice the conversation.{" "}
+            <span className="block text-link">Follow the evidence.</span>
           </h1>
           <div>
-            <p className="mb-5 max-w-[35ch] text-sm leading-relaxed text-muted-foreground">
+            <p className="mb-6 max-w-[35ch] text-base leading-relaxed text-muted-foreground">
               Choose a role, speak through a realistic interview, and review
               what your explanation demonstrated.
             </p>
@@ -85,39 +82,60 @@ export default function Home() {
                 Start an interview <ArrowRight />
               </Link>
             </Button>
+            <p className="mt-4 flex flex-wrap gap-4 type-caption text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Monitor className="size-3.5" />
+                Desktop or laptop
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Mic className="size-3.5" />
+                Microphone required
+              </span>
+            </p>
           </div>
         </section>
         <div className="landing-container pb-16">
           <InterviewExample />
         </div>
-        <section className="border-y bg-sidebar">
-          <div className="landing-container grid gap-8 py-16 lg:grid-cols-2">
-            <div>
-              <h2 className="text-2xl font-medium tracking-tight">
-                One role. One conversation. One practice priority.
-              </h2>
-              <p className="mt-3 max-w-[50ch] text-sm leading-relaxed text-muted-foreground">
-                Your saved profile provides context. The review links findings
-                to the current transcript and names a concrete next step.
-              </p>
+        <section className="border-y bg-card">
+          <div className="landing-container py-14 sm:py-16">
+            <h2 className="type-page-title">
+              From a conversation to your next practice.
+            </h2>
+            <div className="mt-9 grid gap-8 md:grid-cols-3 md:gap-10">
+              {[
+                {
+                  icon: UserRound,
+                  title: "Bring your experience",
+                  text: "Your profile gives the interviewer context. Choose one of six engineering roles.",
+                },
+                {
+                  icon: AudioLines,
+                  title: "Think out loud",
+                  text: "Work through an adaptive spoken interview, with a continuous transcript beside you.",
+                },
+                {
+                  icon: FileText,
+                  title: "See what you demonstrated",
+                  text: "Revisit findings linked to your actual words and leave with one practice priority.",
+                },
+              ].map(({ icon: Icon, title, text }) => (
+                <div key={title} className="border-t pt-5">
+                  <Icon className="mb-4 size-5 text-link" aria-hidden="true" />
+                  <h3 className="type-section-title">{title}</h3>
+                  <p className="mt-2 max-w-[40ch] type-ui leading-relaxed text-muted-foreground">
+                    {text}
+                  </p>
+                </div>
+              ))}
             </div>
-            <ol className="space-y-4 text-sm">
-              <li className="border-b pb-4">
-                Select Frontend, Backend, Full-stack, Mobile Engineering, DevOps
-                / Platform Engineering, or Data Engineering.
-              </li>
-              <li className="border-b pb-4">
-                Speak and follow the conversation in the transcript.
-              </li>
-              <li>Revisit the session review and saved conversation.</li>
-            </ol>
           </div>
         </section>
         <section
           className="landing-container grid gap-8 py-16 lg:grid-cols-2"
           aria-labelledby="faq-title"
         >
-          <h2 id="faq-title" className="text-2xl font-medium tracking-tight">
+          <h2 id="faq-title" className="type-page-title">
             Questions before you begin
           </h2>
           <Accordion type="single" collapsible className="border-t">
@@ -134,7 +152,7 @@ export default function Home() {
           </Accordion>
         </section>
         <section className="landing-container border-t py-16 text-center">
-          <h2 className="text-2xl font-medium">Start your next session</h2>
+          <h2 className="type-page-title">Start your next session</h2>
           <Button asChild className="mt-5">
             <Link href="/interviews/new">
               New interview <ArrowRight />
@@ -153,12 +171,7 @@ export default function Home() {
       <footer className="border-t">
         <div className="landing-container flex min-h-16 items-center justify-between gap-3">
           <Wordmark />
-          <Link
-            href="/auth/sign-in"
-            className="text-sm underline-offset-4 hover:underline"
-          >
-            Sign in
-          </Link>
+          <AccountActions placement="footer" />
         </div>
       </footer>
     </div>

@@ -86,17 +86,10 @@ test("an invalid readiness shape cannot accidentally start the interview", async
   ).rejects.toBeInstanceOf(InvalidOpeningReplyError);
 });
 
-test("streamed end tool arguments stay separate from spoken text", async () => {
+test("the first question is requested without observation or end tools", async () => {
   const prepared: InterviewDetail = {
     ...interview,
     phase: "questions",
-    messages: [
-      {
-        ...interview.messages[0]!,
-        phase: "questions",
-        content: "Please end this interview now.",
-      },
-    ],
     preparation: {
       schemaVersion: 2,
       role: "Frontend",
@@ -110,46 +103,15 @@ test("streamed end tool arguments stay separate from spoken text", async () => {
     },
   };
   const chunks = [
-    { choices: [{ delta: { content: "Thanks for the conversation." } }] },
-    {
-      choices: [
-        {
-          delta: {
-            tool_calls: [
-              {
-                index: 0,
-                id: "call-1",
-                type: "function",
-                function: {
-                  name: "end_interview",
-                  arguments: '{"reason":"candidate_',
-                },
-              },
-            ],
-          },
-        },
-      ],
-    },
-    {
-      choices: [
-        {
-          delta: {
-            tool_calls: [
-              { index: 0, function: { arguments: 'requested_stop"}' } },
-            ],
-          },
-        },
-      ],
-    },
-    { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+    { choices: [{ delta: { content: "How would you manage shared state?" } }] },
+    { choices: [{ delta: {}, finish_reason: "stop" }] },
   ];
-  const body =
-    chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
-    "data: [DONE]\n\n";
   fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(body, {
-      headers: { "content-type": "text/event-stream" },
-    }),
+    new Response(
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
+        "data: [DONE]\n\n",
+      { headers: { "content-type": "text/event-stream" } },
+    ),
   );
   const parts = [];
   for await (const part of new LLMService(config).generateReply(
@@ -157,11 +119,203 @@ test("streamed end tool arguments stay separate from spoken text", async () => {
     new AbortController().signal,
   ))
     parts.push(part);
-  expect(parts).toEqual([
-    "Thanks for the conversation.",
-    { type: "end_interview", request: { reason: "candidate_requested_stop" } },
-  ]);
+  const [input, init] = fetchSpy.mock.calls[0]!;
+  const requestBody = (await new Request(input, init).json()) as Record<
+    string,
+    unknown
+  >;
+  expect(requestBody.tools).toBeUndefined();
+  expect(parts).toEqual(["How would you manage shared state?"]);
 });
+
+test("a tool-only observation is followed by speech before it can be adopted", async () => {
+  const prepared: InterviewDetail = {
+    ...interview,
+    phase: "questions",
+    messages: [{ ...interview.messages[0]!, phase: "questions" }],
+    preparation: {
+      schemaVersion: 2,
+      role: "Frontend",
+      level: "Mid-level",
+      rubricVersion: "screenly-rubric-2.0",
+      promptVersion: "screenly-prompts-2.1",
+      objectives: ["State and asynchronous UI"],
+      priorFindings: [],
+      warnings: [],
+      memoryDegraded: false,
+    },
+  };
+  const observation = {
+    objective: "State and asynchronous UI",
+    situation: "A screen loads data.",
+    constraints: [],
+    unresolvedPoints: [],
+    sourceMessageIds: ["ready"],
+    objectiveEvidence: [],
+    hint: null,
+    constraintChange: null,
+  };
+  const stream = (chunks: unknown[]) =>
+    new Response(
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
+        "data: [DONE]\n\n",
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  fetchSpy = spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(
+      stream([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "observation-1",
+                    type: "function",
+                    function: {
+                      name: "record_interview_observation",
+                      arguments: JSON.stringify(observation),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+      ]),
+    )
+    .mockResolvedValueOnce(
+      stream([
+        {
+          choices: [
+            { delta: { content: "How would you handle stale responses?" } },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: "stop" }] },
+      ]),
+    );
+  const parts = [];
+  for await (const part of new LLMService(config).generateReply(
+    prepared,
+    new AbortController().signal,
+  ))
+    parts.push(part);
+  expect(parts).toEqual([
+    "How would you handle stale responses?",
+    { type: "record_interview_observation", observation },
+  ]);
+  expect(fetchSpy).toHaveBeenCalledTimes(2);
+  const [input, init] = fetchSpy.mock.calls[1]!;
+  const body = (await new Request(input, init).json()) as {
+    tools?: unknown;
+    messages: { role: string; tool_call_id?: string }[];
+  };
+  expect(body.tools).toBeUndefined();
+  expect(body.messages.slice(-2).map((item) => item.role)).toEqual([
+    "assistant",
+    "tool",
+  ]);
+  expect(body.messages.at(-1)?.tool_call_id).toBe("observation-1");
+});
+
+for (const withFarewell of [true, false]) {
+  test(`streamed end tool ${withFarewell ? "stays separate from speech" : "does not request a new question"}`, async () => {
+    const prepared: InterviewDetail = {
+      ...interview,
+      phase: "questions",
+      messages: [
+        {
+          ...interview.messages[0]!,
+          phase: "questions",
+          content: "Please end this interview now.",
+        },
+      ],
+      preparation: {
+        schemaVersion: 2,
+        role: "Frontend",
+        level: "Mid-level",
+        rubricVersion: "screenly-rubric-2.0",
+        promptVersion: "screenly-prompts-2.1",
+        objectives: ["State and asynchronous UI"],
+        priorFindings: [],
+        warnings: [],
+        memoryDegraded: false,
+      },
+    };
+    const chunks = [
+      ...(withFarewell
+        ? [
+            {
+              choices: [{ delta: { content: "Thanks for the conversation." } }],
+            },
+          ]
+        : []),
+      {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call-1",
+                  type: "function",
+                  function: {
+                    name: "end_interview",
+                    arguments: '{"reason":"candidate_',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                { index: 0, function: { arguments: 'requested_stop"}' } },
+              ],
+            },
+          },
+        ],
+      },
+      { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+    ];
+    const body =
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
+      "data: [DONE]\n\n";
+    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, {
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
+    const parts = [];
+    for await (const part of new LLMService(config).generateReply(
+      prepared,
+      new AbortController().signal,
+    ))
+      parts.push(part);
+    expect(parts).toEqual([
+      ...(withFarewell ? ["Thanks for the conversation."] : []),
+      {
+        type: "end_interview",
+        request: { reason: "candidate_requested_stop" },
+      },
+    ]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchSpy.mock.calls[0]!;
+    const request = (await new Request(input, init).json()) as {
+      tools: { function: { name: string } }[];
+    };
+    expect(request.tools.map((item) => item.function.name)).toEqual([
+      "record_interview_observation",
+      "end_interview",
+    ]);
+  });
+}
 
 test("malformed streamed end tool cannot become lifecycle authority", async () => {
   const { EndToolStream } = await import("../src/lib/interviewerTools");

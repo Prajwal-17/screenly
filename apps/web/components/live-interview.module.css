@@ -78,6 +78,7 @@
   grid-template-columns: minmax(0, 1fr) clamp(280px, 28vw, 400px);
 }
 .stage {
+  font-family: var(--font-overused-grotesk), Arial, sans-serif;
   grid-area: 1 / 1;
   display: flex;
   min-height: 0;
@@ -195,7 +196,7 @@
   min-height: 24px;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--primary);
+  color: var(--link);
   text-align: center;
 }
 .speakerStatus svg {
