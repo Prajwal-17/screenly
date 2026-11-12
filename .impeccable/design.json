@@ -1121,6 +1121,37 @@
       "info-foreground": "#2563eb",
       "info-surface": "#eff6ff",
       "info-border": "#93c5fd"
+    },
+    "screenlyPublicEntry": {
+      "requirement": "REQ-046",
+      "identity": {
+        "mark": "custom opposing-turn S",
+        "wordmark": "screenly",
+        "compact": {
+          "markSize": "28px",
+          "fontSize": "20px"
+        },
+        "landing": {
+          "markSize": "44px",
+          "fontSize": "34px",
+          "fontWeight": 560
+        }
+      },
+      "typography": {
+        "landing-display": {
+          "fontFamily": "var(--font-geist-sans), Arial, sans-serif",
+          "fontSize": "clamp(2.375rem, 4.25vw, 3.75rem)",
+          "fontWeight": 540,
+          "lineHeight": 1.1,
+          "letterSpacing": "-0.035em"
+        }
+      },
+      "composition": {
+        "columns": "1.15fr 0.85fr",
+        "authWidth": "328px",
+        "stackBelow": "761px"
+      },
+      "colors": "inherits existing background, card, border, primary, foreground and ink-secondary tokens"
     }
   },
   "components": [
@@ -1201,7 +1232,7 @@
       "kind": "card",
       "refersTo": "working-panel",
       "description": "Flat bordered white surface for grouped content.",
-      "html": "<section class=\"ds-panel\"><h2>Interview details</h2><p>Frontend · Mid-level · 20 minutes</p></section>",
+      "html": "<section class=\"ds-panel\"><h2>Interview details</h2><p>Frontend \u00b7 Mid-level \u00b7 20 minutes</p></section>",
       "css": ".ds-panel{padding:24px;border:1px solid var(--border,#e5e5e5);border-radius:16px;background:var(--card,#ffffff);color:var(--card-foreground,#262626);font-family:var(--font-geist-sans,Arial,sans-serif);}.ds-panel h2{margin:0;font-size:18px;font-weight:500;line-height:1.4;letter-spacing:-.01em;}.ds-panel p{margin:8px 0 0;color:var(--muted-foreground,#686868);font-size:14px;}"
     },
     {

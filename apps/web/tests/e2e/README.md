@@ -1,7 +1,5 @@
 # Browser verification
 
-`verification.json` is a historical ledger; regenerate it only after a complete integrated verification run. Generated reports are local artifacts for the run. Earlier counts and desktop/touch captures belong to the superseded mobile-and-collapse policy.
-
 An earlier independent review covered ten desktop/touch resting captures under the superseded policy. Those captures are historical, not validation of the desktop-only revision.
 
 From the repository root:
@@ -43,7 +41,7 @@ Next type generation and build share `.next/types`; do not run them together. Th
 
 | Area               | Evidence                                                                                                                                                                                                                                 |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shell              | Classic sidebar, Dashboard/profile/memory routes and keyboard-accessible navigation, route title/main focus, retired-route redirects, live drawer and resize, sign-out failure/retry.                                                                                                              |
+| Shell              | Classic sidebar, Dashboard/profile/memory routes and keyboard-accessible navigation, route title/main focus, retired-route redirects, live drawer and resize, sign-out failure/retry.                                                    |
 | Auth and gates     | Session-aware homepage/no sign-in flash, signed-out entry, logout/reentry, Google availability/retry, OAuth error copy, development form gating, existing-session redirect, profile recovery/expiry, missing interview and unknown page. |
 | Entry              | Six roles, profile suggestion, saved explicit experience requirement, strict `{ role }` payload, duplicate-submit lock and create retry.                                                                                                 |
 | Preflight          | Microphone denial/retry with a fake device, speaker test and unavailable voice/interviewer gate.                                                                                                                                         |
@@ -52,7 +50,7 @@ Next type generation and build share `.next/types`; do not run them together. Th
 | Live               | Continuous transcript, partial-to-saved reconciliation, pause, replay, audio-menu focus, targeted recovery, reconnect, finish cancellation/retry and navigation guard.                                                                   |
 | Responsive         | Main routes at desktop widths, long content, short-window controls, narrow-window boundary and live session preservation, public landing at phone/tablet widths.                                                                         |
 
-The live orb, captions and default-open side transcript are preserved. `preview-fixture.mjs` models the current strict create, review and memory routes for later manual browser review; it remains synthetic only.
+The live orb, captions and default-open side transcript are preserved.
 
 These checks do not establish full screen-reader compatibility, real output-device routing, provider latency, offline transport recovery, or a performance comparison against a measured prior revision. The 200% text-size check exercises reflow, rather than a physical browser-zoom gesture. Route/root error recovery is provider-independent by construction; actual route/root-layout failures still require production-mode fault injection. Keep untested integration states explicit in review evidence.
 
@@ -61,10 +59,6 @@ These checks do not establish full screen-reader compatibility, real output-devi
 A subsequent shared T3 preview pass used the real local frontend/backend, a loopback-only synthetic account, and isolated D1 state. It exercised the landing redirect, all six manual onboarding steps, URL validation, repeatable link removal and project editing, setup validation, microphone denial, dashboard role selection, search and drawer focus, Help, history filtering and deletion, and historical 360px not-found recovery. Search dismissal was fixed to restore the desktop opener; this pass preceded the desktop-only policy. See the execution ledger in `UI_IMPLEMENTATION_PLAN.md` for exact coverage and omissions.
 
 This direct pass did not exercise the complete requested live session, feedback, import approval, all error states, or the full viewport/zoom matrix. The fixture suite below provides separate synthetic evidence for many of those states; it does not make the interactive or real-service review complete.
-
-The later synthetic shared-preview continuation is recorded in section 11 of `UI_IMPLEMENTATION_PLAN.md`. To reproduce its local fixture, keep ports 3106 and 4399 free, then start `bun run apps/web/tests/e2e/preview-fixture.mjs` from the root and `WEB_PORT=3106 NEXT_PUBLIC_API_URL=http://127.0.0.1:4399 bun run --cwd apps/web dev` in a second terminal. Open the frontend in the shared browser. The fixture binds to loopback, stores only synthetic state in memory, and is never included in the application bundle. It only models the already-active live socket, not microphone capture or provider audio. Stop both processes afterward.
-
-From a separate local shell, `curl -s -X POST -H 'content-type: application/json' --data '{"reset":true,"newProfile":true}' http://127.0.0.1:4399/__control` resets the fixture for onboarding. The same endpoint accepts `importMode` (`success`, `pending`, `error`, `empty`), `failures` keyed by `METHOD /api/path` (replace with `{}` to clear), `capabilities`, an `event` matching a shared server-event shape, or `disconnect: true`. `GET /__control` exposes synthetic state and recorded client events. These controls are test-only and must not be pointed at real data.
 
 ## Loading and recovery
 

@@ -34,6 +34,62 @@ bun run test:e2e
 
 The harness starts its own frontend and intercepts synthetic API/socket responses. See [tests/e2e/README.md](tests/e2e/README.md) for selective commands, screenshots, state coverage, and real-provider verification requirements.
 
+## Cloudflare Workers deployment
+
+The frontend deploys as its own Worker, `screenly-web`, through the
+[OpenNext Cloudflare adapter](https://opennext.js.org/cloudflare). The backend stays a separate
+Worker, so the browser talks to both origins directly.
+
+- `wrangler.jsonc` owns the Worker name, `nodejs_compat`, the `.open-next/assets` upload and the
+  `WORKER_SELF_REFERENCE` binding. It must stay aligned with the `main` and `assets` paths that
+  `opennextjs-cloudflare build` produces.
+- `open-next.config.ts` uses the default configuration. Pages are prerendered at build time and
+  data comes from the browser, so no incremental cache is provisioned. Add the
+  `r2IncrementalCache` override there before introducing server rendering or ISR.
+- `public/_headers` marks hashed `/_next/static/*` files immutable.
+- `scripts/build-audio.mjs` regenerates `public/vad` from scratch. Workers reject any static asset
+  over 25 MiB, so unused ONNX Runtime WASM variants must not accumulate there.
+
+No Worker binding types are generated. The frontend never calls `getCloudflareContext()`, so
+`wrangler types` output would be unused, and its workerd runtime declarations shadow `lib.dom`
+(`Body.json()` returns `unknown` instead of `any`), which breaks `tsc` in `lib/api.ts` and
+`lib/profile.ts`. If server-side bindings are added later, generate the types into a file excluded
+from `tsconfig.json` and the ESLint config rather than adding them to the app's global types.
+
+Build the Worker bundle without running or deploying it, run it locally in the Workers runtime, or
+deploy:
+
+```sh
+bun run --cwd apps/web build:worker   # writes .open-next/worker.js + .open-next/assets
+bun run --cwd apps/web preview
+bun run deploy:web
+```
+
+`bun run build` only runs `next build`; the Worker bundle comes from `build:worker`, which
+`preview`, `deploy` and `upload` also run first. `bunx wrangler deploy --dry-run` from `apps/web`
+reports the upload size and asset limit errors without touching your account.
+
+`preview` serves on `http://localhost:8787`, which collides with the backend; pass
+`--port 8788` to the underlying command when both run at once. `bun run --cwd apps/web dev` still
+uses `next dev` and is unchanged.
+
+`NEXT_PUBLIC_API_URL` is inlined into the browser bundle at build time, so set it for the build
+rather than in `wrangler.jsonc`:
+
+```sh
+NEXT_PUBLIC_API_URL=https://api.example.com bun run deploy:web
+```
+
+Deploy the backend first, then set its `FRONTEND_URL` and `BETTER_AUTH_URL` to the frontend origin
+and register `https://api.example.com/api/auth/callback/google` with Google. Serve both Workers
+from custom domains on the same registrable domain (for example `app.example.com` and
+`api.example.com`) so the Better Auth session cookie stays first-party; unrelated `*.workers.dev`
+subdomains are treated as cross-site by browsers that block third-party cookies.
+
+Custom domains must sit one label below the zone apex. Universal SSL covers `*.example.com`, so a
+name like `api.app.example.com` fails TLS until the zone has Advanced Certificate Manager or Total
+TLS. Use `app.example.com` plus `api.example.com`, or `app.example.com` plus `app-api.example.com`.
+
 The approved setup layout is owned by `app/interviews/new/page.tsx` and the shared RadioGroup
 row variant: flat role selection, selected session brief, optional saved profile goal and one
 Continue to audio action. Explicit goal edits merge into fresh profile data through the existing

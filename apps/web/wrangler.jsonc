@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "screenly-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "screenly-web",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+  "routes": [
+    {
+      "pattern": "screenly.prajwal.sh",
+      "custom_domain": true,
+    },
+  ],
+}

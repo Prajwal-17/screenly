@@ -61,7 +61,7 @@ bun run db:migrate:remote
 bun run deploy:backend
 ```
 
-Deployment creates the `INTERVIEWS` Durable Object binding and its SQLite-backed storage migration. D1 migrations remain an explicit deployment step. Register the production Google callback at `https://YOUR_BACKEND/api/auth/callback/google`. Deploy the frontend separately, built with `NEXT_PUBLIC_API_URL=https://YOUR_BACKEND`. Worker logs and traces are enabled in `wrangler.jsonc`.
+Deployment creates the `INTERVIEWS` Durable Object binding and its SQLite-backed storage migration. D1 migrations remain an explicit deployment step. Register the production Google callback at `https://YOUR_BACKEND/api/auth/callback/google`. Deploy the frontend separately with `bun run deploy:web`, built with `NEXT_PUBLIC_API_URL=https://YOUR_BACKEND`; see [the frontend deployment guide](../web/README.md#cloudflare-workers-deployment). Worker logs and traces are enabled in `wrangler.jsonc`.
 
 ## Local development authentication
 

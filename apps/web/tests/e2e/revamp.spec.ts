@@ -173,9 +173,7 @@ test("revamp capture matrix covers the pinned dark theme and all primary surface
         ).toBeVisible();
       if (route === "/")
         await expect(
-          page
-            .getByRole("navigation", { name: "Main navigation" })
-            .getByRole("link", { name: "Go to app", exact: true }),
+          page.getByRole("link", { name: "Go to app", exact: true }),
         ).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       expect(
@@ -230,9 +228,7 @@ test("revamp capture matrix covers the pinned dark theme and all primary surface
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(
-    page
-      .getByRole("navigation", { name: "Main navigation" })
-      .getByRole("link", { name: "Sign in", exact: true }),
+    page.getByRole("button", { name: "Continue with Google", exact: true }),
   ).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({

@@ -1,0 +1,2 @@
+# Read by `next dev` and `opennextjs-cloudflare preview`; selects which .env file Next.js loads.
+NEXTJS_ENV=development

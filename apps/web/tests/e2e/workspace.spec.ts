@@ -42,13 +42,10 @@ test("sign-out failure is recoverable and success returns home", async ({
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/");
-  const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(
-    navigation.getByRole("link", { name: "Sign in", exact: true }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeEnabled();
   await expect(page.getByRole("link", { name: "Go to app" })).toHaveCount(0);
-  await navigation.getByRole("link", { name: "Get started" }).click();
-  await expect(page).toHaveURL(/\/auth\/sign-in$/);
 });
 
 test("profile failure, expiry, and missing interviews offer recovery", async ({

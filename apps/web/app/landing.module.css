@@ -1,0 +1,88 @@
+.landing {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+.screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  min-height: 100svh;
+}
+.intro {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  padding: 44px clamp(40px, 6.5vw, 104px);
+}
+.brand {
+  gap: 13px;
+  font-family: inherit;
+  font-size: 34px;
+  font-weight: 560;
+}
+.brand [data-slot="screenly-mark"] {
+  width: 44px;
+  height: 44px;
+}
+.copy {
+  align-self: center;
+  max-width: 610px;
+  padding: 48px 0;
+}
+.copy p {
+  max-width: 405px;
+  margin-top: 26px;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.authSide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 48px 40px;
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+.auth {
+  width: 100%;
+  max-width: 328px;
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .intro {
+    padding-inline: 40px 30px;
+  }
+}
+@media (max-width: 760px) {
+  .screen {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .intro {
+    padding: 28px 26px;
+  }
+  .brand {
+    font-size: 30px;
+    gap: 11px;
+  }
+  .brand [data-slot="screenly-mark"] {
+    width: 40px;
+    height: 40px;
+  }
+  .copy {
+    padding: 54px 0 24px;
+  }
+  .copy p {
+    font-size: 15px;
+    line-height: 1.7;
+    margin-top: 22px;
+  }
+  .authSide {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 32px 26px;
+  }
+  .auth {
+    max-width: 420px;
+  }
+}

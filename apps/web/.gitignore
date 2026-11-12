@@ -12,6 +12,9 @@
 # next.js
 /.next/
 /out/
+/.open-next/
+/.wrangler/
+cloudflare-env.d.ts
 
 # production
 /build
@@ -27,6 +30,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.dev.vars*
+!.env.example
+!.dev.vars.example
 
 # vercel
 .vercel
@@ -36,5 +42,3 @@ yarn-error.log*
 next-env.d.ts
 
 public/vad
-
-!.env.example

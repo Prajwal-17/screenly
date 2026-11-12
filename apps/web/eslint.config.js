@@ -4,6 +4,8 @@ import { nextJsConfig } from "@repo/eslint-config/next-js";
 export default [
   {
     ignores: [
+      ".open-next/**",
+      ".wrangler/**",
       "public/vad/**",
       "public/audio/playback-processor.js",
       "playwright-report/**",
@@ -11,4 +13,8 @@ export default [
     ],
   },
   ...nextJsConfig,
+  {
+    files: ["next.config.js"],
+    languageOptions: { globals: { process: "readonly" } },
+  },
 ];

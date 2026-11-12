@@ -17,6 +17,9 @@
     "test:e2e": "bun run --cwd apps/web test:e2e",
     "format:check": "prettier --check .",
     "check": "bun run check-types && bun run lint && bun run test && bun run build",
+    "build:web": "bun run --cwd apps/web build:worker",
+    "preview:web": "bun run --cwd apps/web preview",
+    "deploy:web": "bun run --cwd apps/web deploy",
     "deploy:backend": "bun run --cwd apps/backend deploy"
   },
   "devDependencies": {

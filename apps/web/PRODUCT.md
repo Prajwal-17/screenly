@@ -52,7 +52,9 @@ Help remains removed and `/help` redirects to Settings. `/session`, `/library`, 
 
 ## Public presentation
 
-The landing uses one clear technical-practice proposition, desktop/microphone requirements beside the decision, the six-role product example, three real steps and FAQ. The example is explicitly illustrative: role tabs show a transcript excerpt and qualitative review without requesting microphone/provider access or implying a personal result. The main entry points to `/interviews/new`. Signed-in visitors see Go to app in the header/footer; signed-out visitors retain sign-in/get-started entry. Initial account resolution does not flash signed-out actions; successful logout restores them. No invented testimonials, trust claims, personal scores or fake progress charts are shown.
+The public entry is a single-screen classic split: custom turn-S/lowercase Screenly identity and concise technical voice-practice introduction on the left, direct Google sign-in on the right. Narrow screens stack these regions. The former example, steps, FAQ and footer are removed, as are account-creation and device/microphone notes. Actual desktop/microphone requirements remain in application/preflight flows.
+
+Shared SignInActions owns session resolution, authenticated Go to app, Google availability/retry, OAuth progress/errors and existing onboarding callbacks. Pending or failed session checks never show a signed-out action; signed-in visitors can enter the app without automatic landing navigation. The dedicated auth route preserves its existing-session redirect and development-only local login. No synthetic results or provider calls appear in the landing. Shared Wordmark and the favicon use the approved turn mark; existing workspace type scale and live composition remain preserved.
 
 ## Accessibility and recovery
 

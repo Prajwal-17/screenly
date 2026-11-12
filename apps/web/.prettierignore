@@ -1,5 +1,7 @@
 .dist/
 .next/
+.open-next/
+.wrangler/
 node_modules/
 components/ui/
 pnpm-lock.yaml

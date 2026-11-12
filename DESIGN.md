@@ -97,6 +97,12 @@ colors:
   dark-info-surface: "#252d12"
   dark-info-border: "#46551c"
 typography:
+  landing-display:
+    fontFamily: var(--font-geist-sans), Arial, sans-serif
+    fontSize: clamp(2.375rem, 4.25vw, 3.75rem)
+    fontWeight: 540
+    lineHeight: "1.1"
+    letterSpacing: -0.035em
   display:
     fontFamily: -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Segoe UI", sans-serif
     fontSize: clamp(2.5rem, 4.8vw, 4rem)
@@ -352,3 +358,9 @@ The core orb, captions, timer, dock, transcript and audio/session ownership rema
 - Don't expose Light, Dark or System controls to users while appearance selection is disabled.
 - Don't restore the rejected purple panels, neon fill selections or alternate display fonts.
 - Don't alter the live stage or introduce new flows during this polish pass.
+
+## Approved public entry and identity — REQ-046
+
+Use the custom geometric turn-S mark in Citron with a lowercase Screenly wordmark, composed by the shared Wordmark component. Default compact lockup: 28px mark, 20px label; landing: 44px mark, 34px/560 label (40px/30px on narrow screens). Preserve the accessible Screenly name. Favicon uses the same silhouette.
+
+Landing follows approved option A: charcoal left intro (1.15fr), 0.85fr card-surface auth rail with 1px rule, minimum rail 360px, 44px outer padding and 328px auth content. Below 761px stack the content with 26px side padding. The landing-display role uses local Geist, clamp(38px,4.25vw,60px)/540, 1.1 line height and -0.035em tracking; mobile clamp(30px,8.9vw,38px). This role is confined to public entry; retain compact workspace roles. Use existing semantic colors and shared controls. No lower marketing sections, session preview, account-creation note or device/microphone copy. Pending, unavailable and failed auth states remain recoverable in the same rail; no forced viewport clipping.

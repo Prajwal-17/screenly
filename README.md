@@ -46,6 +46,24 @@ bun run check
 
 ## Applications
 
-- [Web](apps/web/README.md): Next.js frontend.
+- [Web](apps/web/README.md): Next.js frontend, deployed to Cloudflare Workers with OpenNext.
 - [Backend](apps/backend/README.md): Hono on Cloudflare Workers, D1, and Durable Objects.
 - [Shared](packages/shared): validation schemas and types.
+
+## Deployment
+
+Both apps are separate Cloudflare Workers. Deploy the backend first, then build the frontend
+against its public origin:
+
+```sh
+bun run deploy:backend
+NEXT_PUBLIC_API_URL=https://api.example.com bun run deploy:web
+```
+
+`bun run build:web` produces the Worker bundle locally (`.open-next/worker.js` and
+`.open-next/assets`) without deploying; plain `bun run build` only runs `next build`.
+
+Set the backend's `FRONTEND_URL` and `BETTER_AUTH_URL` to the frontend origin. `NEXT_PUBLIC_API_URL`
+is inlined at build time, so it must be present for the frontend build rather than added later in
+`wrangler.jsonc`. See the [frontend guide](apps/web/README.md#cloudflare-workers-deployment) for
+local Worker previews, caching, and cookie-origin requirements.

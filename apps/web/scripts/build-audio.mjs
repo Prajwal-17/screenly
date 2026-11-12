@@ -1,5 +1,5 @@
 import { build } from "bun";
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const output = new URL("../public/audio/", import.meta.url);
@@ -28,6 +28,9 @@ await copyFile(
 console.log("Built pitch-preserving speech worklet.");
 
 const vadOutput = new URL("../public/vad/", import.meta.url);
+// Regenerate from scratch so unused ONNX Runtime variants cannot accumulate;
+// Cloudflare Workers rejects static assets larger than 25 MiB.
+await rm(vadOutput, { recursive: true, force: true });
 await mkdir(vadOutput, { recursive: true });
 const vad = await build({
   entrypoints: [
